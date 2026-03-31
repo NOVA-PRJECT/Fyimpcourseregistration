@@ -44,10 +44,11 @@ export async function getBlueprint() {
 
   // Check registration window
   const { data: settings, error: settingsError } = await supabase
-    .from('campus_settings')
-    .select('registration_is_open, deadline, min_credits, max_credits')
-    .eq('campus_id', student.campus_id)
-    .single()
+  .from('campus_settings')
+  .select('registration_is_open, deadline, min_credits, max_credits, academic_year')
+  .eq('campus_id', student.campus_id)
+  .single()
+
 
   if (settingsError || !settings) {
     return { success: false, error: 'Campus settings not found', status: 404 }
