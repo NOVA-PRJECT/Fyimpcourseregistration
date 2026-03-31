@@ -24,7 +24,7 @@ export async function processBulkUpload(rows: BulkUploadRow[]) {
     } else {
       errors.push({
         row: index + 1,
-        issues: result.error.errors.map(e => e.message),
+        issues: result.error.issues.map(e => e.message),
       })
     }
   })
