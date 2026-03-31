@@ -1,0 +1,272 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { createBrowserClient } from '@supabase/ssr'
+import styles from './hod-dashboard.module.css'
+
+interface Defaulter {
+  id: string
+  full_name: string
+  roll_number: string
+}
+
+interface DefaulterData {
+  total_students: number
+  submitted_count: number
+  defaulter_count: number
+  defaulters: Defaulter[]
+}
+
+interface HodInfo {
+  full_name: string
+  department_name: string
+}
+
+export default function HodDashboard() {
+  const router = useRouter()
+
+  const [hodInfo, setHodInfo] = useState<HodInfo | null>(null)
+  const [loadingHod, setLoadingHod] = useState(true)
+  const [semester, setSemester] = useState<number>(1)
+  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<DefaulterData | null>(null)
+  const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  // Load HOD info on mount
+  useEffect(() => {
+    async function loadHodInfo() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+
+      const { data: faculty } = await supabase
+        .from('faculty')
+        .select(`
+          full_name,
+          departments (name)
+        `)
+        .eq('id', user.id)
+        .single()
+
+      if (faculty) {
+        setHodInfo({
+          full_name: faculty.full_name,
+          department_name: (faculty.departments as any)?.name ?? 'Unknown',
+        })
+      }
+      setLoadingHod(false)
+    }
+    loadHodInfo()
+  }, [])
+
+  // Fetch defaulters
+  async function handleFetch() {
+    setLoading(true)
+    setError('')
+    setData(null)
+    setCopied(false)
+
+    const response = await fetch(`/api/faculty/defaulters?semester=${semester}`)
+    const result = await response.json()
+
+    if (!response.ok) {
+      setError(result.error ?? 'Failed to fetch data. Please try again.')
+      setLoading(false)
+      return
+    }
+
+    setData(result)
+    setLoading(false)
+  }
+
+  // Format defaulter list for WhatsApp
+  function handleCopyWhatsApp() {
+    if (!data || data.defaulters.length === 0) return
+
+    const lines = [
+      `📋 *FYIMP Course Registration`,
+      `📚 Semester: ${semester}`,
+      `🏛️ Department: ${hodInfo?.department_name}`,
+      ``,
+      `The following students have *not yet submitted* their course registration:`,
+      ``,
+      ...data.defaulters.map((s, i) =>
+        `${i + 1}. ${s.full_name}`
+      ),
+      ``,
+      ``,
+      `Please complete your registration immediately.`,
+    ]
+
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 3000)
+    })
+  }
+
+  // Logout
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  return (
+    <div className={styles.pageWrapper}>
+
+      {/* Top Bar */}
+      <div className={styles.topBar}>
+        <div className={styles.topBarLeft}>
+          <div className={styles.logoSmall}>
+            <Image src="/logo.png" alt="KU" width={28} height={28} />
+          </div>
+          <div>
+            <p className={styles.topBarTitle}>FYIMP Portal</p>
+            <p className={styles.topBarSubtitle}>HOD Dashboard</p>
+          </div>
+        </div>
+        <button className={styles.logoutBtn} onClick={handleLogout}>
+          Logout
+        </button>
+      </div>
+
+      {/* HOD Info Card */}
+      <div className={styles.infoCard}>
+        {loadingHod ? (
+          <div style={{ height: '2.5rem' }} />
+        ) : (
+          <>
+            <p className={styles.hodName}>
+              {hodInfo?.full_name ?? 'HOD'}
+            </p>
+            <div className={styles.hodDetails}>
+              <span className={`${styles.detailBadge} ${styles.roleBadge}`}>
+                HOD
+              </span>
+              <span className={styles.detailBadge}>
+                {hodInfo?.department_name}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Main Content */}
+      <div className={styles.mainContent}>
+
+        {error && <div className={styles.errorBanner}>{error}</div>}
+
+        {/* Semester Selector */}
+        <div className={styles.semesterRow}>
+          <span className={styles.semesterLabel}>Check Semester:</span>
+          <select
+            className={styles.semesterSelect}
+            value={semester}
+            onChange={e => setSemester(Number(e.target.value))}
+          >
+            {[1,2,3,4,5,6,7,8,9,10].map(s => (
+              <option key={s} value={s}>Semester {s}</option>
+            ))}
+          </select>
+          <button
+            className={styles.fetchBtn}
+            onClick={handleFetch}
+            disabled={loading}
+          >
+            {loading ? 'Loading...' : 'Check →'}
+          </button>
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div className={styles.loadingState}>
+            <div className={styles.spinner} />
+            <p className={styles.loadingText}>Fetching student data...</p>
+          </div>
+        )}
+
+        {/* Results */}
+        {!loading && data && (
+          <>
+            {/* Stats Row */}
+            <div className={styles.statsRow}>
+              <div className={styles.statCard}>
+                <p className={styles.statValue}>{data.total_students}</p>
+                <p className={styles.statLabel}>Total</p>
+              </div>
+              <div className={styles.statCard}>
+                <p className={`${styles.statValue} ${styles.success}`}>
+                  {data.submitted_count}
+                </p>
+                <p className={styles.statLabel}>Submitted</p>
+              </div>
+              <div className={styles.statCard}>
+                <p className={`${styles.statValue} ${data.defaulter_count > 0 ? styles.danger : styles.success}`}>
+                  {data.defaulter_count}
+                </p>
+                <p className={styles.statLabel}>Pending</p>
+              </div>
+            </div>
+
+            {/* Defaulter Table */}
+            <div className={styles.sectionHeader}>
+              <p className={styles.sectionTitle}>
+                Pending Students ({data.defaulter_count})
+              </p>
+              {data.defaulter_count > 0 && (
+                copied ? (
+                  <span className={styles.copiedMsg}>✓ Copied!</span>
+                ) : (
+                  <button
+                    className={styles.whatsappBtn}
+                    onClick={handleCopyWhatsApp}
+                  >
+                    📋 Copy for WhatsApp
+                  </button>
+                )
+              )}
+            </div>
+
+            <div className={styles.tableWrapper}>
+              {data.defaulter_count === 0 ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>🎉</div>
+                  <p className={styles.emptyTitle}>All students submitted!</p>
+                  <p className={styles.emptySubtitle}>
+                    All {data.total_students} students have completed their registration for Semester {semester}.
+                  </p>
+                </div>
+              ) : (
+                <table className={styles.table}>
+                  <thead className={styles.tableHead}>
+                    <tr>
+                      <th>#</th>
+                      <th>Name</th>
+                      <th>Roll Number</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.defaulters.map((student, index) => (
+                      <tr key={student.id} className={styles.tableRow}>
+                        <td>{index + 1}</td>
+                        <td>{student.full_name}</td>
+                        <td className={styles.rollNumber}>{student.roll_number}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+
+      </div>
+    </div>
+  )
+}

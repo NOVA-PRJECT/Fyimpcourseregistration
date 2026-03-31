@@ -1,12 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { AddFacultySchema } from '@/modules/admin/schemas/addFacultySchema'
-import { createFacultyUser } from '@/modules/admin/services/createFacultyUser'
+import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 
-export async function POST(request: NextRequest) {
+export async function POST() {
 
   const cookieStore = await cookies()
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -23,7 +23,6 @@ export async function POST(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -38,30 +37,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
-  const body = await request.json()
-  const result = AddFacultySchema.safeParse(body)
+  const { data: promotedCount, error } = await supabaseAdmin
+    .rpc('promote_campus_students', { p_campus_id: director.campus_id })
 
-  if (!result.success) {
+  if (error) {
     return NextResponse.json(
-      { error: 'Invalid input', details: result.error.flatten() },
-      { status: 400 }
-    )
-  }
-
-  const response = await createFacultyUser({
-    ...result.data,
-    campus_id: director.campus_id,
-  })
-
-  if (!response.success) {
-    return NextResponse.json(
-      { error: response.error },
-      { status: response.status }
+      { error: 'Failed to promote students', details: error.message },
+      { status: 500 }
     )
   }
 
   return NextResponse.json({
     success: true,
-    message: response.message,
+    promoted_count: promotedCount,
+    message: `${promotedCount} students promoted to next semester`,
   })
 }

@@ -1,0 +1,251 @@
+/* =========================================
+   HOME PAGE — CSS MODULE
+   ========================================= */
+
+
+
+.pageWrapper {
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100dvh;
+  width: 100%;
+  background-color: #002147;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  position: relative;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* Background grid pattern */
+.pageWrapper::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(201,162,39,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201,162,39,0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Glow effects */
+.glowTop {
+  position: fixed;
+  top: -8rem;
+  right: -8rem;
+  width: 20rem;
+  height: 20rem;
+  background: rgba(201,162,39,0.06);
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glowBottom {
+  position: fixed;
+  bottom: -8rem;
+  left: -8rem;
+  width: 18rem;
+  height: 18rem;
+  background: rgba(26,95,168,0.12);
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* University header */
+.universityHeader {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 0.85rem;
+}
+
+.logoWrapper {
+  width: 3.75rem;
+  height: 3.75rem;
+  background: rgba(255,255,255,0.08);
+  border-radius: 50%;
+  border: 1px solid rgba(201,162,39,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem;
+  margin-bottom: 0.6rem;
+  box-shadow: 0 0 24px rgba(201,162,39,0.1);
+}
+
+.universityName {
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.3rem 0;
+  text-align: center;
+}
+
+.goldLine {
+  width: 2rem;
+  height: 2px;
+  background: #c9a227;
+  border-radius: 2px;
+}
+
+/* Main card */
+.card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 22rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+  backdrop-filter: blur(8px);
+  animation: cardReveal 0.4s ease both;
+  box-sizing: border-box;
+}
+
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Portal title */
+.portalTitle {
+  color: #ffffff;
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0 0 0.25rem 0;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.portalSubtitle {
+  color: rgba(255,255,255,0.4);
+  font-size: 0.72rem;
+  text-align: center;
+  margin: 0 0 1rem 0;
+}
+
+/* Divider */
+.divider {
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  margin-bottom: 1rem;
+}
+
+/* Info list */
+.infoList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.infoItem {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.infoDot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #c9a227;
+  flex-shrink: 0;
+}
+
+.infoText {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.6);
+  margin: 0;
+}
+
+/* Login button */
+.loginBtn {
+  display: block;
+  width: 100%;
+  padding: 0.8rem;
+  background: #c9a227;
+  color: #002147;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+  border-radius: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: background 0.15s ease, transform 0.1s ease;
+  box-sizing: border-box;
+}
+
+.loginBtn:hover {
+  background: #b8911f;
+}
+
+.loginBtn:active {
+  transform: scale(0.98);
+}
+
+/* Note */
+.note {
+  color: rgba(255,255,255,0.2);
+  font-size: 0.65rem;
+  text-align: center;
+  margin: 0.75rem 0 0 0;
+}
+
+/* Footer */
+.footer {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.85rem;
+  color: rgba(255,255,255,0.18);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+/* Tablet and up */
+@media (min-width: 640px) {
+  .logoWrapper {
+    width: 5rem;
+    height: 5rem;
+  }
+
+  .universityName {
+    font-size: 1.2rem;
+  }
+
+  .universityHeader {
+    margin-bottom: 1.25rem;
+  }
+
+  .card {
+    padding: 1.75rem;
+    max-width: 24rem;
+  }
+
+  .portalTitle {
+    font-size: 1.35rem;
+  }
+
+  .infoText {
+    font-size: 0.82rem;
+  }
+
+  .footer {
+    margin-top: 1.25rem;
+  }
+}

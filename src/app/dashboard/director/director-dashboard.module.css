@@ -1,0 +1,411 @@
+/* =========================================
+   CAMPUS DIRECTOR DASHBOARD — CSS MODULE
+   ========================================= */
+
+.pageWrapper {
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100dvh;
+  width: 100%;
+  background-color: #f0f2f5;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── TOP BAR ── */
+.topBar {
+  background-color: #002147;
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 33, 71, 0.3);
+}
+
+.topBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logoSmall {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(201,162,39,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.topBarTitle {
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.topBarSubtitle {
+  color: rgba(255,255,255,0.45);
+  font-size: 0.65rem;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.logoutBtn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 0.4rem;
+  color: rgba(255,255,255,0.7);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-family: inherit;
+}
+
+.logoutBtn:hover {
+  background: rgba(255,255,255,0.15);
+  color: #ffffff;
+}
+
+/* ── INFO CARD ── */
+.infoCard {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e5ea;
+  padding: 1rem 1.25rem;
+}
+
+.directorName {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #002147;
+  margin: 0 0 0.35rem 0;
+}
+
+.directorDetails {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.detailBadge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 2rem;
+  background: #f0f4f8;
+  color: #44474e;
+  border: 1px solid #dde1e7;
+}
+
+.detailBadge.roleBadge {
+  background: #002147;
+  color: #ffffff;
+  border-color: #002147;
+}
+
+/* ── MAIN CONTENT ── */
+.mainContent {
+  flex: 1;
+  padding: 1.25rem;
+  max-width: 48rem;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Section title */
+.sectionTitle {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #9ba1ab;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0 0 0.75rem 0;
+}
+
+/* ── WINDOW CARD ── */
+.windowCard {
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.windowStatusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.windowStatusLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.windowDot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.windowDot.open {
+  background: #2ecc71;
+  animation: pulse 1.5s infinite;
+}
+
+.windowDot.closed {
+  background: #e74c3c;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.windowStatusText {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #002147;
+  margin: 0;
+}
+
+.windowDeadline {
+  font-size: 0.72rem;
+  color: #9ba1ab;
+  margin: 0.15rem 0 0 0;
+}
+
+/* Toggle switch */
+.toggleWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toggleLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #44474e;
+}
+
+.toggle {
+  position: relative;
+  width: 2.75rem;
+  height: 1.5rem;
+  cursor: pointer;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggleSlider {
+  position: absolute;
+  inset: 0;
+  background: #dde1e7;
+  border-radius: 2rem;
+  transition: background 0.2s ease;
+}
+
+.toggleSlider::before {
+  content: '';
+  position: absolute;
+  width: 1.1rem;
+  height: 1.1rem;
+  left: 0.2rem;
+  top: 0.2rem;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.toggle input:checked + .toggleSlider {
+  background: #2ecc71;
+}
+
+.toggle input:checked + .toggleSlider::before {
+  transform: translateX(1.25rem);
+}
+
+/* Form fields */
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #44474e;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.input {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #191c1d;
+  background: #f8f9fa;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+  -webkit-appearance: none;
+}
+
+.input:focus {
+  border-color: #002147;
+  background: #ffffff;
+}
+
+.inputRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+/* Buttons */
+.primaryBtn {
+  width: 100%;
+  padding: 0.75rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #002147;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  background: #001633;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Success banner */
+.successBanner {
+  background: #f0faf4;
+  border: 1px solid #a8d5b5;
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a6b3c;
+  margin-bottom: 1rem;
+}
+
+/* Error banner */
+.errorBanner {
+  background: #fdf2f2;
+  border: 1px solid #f5c6c6;
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  color: #c0392b;
+  margin-bottom: 1rem;
+}
+
+/* Spinner */
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── ADD FACULTY CARD ── */
+.facultyCard {
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.roleSelect {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #191c1d;
+  background: #f8f9fa;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+
+.roleSelect:focus {
+  border-color: #002147;
+  background: #ffffff;
+}
+
+.deptSelect {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #191c1d;
+  background: #f8f9fa;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+
+.deptSelect:focus {
+  border-color: #002147;
+  background: #ffffff;
+}
+
+@media (min-width: 640px) {
+  .topBar { padding: 1rem 1.5rem; }
+  .infoCard { padding: 1.25rem 1.5rem; }
+  .mainContent { padding: 1.5rem; }
+}

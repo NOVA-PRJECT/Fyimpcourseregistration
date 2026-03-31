@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
+import { determineUserRoute } from '@/modules/auth/services/routeUser'
 import { Role } from '@/core/constants/roles'
 
 export async function POST(request: NextRequest) {
@@ -14,56 +13,15 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  let role: Role | null = null
+  const { role, redirectTo } = await determineUserRoute(auth_user_id)
 
-  // Check students table
-  const { data: student } = await supabaseAdmin
-    .from('students')
-    .select('id')
-    .eq('id', auth_user_id)
-    .single()
-
-  if (student) {
-    role = 'student'
-  }
-
-  // Check faculty table
-  if (!role) {
-    const { data: faculty } = await supabaseAdmin
-      .from('faculty')
-      .select('id, role')
-      .eq('id', auth_user_id)
-      .single()
-
-    if (faculty) {
-      role = faculty.role as Role
-    }
-  }
-
-  // Check admins table
-  if (!role) {
-    const { data: admin } = await supabaseAdmin
-      .from('admins')
-      .select('id')
-      .eq('id', auth_user_id)
-      .single()
-
-    if (admin) {
-      role = 'superadmin'
-    }
-  }
-
-  // Nobody found — reject
-  if (!role) {
+  if (!role || !redirectTo) {
     return NextResponse.json(
-      { error: 'User not found in any table' },
+      { error: 'User not found' },
       { status: 403 }
     )
   }
 
-  const redirectTo = ROLE_DASHBOARD_MAP[role]
-
-  // Build response with role cookie
   const response = NextResponse.json({ redirectTo })
 
   response.cookies.set('user_role', role, {
@@ -71,7 +29,7 @@ export async function POST(request: NextRequest) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60 * 24 * 7  // 7 days
+    maxAge: 60 * 60 * 24 * 7
   })
 
   return response

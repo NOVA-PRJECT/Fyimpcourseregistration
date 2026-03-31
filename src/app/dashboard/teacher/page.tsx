@@ -1,0 +1,346 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { createBrowserClient } from '@supabase/ssr'
+import styles from './teacher-dashboard.module.css'
+
+interface Course {
+  id: string
+  course_code: string
+  title: string
+}
+
+interface Student {
+  id: string
+  full_name: string
+  roll_number: string
+  department: string
+  department_code: string
+}
+
+interface RosterData {
+  course: { id: string; title: string; course_code: string }
+  total_students: number
+  department_breakdown: Record<string, number>
+  students: Student[]
+}
+
+export default function TeacherDashboard() {
+  const router = useRouter()
+
+  const [teacherName, setTeacherName] = useState('')
+  const [loadingTeacher, setLoadingTeacher] = useState(true)
+  const [courses, setCourses] = useState<Course[]>([])
+  const [selectedCourseId, setSelectedCourseId] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [rosterData, setRosterData] = useState<RosterData | null>(null)
+  const [error, setError] = useState('')
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  // Load teacher info and course list on mount
+  useEffect(() => {
+    async function loadData() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+
+      // Get teacher info
+      const { data: faculty } = await supabase
+        .from('faculty')
+        .select('full_name')
+        .eq('id', user.id)
+        .single()
+
+      if (faculty) setTeacherName(faculty.full_name)
+
+      // Get all courses
+      const { data: courseList } = await supabase
+        .from('courses')
+        .select('id, course_code, title')
+        .order('title')
+
+      if (courseList) setCourses(courseList)
+      setLoadingTeacher(false)
+    }
+    loadData()
+  }, [])
+
+  // Fetch class roster
+  async function handleFetch() {
+    if (!selectedCourseId) {
+      setError('Please select a course first')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setRosterData(null)
+
+    const response = await fetch(`/api/faculty/attendance?course_id=${selectedCourseId}`)
+    const result = await response.json()
+
+    if (!response.ok) {
+      setError(result.error ?? 'Failed to fetch roster. Please try again.')
+      setLoading(false)
+      return
+    }
+
+    setRosterData(result)
+    setLoading(false)
+  }
+
+  // Generate and download PDF attendance sheet
+  async function handleDownloadPDF() {
+    if (!rosterData) return
+
+    const { jsPDF } = await import('jspdf')
+    const doc = new jsPDF()
+
+    const pageWidth = doc.internal.pageSize.getWidth()
+    let y = 20
+
+    // Header
+    doc.setFontSize(16)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Kannur University — FYIMP', pageWidth / 2, y, { align: 'center' })
+    y += 8
+
+    doc.setFontSize(12)
+    doc.text('Attendance Sheet', pageWidth / 2, y, { align: 'center' })
+    y += 10
+
+    // Course info
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Course: ${rosterData.course.title}`, 14, y)
+    y += 6
+    doc.text(`Code: ${rosterData.course.course_code}`, 14, y)
+    y += 6
+    doc.text(`Total Students: ${rosterData.total_students}`, 14, y)
+    y += 6
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')}`, 14, y)
+    y += 10
+
+    // Divider
+    doc.setDrawColor(0, 33, 71)
+    doc.line(14, y, pageWidth - 14, y)
+    y += 8
+
+    // Table header
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.text('#', 14, y)
+    doc.text('Name', 24, y)
+    doc.text('Roll Number', 110, y)
+    doc.text('Department', 155, y)
+    y += 5
+
+    doc.line(14, y, pageWidth - 14, y)
+    y += 6
+
+    // Table rows
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+
+    rosterData.students.forEach((student, index) => {
+      if (y > 270) {
+        doc.addPage()
+        y = 20
+      }
+
+      doc.text(`${index + 1}`, 14, y)
+      doc.text(student.full_name, 24, y)
+      doc.text(student.roll_number, 110, y)
+      doc.text(student.department_code || student.department, 155, y)
+      y += 7
+    })
+
+    // Save
+    doc.save(`attendance_${rosterData.course.course_code}_${new Date().toISOString().slice(0, 10)}.pdf`)
+  }
+
+  // Logout
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  return (
+    <div className={styles.pageWrapper}>
+
+      {/* Top Bar */}
+      <div className={styles.topBar}>
+        <div className={styles.topBarLeft}>
+          <div className={styles.logoSmall}>
+            <Image src="/logo.png" alt="KU" width={28} height={28} />
+          </div>
+          <div>
+            <p className={styles.topBarTitle}>FYIMP Portal</p>
+            <p className={styles.topBarSubtitle}>Teacher Dashboard</p>
+          </div>
+        </div>
+        <button className={styles.logoutBtn} onClick={handleLogout}>
+          Logout
+        </button>
+      </div>
+
+      {/* Teacher Info Card */}
+      <div className={styles.infoCard}>
+        {loadingTeacher ? (
+          <div style={{ height: '2.5rem' }} />
+        ) : (
+          <>
+            <p className={styles.teacherName}>
+              {teacherName || 'Teaching Staff'}
+            </p>
+            <div className={styles.teacherDetails}>
+              <span className={`${styles.detailBadge} ${styles.roleBadge}`}>
+                Teaching Staff
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Main Content */}
+      <div className={styles.mainContent}>
+
+        {error && <div className={styles.errorBanner}>{error}</div>}
+
+        {/* Course Search */}
+        <p className={styles.searchLabel}>Select a Course</p>
+        <div className={styles.searchRow}>
+          <select
+            className={styles.courseSelect}
+            value={selectedCourseId}
+            onChange={e => {
+              setSelectedCourseId(e.target.value)
+              setRosterData(null)
+              setError('')
+            }}
+          >
+            <option value="">— Choose a course —</option>
+            {courses.map(course => (
+              <option key={course.id} value={course.id}>
+                {course.title} — {course.course_code}
+              </option>
+            ))}
+          </select>
+          <button
+            className={styles.fetchBtn}
+            onClick={handleFetch}
+            disabled={loading || !selectedCourseId}
+          >
+            {loading ? 'Loading...' : 'Get Roster →'}
+          </button>
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div className={styles.loadingState}>
+            <div className={styles.spinner} />
+            <p className={styles.loadingText}>Fetching class roster...</p>
+          </div>
+        )}
+
+        {/* Results */}
+        {!loading && rosterData && (
+          <>
+            {/* Course Info Banner */}
+            <div className={styles.courseInfoBanner}>
+              <div>
+                <p className={styles.courseInfoName}>{rosterData.course.title}</p>
+                <p className={styles.courseInfoCode}>{rosterData.course.course_code}</p>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className={styles.statsRow}>
+              <div className={styles.statCard}>
+                <p className={styles.statValue}>{rosterData.total_students}</p>
+                <p className={styles.statLabel}>Total Students</p>
+              </div>
+              <div className={styles.statCard}>
+                <p className={styles.statValue}>
+                  {Object.keys(rosterData.department_breakdown).length}
+                </p>
+                <p className={styles.statLabel}>Departments</p>
+              </div>
+            </div>
+
+            {/* Department Breakdown */}
+            {Object.keys(rosterData.department_breakdown).length > 0 && (
+              <div className={styles.breakdownCard}>
+                <p className={styles.breakdownTitle}>Department Breakdown</p>
+                {Object.entries(rosterData.department_breakdown).map(([dept, count]) => (
+                  <div key={dept} className={styles.breakdownRow}>
+                    <span className={styles.breakdownDept}>{dept}</span>
+                    <span className={styles.breakdownCount}>{count} students</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Roster Table */}
+            <div className={styles.sectionHeader}>
+              <p className={styles.sectionTitle}>
+                Class Roster ({rosterData.total_students})
+              </p>
+              {rosterData.total_students > 0 && (
+                <button
+                  className={styles.downloadBtn}
+                  onClick={handleDownloadPDF}
+                >
+                  📄 Download PDF
+                </button>
+              )}
+            </div>
+
+            <div className={styles.tableWrapper}>
+              {rosterData.total_students === 0 ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>📭</div>
+                  <p className={styles.emptyTitle}>No students enrolled</p>
+                  <p className={styles.emptySubtitle}>
+                    No students have selected this course yet.
+                  </p>
+                </div>
+              ) : (
+                <table className={styles.table}>
+                  <thead className={styles.tableHead}>
+                    <tr>
+                      <th>#</th>
+                      <th>Name</th>
+                      <th>Roll No</th>
+                      <th>Department</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rosterData.students.map((student, index) => (
+                      <tr key={student.id} className={styles.tableRow}>
+                        <td>{index + 1}</td>
+                        <td>{student.full_name}</td>
+                        <td className={styles.rollNumber}>{student.roll_number}</td>
+                        <td>
+                          <span className={styles.deptBadge}>
+                            {student.department_code || student.department}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+
+      </div>
+    </div>
+  )
+}
