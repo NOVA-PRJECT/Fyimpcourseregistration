@@ -6,9 +6,7 @@ import { Role } from '@/core/constants/roles'
 export async function middleware(request: NextRequest) {
 
   let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
+    request: { headers: request.headers },
   })
 
   const supabase = createServerClient(
@@ -16,9 +14,7 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
+        getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
@@ -36,13 +32,15 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
   const isLoginRoute = pathname.startsWith('/login')
+  const isSignupRoute = pathname.startsWith('/signup')
   const isDashboardRoute = pathname.startsWith('/dashboard')
   const isApiRoute = pathname.startsWith('/api')
 
   // API routes handle their own auth
-  if (isApiRoute) {
-    return response
-  }
+  if (isApiRoute) return response
+
+  // Signup and pending approval pages — always accessible
+  if (isSignupRoute) return response
 
   // No user — kick to login
   if (!user && isDashboardRoute) {
@@ -62,22 +60,18 @@ export async function middleware(request: NextRequest) {
   if (user && isDashboardRoute) {
     const role = request.cookies.get('user_role')?.value as Role | undefined
 
-    // No role cookie found — send to login
     if (!role) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    // Find which dashboard this route belongs to
     const matchedRoute = Object.keys(DASHBOARD_ROLE_MAP).find(route =>
       pathname.startsWith(route)
     )
 
-    // Route not in map — deny
     if (!matchedRoute) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    // Role doesn't match this dashboard — send to correct dashboard
     const requiredRole = DASHBOARD_ROLE_MAP[matchedRoute]
     if (role !== requiredRole) {
       return NextResponse.redirect(new URL(ROLE_DASHBOARD_MAP[role], request.url))
@@ -88,7 +82,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }

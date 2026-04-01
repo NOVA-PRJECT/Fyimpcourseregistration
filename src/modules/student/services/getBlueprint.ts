@@ -33,14 +33,18 @@ export async function getBlueprint() {
 
   // Get student details
   const { data: student, error: studentError } = await supabase
-    .from('students')
-    .select('department_id, campus_id, current_semester')
-    .eq('id', user.id)
-    .single()
+  .from('students')
+  .select('department_id, campus_id, current_semester, account_status')
+  .eq('id', user.id)
+  .single()
 
-  if (studentError || !student) {
-    return { success: false, error: 'Student not found', status: 404 }
-  }
+if (studentError || !student) {
+  return { success: false, error: 'Student not found', status: 404 }
+}
+
+if (student.account_status !== 'approved') {
+  return { success: false, error: 'Account pending HOD approval', status: 403 }
+}
 
   // Check registration window
   const { data: settings, error: settingsError } = await supabase

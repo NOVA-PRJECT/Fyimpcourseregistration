@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -19,6 +21,11 @@ interface DefaulterData {
   defaulters: Defaulter[]
 }
 
+interface PendingStudent {
+  id: string
+  full_name: string
+}
+
 interface HodInfo {
   full_name: string
   department_name: string
@@ -26,9 +33,13 @@ interface HodInfo {
 
 export default function HodDashboard() {
   const router = useRouter()
-
   const [hodInfo, setHodInfo] = useState<HodInfo | null>(null)
   const [loadingHod, setLoadingHod] = useState(true)
+  const [pendingStudents, setPendingStudents] = useState<PendingStudent[]>([])
+  const [loadingPending, setLoadingPending] = useState(true)
+  const [approvingId, setApprovingId] = useState<string | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [approvalMsg, setApprovalMsg] = useState('')
   const [semester, setSemester] = useState<number>(1)
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<DefaulterData | null>(null)
@@ -40,18 +51,14 @@ export default function HodDashboard() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Load HOD info on mount
   useEffect(() => {
-    async function loadHodInfo() {
+    async function loadData() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
       const { data: faculty } = await supabase
         .from('faculty')
-        .select(`
-          full_name,
-          departments (name)
-        `)
+        .select('full_name, departments (name)')
         .eq('id', user.id)
         .single()
 
@@ -62,56 +69,87 @@ export default function HodDashboard() {
         })
       }
       setLoadingHod(false)
+
+      const response = await fetch('/api/hod/pending-signups')
+      const result = await response.json()
+      if (response.ok) setPendingStudents(result)
+      setLoadingPending(false)
     }
-    loadHodInfo()
+    loadData()
   }, [])
 
-  // Fetch defaulters
+  async function handleApprove(studentId: string) {
+    setApprovingId(studentId)
+    setApprovalMsg('')
+    const response = await fetch('/api/hod/approve-student', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student_id: studentId }),
+    })
+    const result = await response.json()
+    if (response.ok) {
+      setApprovalMsg('Student approved successfully')
+      setPendingStudents(prev => prev.filter(s => s.id !== studentId))
+    } else {
+      setApprovalMsg(result.error ?? 'Failed to approve')
+    }
+    setApprovingId(null)
+  }
+
+  async function handleReject(studentId: string) {
+    setRejectingId(studentId)
+    setApprovalMsg('')
+    const response = await fetch('/api/hod/reject-student', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student_id: studentId }),
+    })
+    const result = await response.json()
+    if (response.ok) {
+      setApprovalMsg('Student rejected and removed')
+      setPendingStudents(prev => prev.filter(s => s.id !== studentId))
+    } else {
+      setApprovalMsg(result.error ?? 'Failed to reject')
+    }
+    setRejectingId(null)
+  }
+
   async function handleFetch() {
     setLoading(true)
     setError('')
     setData(null)
     setCopied(false)
-
     const response = await fetch(`/api/faculty/defaulters?semester=${semester}`)
     const result = await response.json()
-
     if (!response.ok) {
-      setError(result.error ?? 'Failed to fetch data. Please try again.')
+      setError(result.error ?? 'Failed to fetch data.')
       setLoading(false)
       return
     }
-
     setData(result)
     setLoading(false)
   }
 
-  // Format defaulter list for WhatsApp
   function handleCopyWhatsApp() {
     if (!data || data.defaulters.length === 0) return
-
     const lines = [
-      `📋 *FYIMP Course Registration`,
+      `📋 *FYIMP Course Registration*`,
       `📚 Semester: ${semester}`,
       `🏛️ Department: ${hodInfo?.department_name}`,
       ``,
       `The following students have *not yet submitted* their course registration:`,
       ``,
-      ...data.defaulters.map((s, i) =>
-        `${i + 1}. ${s.full_name}`
-      ),
+      ...data.defaulters.map((s, i) => `${i + 1}. ${s.full_name} (${s.roll_number})`),
       ``,
       ``,
       `Please complete your registration immediately.`,
     ]
-
     navigator.clipboard.writeText(lines.join('\n')).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 3000)
     })
   }
 
-  // Logout
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/login')
@@ -120,7 +158,6 @@ export default function HodDashboard() {
   return (
     <div className={styles.pageWrapper}>
 
-      {/* Top Bar */}
       <div className={styles.topBar}>
         <div className={styles.topBarLeft}>
           <div className={styles.logoSmall}>
@@ -131,38 +168,87 @@ export default function HodDashboard() {
             <p className={styles.topBarSubtitle}>HOD Dashboard</p>
           </div>
         </div>
-        <button className={styles.logoutBtn} onClick={handleLogout}>
-          Logout
-        </button>
+        <button className={styles.logoutBtn} onClick={handleLogout}>Logout</button>
       </div>
 
-      {/* HOD Info Card */}
       <div className={styles.infoCard}>
-        {loadingHod ? (
-          <div style={{ height: '2.5rem' }} />
-        ) : (
+        {loadingHod ? <div style={{ height: '2.5rem' }} /> : (
           <>
-            <p className={styles.hodName}>
-              {hodInfo?.full_name ?? 'HOD'}
-            </p>
+            <p className={styles.hodName}>{hodInfo?.full_name ?? 'HOD'}</p>
             <div className={styles.hodDetails}>
-              <span className={`${styles.detailBadge} ${styles.roleBadge}`}>
-                HOD
-              </span>
-              <span className={styles.detailBadge}>
-                {hodInfo?.department_name}
-              </span>
+              <span className={`${styles.detailBadge} ${styles.roleBadge}`}>HOD</span>
+              <span className={styles.detailBadge}>{hodInfo?.department_name}</span>
             </div>
           </>
         )}
       </div>
 
-      {/* Main Content */}
       <div className={styles.mainContent}>
 
+        {/* Pending Approvals */}
+        <div className={styles.sectionHeader}>
+          <p className={styles.sectionTitle}>Pending Approvals</p>
+          {pendingStudents.length > 0 && (
+            <span className={styles.pendingBadge}>{pendingStudents.length}</span>
+          )}
+        </div>
+
+        {approvalMsg && <div className={styles.successBanner}>✓ {approvalMsg}</div>}
+
+        <div className={styles.tableWrapper} style={{ marginBottom: '1.25rem' }}>
+          {loadingPending ? (
+            <div className={styles.loadingState}>
+              <div className={styles.spinner} />
+              <p className={styles.loadingText}>Loading...</p>
+            </div>
+          ) : pendingStudents.length === 0 ? (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyIcon}>✅</div>
+              <p className={styles.emptyTitle}>No pending approvals</p>
+              <p className={styles.emptySubtitle}>All signup requests have been reviewed.</p>
+            </div>
+          ) : (
+            <table className={styles.table}>
+              <thead className={styles.tableHead}>
+                <tr>
+                  <th>#</th>
+                  <th>Name</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingStudents.map((student, index) => (
+                  <tr key={student.id} className={styles.tableRow}>
+                    <td>{index + 1}</td>
+                    <td>{student.full_name}</td>
+                    <td>
+                      <div className={styles.actionBtns}>
+                        <button
+                          className={styles.approveBtn}
+                          onClick={() => handleApprove(student.id)}
+                          disabled={approvingId === student.id || rejectingId === student.id}
+                        >
+                          {approvingId === student.id ? '...' : '✓ Approve'}
+                        </button>
+                        <button
+                          className={styles.rejectBtn}
+                          onClick={() => handleReject(student.id)}
+                          disabled={approvingId === student.id || rejectingId === student.id}
+                        >
+                          {rejectingId === student.id ? '...' : '✗ Reject'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Defaulter Radar */}
         {error && <div className={styles.errorBanner}>{error}</div>}
 
-        {/* Semester Selector */}
         <div className={styles.semesterRow}>
           <span className={styles.semesterLabel}>Check Semester:</span>
           <select
@@ -174,16 +260,11 @@ export default function HodDashboard() {
               <option key={s} value={s}>Semester {s}</option>
             ))}
           </select>
-          <button
-            className={styles.fetchBtn}
-            onClick={handleFetch}
-            disabled={loading}
-          >
+          <button className={styles.fetchBtn} onClick={handleFetch} disabled={loading}>
             {loading ? 'Loading...' : 'Check →'}
           </button>
         </div>
 
-        {/* Loading */}
         {loading && (
           <div className={styles.loadingState}>
             <div className={styles.spinner} />
@@ -191,19 +272,15 @@ export default function HodDashboard() {
           </div>
         )}
 
-        {/* Results */}
         {!loading && data && (
           <>
-            {/* Stats Row */}
             <div className={styles.statsRow}>
               <div className={styles.statCard}>
                 <p className={styles.statValue}>{data.total_students}</p>
                 <p className={styles.statLabel}>Total</p>
               </div>
               <div className={styles.statCard}>
-                <p className={`${styles.statValue} ${styles.success}`}>
-                  {data.submitted_count}
-                </p>
+                <p className={`${styles.statValue} ${styles.success}`}>{data.submitted_count}</p>
                 <p className={styles.statLabel}>Submitted</p>
               </div>
               <div className={styles.statCard}>
@@ -214,22 +291,12 @@ export default function HodDashboard() {
               </div>
             </div>
 
-            {/* Defaulter Table */}
             <div className={styles.sectionHeader}>
-              <p className={styles.sectionTitle}>
-                Pending Students ({data.defaulter_count})
-              </p>
+              <p className={styles.sectionTitle}>Pending Students ({data.defaulter_count})</p>
               {data.defaulter_count > 0 && (
-                copied ? (
-                  <span className={styles.copiedMsg}>✓ Copied!</span>
-                ) : (
-                  <button
-                    className={styles.whatsappBtn}
-                    onClick={handleCopyWhatsApp}
-                  >
-                    📋 Copy for WhatsApp
-                  </button>
-                )
+                copied
+                  ? <span className={styles.copiedMsg}>✓ Copied!</span>
+                  : <button className={styles.whatsappBtn} onClick={handleCopyWhatsApp}>📋 Copy for WhatsApp</button>
               )}
             </div>
 
@@ -239,17 +306,13 @@ export default function HodDashboard() {
                   <div className={styles.emptyIcon}>🎉</div>
                   <p className={styles.emptyTitle}>All students submitted!</p>
                   <p className={styles.emptySubtitle}>
-                    All {data.total_students} students have completed their registration for Semester {semester}.
+                    All {data.total_students} students completed registration for Semester {semester}.
                   </p>
                 </div>
               ) : (
                 <table className={styles.table}>
                   <thead className={styles.tableHead}>
-                    <tr>
-                      <th>#</th>
-                      <th>Name</th>
-                      <th>Roll Number</th>
-                    </tr>
+                    <tr><th>#</th><th>Name</th><th>Roll Number</th></tr>
                   </thead>
                   <tbody>
                     {data.defaulters.map((student, index) => (

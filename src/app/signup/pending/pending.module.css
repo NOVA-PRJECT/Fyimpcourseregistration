@@ -1,0 +1,277 @@
+/* =========================================
+   PENDING APPROVAL PAGE — CSS MODULE
+   ========================================= */
+
+
+.pageWrapper {
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100dvh;
+  width: 100%;
+  background-color: #f8f9fa;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  position: relative;
+  overflow-y: auto;
+}
+
+.pageWrapper::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background-color: #002147;
+  z-index: 0;
+}
+
+/* Card */
+.card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 22rem;
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px rgba(0, 33, 71, 0.15);
+  overflow: hidden;
+  animation: cardReveal 0.4s ease both;
+}
+
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Card Header */
+.cardHeader {
+  background-color: #002147;
+  padding: 1.25rem 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logoWrapper {
+  width: 3rem;
+  height: 3rem;
+  background: rgba(255,255,255,0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border: 1px solid rgba(201,162,39,0.3);
+}
+
+.logo {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.portalTitle {
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0;
+  text-align: center;
+}
+
+.goldLine {
+  width: 2rem;
+  height: 2px;
+  background-color: #c9a227;
+  border-radius: 2px;
+}
+
+/* Card Body */
+.cardBody {
+  padding: 1.75rem 1.5rem;
+  text-align: center;
+}
+
+/* Status Icon */
+.statusIcon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+  animation: float 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* Status Title */
+.statusTitle {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #002147;
+  margin: 0 0 0.65rem 0;
+}
+
+.rejectedTitle {
+  color: #c0392b;
+}
+
+/* Description */
+.statusDescription {
+  font-size: 0.78rem;
+  color: #44474e;
+  line-height: 1.5;
+  margin: 0 0 1.25rem 0;
+}
+
+/* Info banner */
+.infoBanner {
+  background: #fff8e6;
+  border: 1px solid #f5d78c;
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.78rem;
+  color: #8b6914;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Error banner */
+.errorBanner {
+  background: #fdf2f2;
+  border: 1px solid #f5c6c6;
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.78rem;
+  color: #c0392b;
+  margin-bottom: 1rem;
+}
+
+/* Check Status Button */
+.checkBtn {
+  width: 100%;
+  padding: 0.8rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #ffffff;
+  background-color: #002147;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.checkBtn:hover:not(:disabled) {
+  background-color: #001633;
+}
+
+.checkBtn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.checkBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Retry Button */
+.retryBtn {
+  display: block;
+  width: 100%;
+  padding: 0.8rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #ffffff;
+  background-color: #c9a227;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  text-align: center;
+  transition: background 0.15s ease;
+}
+
+.retryBtn:hover {
+  background-color: #b8911f;
+}
+
+/* Spinner */
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Divider */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1rem 0;
+}
+
+.dividerLine {
+  flex: 1;
+  height: 1px;
+  background: #e8eaed;
+}
+
+.dividerText {
+  font-size: 0.7rem;
+  color: #9ba1ab;
+}
+
+/* Login Link */
+.loginLink {
+  font-size: 0.8rem;
+  color: #44474e;
+  margin: 0;
+}
+
+.loginLink a {
+  color: #002147;
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px solid #c9a227;
+  padding-bottom: 1px;
+}
+
+.loginLink a:hover {
+  color: #c9a227;
+}
+
+/* Footer */
+.footer {
+  position: relative;
+  z-index: 1;
+  margin-top: 1.25rem;
+  font-size: 0.625rem;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+@media (min-width: 640px) {
+  .card { max-width: 24rem; }
+  .cardBody { padding: 2rem; }
+}

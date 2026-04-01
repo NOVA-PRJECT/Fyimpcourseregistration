@@ -398,6 +398,80 @@
   color: #1a6b3c;
   margin-bottom: 1rem;
 }
+/* Pending badge */
+.pendingBadge {
+  background: #c0392b;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2rem;
+  margin-left: 0.5rem;
+}
+
+/* Action buttons */
+.actionBtns {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.approveBtn {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #1a6b3c;
+  border: none;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+
+.approveBtn:hover:not(:disabled) {
+  background: #145530;
+}
+
+.approveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rejectBtn {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #c0392b;
+  border: none;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+
+.rejectBtn:hover:not(:disabled) {
+  background: #a93226;
+}
+
+.rejectBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Success banner */
+.successBanner {
+  background: #f0faf4;
+  border: 1px solid #a8d5b5;
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a6b3c;
+  margin-bottom: 1rem;
+}
 
 @media (min-width: 640px) {
   .topBar { padding: 1rem 1.5rem; }
