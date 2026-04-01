@@ -189,9 +189,13 @@ export default function SuperAdminDashboard() {
           <div className={styles.formatHint}>
             <p className={styles.formatHintTitle}>Required CSV Columns</p>
             <p className={styles.formatHintCode}>
-              cap_application_number, date_of_birth, full_name,<br />
-              email, department_id, campus_id, academic_year
-            </p>
+  cap_application_number, date_of_birth, full_name,<br />
+  email, department_name, campus_code, academic_year
+</p>
+<p className={styles.formatHintCode} style={{ marginTop: '0.5rem', color: '#9ba1ab' }}>
+  Example: TEST003, 2005-01-01, Ahmed Ali,<br />
+  ahmed@test.com, Mathematical Sciences, KU, 2025-26
+</p>
           </div>
 
           {/* Dropzone */}
