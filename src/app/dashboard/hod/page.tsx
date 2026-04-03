@@ -2,10 +2,11 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
+import Papa from 'papaparse'
 import styles from './hod-dashboard.module.css'
 
 interface Defaulter {
@@ -21,9 +22,10 @@ interface DefaulterData {
   defaulters: Defaulter[]
 }
 
-interface PendingStudent {
-  id: string
-  full_name: string
+interface UploadResult {
+  inserted_count: number
+  error_count: number
+  errors?: { row: number; issues: string[] }[]
 }
 
 interface HodInfo {
@@ -33,13 +35,19 @@ interface HodInfo {
 
 export default function HodDashboard() {
   const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const [hodInfo, setHodInfo] = useState<HodInfo | null>(null)
   const [loadingHod, setLoadingHod] = useState(true)
-  const [pendingStudents, setPendingStudents] = useState<PendingStudent[]>([])
-  const [loadingPending, setLoadingPending] = useState(true)
-  const [approvingId, setApprovingId] = useState<string | null>(null)
-  const [rejectingId, setRejectingId] = useState<string | null>(null)
-  const [approvalMsg, setApprovalMsg] = useState('')
+
+  // CSV Upload state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
+  const [uploadError, setUploadError] = useState('')
+  const [uploadSuccess, setUploadSuccess] = useState('')
+
+  // Defaulters state
   const [semester, setSemester] = useState<number>(1)
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<DefaulterData | null>(null)
@@ -69,81 +77,119 @@ export default function HodDashboard() {
         })
       }
       setLoadingHod(false)
-
-      const response = await fetch('/api/hod/pending-signups')
-      const result = await response.json()
-      if (response.ok) setPendingStudents(result)
-      setLoadingPending(false)
     }
     loadData()
   }, [])
 
-  async function handleApprove(studentId: string) {
-    setApprovingId(studentId)
-    setApprovalMsg('')
-    const response = await fetch('/api/hod/approve-student', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ student_id: studentId }),
-    })
-    const result = await response.json()
-    if (response.ok) {
-      setApprovalMsg('Student approved successfully')
-      setPendingStudents(prev => prev.filter(s => s.id !== studentId))
-    } else {
-      setApprovalMsg(result.error ?? 'Failed to approve')
+  // Handle file selection
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.name.endsWith('.csv')) {
+      setUploadError('Please upload a CSV file only')
+      return
     }
-    setApprovingId(null)
+    setSelectedFile(file)
+    setUploadError('')
+    setUploadResult(null)
+    setUploadSuccess('')
   }
 
-  async function handleReject(studentId: string) {
-    setRejectingId(studentId)
-    setApprovalMsg('')
-    const response = await fetch('/api/hod/reject-student', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ student_id: studentId }),
-    })
-    const result = await response.json()
-    if (response.ok) {
-      setApprovalMsg('Student rejected and removed')
-      setPendingStudents(prev => prev.filter(s => s.id !== studentId))
-    } else {
-      setApprovalMsg(result.error ?? 'Failed to reject')
+  // Upload CSV
+  async function handleUpload() {
+    if (!selectedFile) {
+      setUploadError('Please select a CSV file first')
+      return
     }
-    setRejectingId(null)
+
+    setUploading(true)
+    setUploadError('')
+    setUploadSuccess('')
+    setUploadResult(null)
+
+    Papa.parse(selectedFile, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const rows = results.data
+
+        if (!rows || rows.length === 0) {
+          setUploadError('CSV file is empty or has no valid rows')
+          setUploading(false)
+          return
+        }
+
+        try {
+          const response = await fetch('/api/admin/bulk-admissions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(rows),
+          })
+
+          const result = await response.json()
+
+          if (!response.ok) {
+            setUploadError(result.error ?? 'Upload failed. Please try again.')
+            setUploading(false)
+            return
+          }
+
+          setUploadResult(result)
+          setUploadSuccess(`Upload complete — ${result.inserted_count} students added.`)
+          setSelectedFile(null)
+          if (fileInputRef.current) fileInputRef.current.value = ''
+
+        } catch {
+          setUploadError('Something went wrong. Please try again.')
+        }
+
+        setUploading(false)
+      },
+      error: () => {
+        setUploadError('Failed to parse CSV. Please check the format.')
+        setUploading(false)
+      }
+    })
   }
 
+  // Fetch defaulters
   async function handleFetch() {
     setLoading(true)
     setError('')
     setData(null)
     setCopied(false)
+
     const response = await fetch(`/api/faculty/defaulters?semester=${semester}`)
     const result = await response.json()
+
     if (!response.ok) {
       setError(result.error ?? 'Failed to fetch data.')
       setLoading(false)
       return
     }
+
     setData(result)
     setLoading(false)
   }
 
+  // Copy for WhatsApp
   function handleCopyWhatsApp() {
     if (!data || data.defaulters.length === 0) return
+
     const lines = [
-      `📋 *FYIMP Course Registration*`,
+      `📋 *FYIMP Course Registration — Defaulters*`,
       `📚 Semester: ${semester}`,
       `🏛️ Department: ${hodInfo?.department_name}`,
       ``,
       `The following students have *not yet submitted* their course registration:`,
       ``,
-      ...data.defaulters.map((s, i) => `${i + 1}. ${s.full_name} (${s.roll_number})`),
+      ...data.defaulters.map((s, i) => `${i + 1}. ${s.full_name}`),
       ``,
+      `Total defaulters: ${data.defaulter_count} / ${data.total_students}`,
       ``,
       `Please complete your registration immediately.`,
     ]
+
     navigator.clipboard.writeText(lines.join('\n')).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 3000)
@@ -158,6 +204,7 @@ export default function HodDashboard() {
   return (
     <div className={styles.pageWrapper}>
 
+      {/* Top Bar */}
       <div className={styles.topBar}>
         <div className={styles.topBarLeft}>
           <div className={styles.logoSmall}>
@@ -171,6 +218,7 @@ export default function HodDashboard() {
         <button className={styles.logoutBtn} onClick={handleLogout}>Logout</button>
       </div>
 
+      {/* HOD Info Card */}
       <div className={styles.infoCard}>
         {loadingHod ? <div style={{ height: '2.5rem' }} /> : (
           <>
@@ -183,74 +231,106 @@ export default function HodDashboard() {
         )}
       </div>
 
+      {/* Main Content */}
       <div className={styles.mainContent}>
 
-        {/* Pending Approvals */}
-        <div className={styles.sectionHeader}>
-          <p className={styles.sectionTitle}>Pending Approvals</p>
-          {pendingStudents.length > 0 && (
-            <span className={styles.pendingBadge}>{pendingStudents.length}</span>
-          )}
+        {/* ── CSV UPLOAD ── */}
+        <p className={styles.sectionTitle}>Upload Semester 1 Students</p>
+
+        {uploadError && <div className={styles.errorBanner}>{uploadError}</div>}
+        {uploadSuccess && <div className={styles.successBanner}>✓ {uploadSuccess}</div>}
+
+        <div className={styles.uploadCard}>
+          <p className={styles.uploadDescription}>
+            Upload your department's Semester 1 student list.
+            Students will use their CAP number and date of birth to sign up.
+          </p>
+
+          <div className={styles.formatHint}>
+            <p className={styles.formatHintTitle}>Required CSV Columns</p>
+            <p className={styles.formatHintCode}>
+              cap_application_number, date_of_birth, full_name, email
+            </p>
+            <p className={styles.formatHintCode} style={{ marginTop: '0.35rem', color: '#9ba1ab' }}>
+              Example: CAP2025001, 2005-08-14, Ahmed Ali, ahmed@email.com
+            </p>
+          </div>
+
+          <div className={`${styles.dropzone} ${selectedFile ? styles.hasFile : ''}`}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className={styles.dropzoneInput}
+              onChange={handleFileChange}
+            />
+            {selectedFile ? (
+              <>
+                <div className={styles.dropzoneIcon}>✅</div>
+                <p className={styles.dropzoneFileName}>{selectedFile.name}</p>
+                <p className={styles.dropzoneSubtext}>
+                  {(selectedFile.size / 1024).toFixed(1)} KB — Ready to upload
+                </p>
+              </>
+            ) : (
+              <>
+                <div className={styles.dropzoneIcon}>📂</div>
+                <p className={styles.dropzoneText}>Tap to select CSV file</p>
+                <p className={styles.dropzoneSubtext}>Only .csv files accepted</p>
+              </>
+            )}
+          </div>
+
+          <button
+            className={styles.uploadBtn}
+            onClick={handleUpload}
+            disabled={uploading || !selectedFile}
+          >
+            {uploading ? (
+              <><span className={styles.spinner} /> Uploading...</>
+            ) : (
+              'Upload Students →'
+            )}
+          </button>
         </div>
 
-        {approvalMsg && <div className={styles.successBanner}>✓ {approvalMsg}</div>}
+        {/* Upload Results */}
+        {uploadResult && (
+          <>
+            <p className={styles.sectionTitle}>Upload Results</p>
+            <div className={styles.uploadCard}>
+              <div className={styles.resultsGrid}>
+                <div className={`${styles.resultStat} ${styles.success}`}>
+                  <p className={styles.resultValue}>{uploadResult.inserted_count}</p>
+                  <p className={styles.resultLabel}>Inserted</p>
+                </div>
+                <div className={`${styles.resultStat} ${uploadResult.error_count > 0 ? styles.danger : styles.success}`}>
+                  <p className={styles.resultValue}>{uploadResult.error_count}</p>
+                  <p className={styles.resultLabel}>Errors</p>
+                </div>
+              </div>
 
-        <div className={styles.tableWrapper} style={{ marginBottom: '1.25rem' }}>
-          {loadingPending ? (
-            <div className={styles.loadingState}>
-              <div className={styles.spinner} />
-              <p className={styles.loadingText}>Loading...</p>
+              {uploadResult.errors && uploadResult.errors.length > 0 && (
+                <div className={styles.errorList}>
+                  <p className={styles.errorListTitle}>Row Errors</p>
+                  {uploadResult.errors.map((err, i) => (
+                    <div key={i} className={styles.errorItem}>
+                      Row {err.row}: {err.issues.join(', ')}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : pendingStudents.length === 0 ? (
-            <div className={styles.emptyState}>
-              <div className={styles.emptyIcon}>✅</div>
-              <p className={styles.emptyTitle}>No pending approvals</p>
-              <p className={styles.emptySubtitle}>All signup requests have been reviewed.</p>
-            </div>
-          ) : (
-            <table className={styles.table}>
-              <thead className={styles.tableHead}>
-                <tr>
-                  <th>#</th>
-                  <th>Name</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingStudents.map((student, index) => (
-                  <tr key={student.id} className={styles.tableRow}>
-                    <td>{index + 1}</td>
-                    <td>{student.full_name}</td>
-                    <td>
-                      <div className={styles.actionBtns}>
-                        <button
-                          className={styles.approveBtn}
-                          onClick={() => handleApprove(student.id)}
-                          disabled={approvingId === student.id || rejectingId === student.id}
-                        >
-                          {approvingId === student.id ? '...' : '✓ Approve'}
-                        </button>
-                        <button
-                          className={styles.rejectBtn}
-                          onClick={() => handleReject(student.id)}
-                          disabled={approvingId === student.id || rejectingId === student.id}
-                        >
-                          {rejectingId === student.id ? '...' : '✗ Reject'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+          </>
+        )}
 
-        {/* Defaulter Radar */}
+        {/* ── DEFAULTER RADAR ── */}
+        <p className={styles.sectionTitle}>Registration Status</p>
+
         {error && <div className={styles.errorBanner}>{error}</div>}
 
         <div className={styles.semesterRow}>
-          <span className={styles.semesterLabel}>Check Semester:</span>
+          <span className={styles.semesterLabel}>Semester:</span>
           <select
             className={styles.semesterSelect}
             value={semester}
@@ -260,7 +340,11 @@ export default function HodDashboard() {
               <option key={s} value={s}>Semester {s}</option>
             ))}
           </select>
-          <button className={styles.fetchBtn} onClick={handleFetch} disabled={loading}>
+          <button
+            className={styles.fetchBtn}
+            onClick={handleFetch}
+            disabled={loading}
+          >
             {loading ? 'Loading...' : 'Check →'}
           </button>
         </div>
@@ -292,11 +376,15 @@ export default function HodDashboard() {
             </div>
 
             <div className={styles.sectionHeader}>
-              <p className={styles.sectionTitle}>Pending Students ({data.defaulter_count})</p>
+              <p className={styles.sectionTitle}>
+                Pending Students ({data.defaulter_count})
+              </p>
               {data.defaulter_count > 0 && (
                 copied
                   ? <span className={styles.copiedMsg}>✓ Copied!</span>
-                  : <button className={styles.whatsappBtn} onClick={handleCopyWhatsApp}>📋 Copy for WhatsApp</button>
+                  : <button className={styles.whatsappBtn} onClick={handleCopyWhatsApp}>
+                      📋 Copy for WhatsApp
+                    </button>
               )}
             </div>
 
@@ -312,14 +400,13 @@ export default function HodDashboard() {
               ) : (
                 <table className={styles.table}>
                   <thead className={styles.tableHead}>
-                    <tr><th>#</th><th>Name</th><th>Roll Number</th></tr>
+                    <tr><th>#</th><th>Name</th></tr>
                   </thead>
                   <tbody>
                     {data.defaulters.map((student, index) => (
                       <tr key={student.id} className={styles.tableRow}>
                         <td>{index + 1}</td>
                         <td>{student.full_name}</td>
-                        <td className={styles.rollNumber}>{student.roll_number}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -1,22 +1,31 @@
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { BulkUploadRow, BulkUploadRowSchema } from '@/modules/admin/schemas/bulkUploadSchema'
+import { z } from 'zod'
 
-export async function processBulkUpload(rows: BulkUploadRow[]) {
+const HodUploadRowSchema = z.object({
+  cap_application_number: z.string().min(1, 'CAP number is required'),
+  date_of_birth: z.string().min(1, 'Date of birth is required'),
+  full_name: z.string().min(1, 'Full name is required'),
+  email: z.string().email().optional().or(z.literal('')),
+})
+
+export type HodUploadRow = z.infer<typeof HodUploadRowSchema>
+
+export async function processBulkUpload(
+  rows: unknown[],
+  department_id: string,
+  campus_id: string,
+  academic_year: string
+) {
 
   if (!rows || rows.length === 0) {
-    return {
-      success: false,
-      error: 'No data provided',
-      status: 400,
-    }
+    return { success: false, error: 'No data provided', status: 400 }
   }
 
-  // Validate every row first
-  const validRows: BulkUploadRow[] = []
+  const validRows: HodUploadRow[] = []
   const errors: { row: number; issues: string[] }[] = []
 
   rows.forEach((row, index) => {
-    const result = BulkUploadRowSchema.safeParse(row)
+    const result = HodUploadRowSchema.safeParse(row)
     if (result.success) {
       validRows.push(result.data)
     } else {
@@ -28,71 +37,21 @@ export async function processBulkUpload(rows: BulkUploadRow[]) {
   })
 
   if (validRows.length === 0) {
-    return {
-      success: false,
-      error: 'No valid rows found',
-      errors,
-      status: 400,
-    }
+    return { success: false, error: 'No valid rows found', errors, status: 400 }
   }
 
-  // Resolve all unique department names to IDs
-  const uniqueDeptNames = [...new Set(validRows.map(r => r.department_name))]
-  const deptMap: Record<string, string> = {}
-
-  for (const name of uniqueDeptNames) {
-    const { data: dept } = await supabaseAdmin
-      .from('departments')
-      .select('id')
-      .eq('name', name)
-      .single()
-
-    if (dept) {
-      deptMap[name] = dept.id
-    } else {
-      return {
-        success: false,
-        error: `Department not found: "${name}". Check the department name matches exactly.`,
-        status: 400,
-      }
-    }
-  }
-
-  // Resolve all unique campus codes to IDs
-  const uniqueCampusCodes = [...new Set(validRows.map(r => r.campus_code))]
-  const campusMap: Record<string, string> = {}
-
-  for (const code of uniqueCampusCodes) {
-    const { data: campus } = await supabaseAdmin
-      .from('campuses')
-      .select('id')
-      .eq('code', code)
-      .single()
-
-    if (campus) {
-      campusMap[code] = campus.id
-    } else {
-      return {
-        success: false,
-        error: `Campus not found: "${code}". Check the campus code matches exactly.`,
-        status: 400,
-      }
-    }
-  }
-
-  // Build final insert payload with resolved IDs
+  // Build insert payload — department and campus come from HOD session
   const insertPayload = validRows.map(row => ({
     cap_application_number: row.cap_application_number,
     date_of_birth: row.date_of_birth,
     full_name: row.full_name,
     email: row.email === '' ? null : row.email,
-    department_id: deptMap[row.department_name],
-    campus_id: campusMap[row.campus_code],
-    academic_year: row.academic_year,
+    department_id,
+    campus_id,
+    academic_year,
     is_claimed: false,
   }))
 
-  // Bulk insert
   const { data, error: insertError } = await supabaseAdmin
     .from('admissions_master')
     .insert(insertPayload)
@@ -108,7 +67,7 @@ export async function processBulkUpload(rows: BulkUploadRow[]) {
     }
     return {
       success: false,
-      error: 'Failed to insert admissions data',
+      error: 'Failed to insert data',
       details: insertError.message,
       status: 500,
     }

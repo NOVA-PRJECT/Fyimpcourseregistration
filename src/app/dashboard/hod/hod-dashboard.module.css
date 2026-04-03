@@ -472,6 +472,201 @@
   color: #1a6b3c;
   margin-bottom: 1rem;
 }
+/* ── CSV UPLOAD ── */
+.uploadCard {
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.uploadDescription {
+  font-size: 0.78rem;
+  color: #44474e;
+  margin: 0 0 0.85rem 0;
+  line-height: 1.5;
+}
+
+.formatHint {
+  background: #f8f9fa;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.formatHintTitle {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #9ba1ab;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.35rem 0;
+}
+
+.formatHintCode {
+  font-size: 0.72rem;
+  font-family: monospace;
+  color: #44474e;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.dropzone {
+  border: 2px dashed #dde1e7;
+  border-radius: 0.75rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  margin-bottom: 0.85rem;
+  position: relative;
+}
+
+.dropzone:hover {
+  border-color: #002147;
+  background: #f8f9fa;
+}
+
+.dropzone.hasFile {
+  border-color: #2ecc71;
+  background: #f0faf4;
+}
+
+.dropzoneInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.dropzoneIcon {
+  font-size: 1.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.dropzoneText {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #44474e;
+  margin: 0 0 0.2rem 0;
+}
+
+.dropzoneSubtext {
+  font-size: 0.68rem;
+  color: #9ba1ab;
+  margin: 0;
+}
+
+.dropzoneFileName {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1a6b3c;
+  margin: 0 0 0.2rem 0;
+}
+
+.uploadBtn {
+  width: 100%;
+  padding: 0.75rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #002147;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.uploadBtn:hover:not(:disabled) {
+  background: #001633;
+}
+
+.uploadBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.resultsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.resultStat {
+  text-align: center;
+  padding: 0.75rem;
+  border-radius: 0.6rem;
+  border: 1px solid #e2e5ea;
+}
+
+.resultStat.success {
+  background: #f0faf4;
+  border-color: #a8d5b5;
+}
+
+.resultStat.danger {
+  background: #fdf2f2;
+  border-color: #f5c6c6;
+}
+
+.resultValue {
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin: 0;
+  line-height: 1;
+}
+
+.resultStat.success .resultValue { color: #1a6b3c; }
+.resultStat.danger .resultValue { color: #c0392b; }
+
+.resultLabel {
+  font-size: 0.65rem;
+  color: #9ba1ab;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0.25rem 0 0 0;
+  font-weight: 600;
+}
+
+.errorList {
+  background: #fdf2f2;
+  border: 1px solid #f5c6c6;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  max-height: 10rem;
+  overflow-y: auto;
+}
+
+.errorListTitle {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #c0392b;
+  text-transform: uppercase;
+  margin: 0 0 0.4rem 0;
+}
+
+.errorItem {
+  font-size: 0.72rem;
+  color: #c0392b;
+  padding: 0.2rem 0;
+  border-bottom: 1px solid #f5c6c6;
+}
+
+.errorItem:last-child {
+  border-bottom: none;
+}
 
 @media (min-width: 640px) {
   .topBar { padding: 1rem 1.5rem; }

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { BulkUploadSchema } from '@/modules/admin/schemas/bulkUploadSchema'
 import { processBulkUpload } from '@/modules/admin/services/processBulkUpload'
+
+export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
 
@@ -23,35 +24,53 @@ export async function POST(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: admin } = await supabase
-    .from('admins')
-    .select('role')
+  // Verify HOD
+  const { data: hod } = await supabase
+    .from('faculty')
+    .select('role, department_id, campus_id')
     .eq('id', user.id)
     .single()
 
-  if (!admin || admin.role !== 'superadmin') {
+  if (!hod || hod.role !== 'hod') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
-  const body = await request.json()
-  const result = BulkUploadSchema.safeParse(body)
+  if (!hod.department_id) {
+    return NextResponse.json({ error: 'HOD has no department assigned' }, { status: 400 })
+  }
 
-if (!result.success) {
-  return NextResponse.json(
-    { error: JSON.stringify(result.error.flatten()), first_row: body[0] },
-    { status: 400 }
+  // Get academic year from campus settings
+  const { data: settings } = await supabase
+    .from('campus_settings')
+    .select('academic_year')
+    .eq('campus_id', hod.campus_id)
+    .single()
+
+  const academic_year = settings?.academic_year ?? new Date().getFullYear().toString()
+
+  const body = await request.json()
+
+  if (!Array.isArray(body)) {
+    return NextResponse.json(
+      { error: 'Payload must be an array of rows' },
+      { status: 400 }
+    )
+  }
+
+  const response = await processBulkUpload(
+    body,
+    hod.department_id,
+    hod.campus_id,
+    academic_year
   )
-}
-  const response = await processBulkUpload(result.data)
 
   if (!response.success) {
     return NextResponse.json(
-      { error: response.error, errors: response.errors },
+      { error: response.error },
       { status: response.status }
     )
   }
