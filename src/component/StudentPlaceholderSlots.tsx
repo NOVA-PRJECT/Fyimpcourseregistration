@@ -4,10 +4,11 @@ export default function StudentPlaceholderSlots() {
       return (
       <>
       <div className={styles.placeholderBanner}>
-        <span className={styles.placeholderBannerIcon}>👆</span>
+        
         <p className={styles.placeholderBannerText}>
           Click <strong>Register →</strong> to load your courses
         </p>
+        <span className={styles.placeholderBannerIcon}>👆</span>
       </div>
 
       <p className={styles.sectionTitle}>Course Registration</p>
