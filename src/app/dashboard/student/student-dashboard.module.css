@@ -515,6 +515,34 @@
   font-weight: 600;
   margin-bottom: 1rem;
 }
+/* Placeholder banner */
+.placeholderBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #fff8e6;
+  border: 1px solid #f5d78c;
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.placeholderBannerIcon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.placeholderBannerText {
+  font-size: 0.78rem;
+  color: #8b6914;
+  margin: 0;
+  font-weight: 500;
+}
+
+.placeholderBannerText strong {
+  color: #c9a227;
+  font-weight: 800;
+}
 
 /* Tablet and up */
 @media (min-width: 640px) {

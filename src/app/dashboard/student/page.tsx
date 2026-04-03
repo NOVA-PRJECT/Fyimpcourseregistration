@@ -5,6 +5,8 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import styles from './student-dashboard.module.css'
+import StudentPlaceholderSlots from '@/component/StudentPlaceholderSlots';
+
 
 interface Course {
   id: string
@@ -253,27 +255,10 @@ export default function StudentDashboard() {
       {/* Main Content */}
       <div className={styles.mainContent}>
 
-        {error && <div className={styles.errorBanner}>{error}</div>}
-        {successMsg && <div className={styles.successBanner}>✓ {successMsg}</div>}
+        
 
         {/* ── IDLE STATE ── */}
-        {dashState === 'idle' && (
-          <>
-            <p className={styles.sectionTitle}>Course Registration</p>
-            <div className={styles.slotsContainer}>
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className={styles.slotCard}>
-                  <div className={styles.slotHeader}>
-                    <span className={styles.slotLabel}>Paper {i}</span>
-                  </div>
-                  <div className={styles.greyedSlot}>
-                    <div className={styles.greyedBar} style={{ width: `${50 + i * 8}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+       {dashState === 'idle' && <StudentPlaceholderSlots />}
 
         {/* ── LOADING ── */}
         {dashState === 'loading_blueprint' && (
@@ -357,6 +342,8 @@ export default function StudentDashboard() {
                 </div>
               ))}
             </div>
+            {error && <div className={styles.errorBanner}>{error}</div>}
+        {successMsg && <div className={styles.successBanner}>✓ {successMsg}</div>}
 
             {/* Submit Button */}
             {(dashState === 'ready' || dashState === 'submitting') && blueprint.window_status === 'OPEN' && (

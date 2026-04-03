@@ -8,8 +8,15 @@ export async function POST(request: NextRequest) {
   const result = SubmitCoursesSchema.safeParse(body)
 
   if (!result.success) {
+  const errors = result.error.flatten()
+  
+  // Extract the first meaningful error message
+  const firstFieldError = Object.values(errors.fieldErrors)[0]?.[0]
+  const firstFormError = errors.formErrors[0]
+  const message = firstFieldError ?? firstFormError ?? 'Invalid input'
+
   return NextResponse.json(
-    { error: JSON.stringify(result.error.flatten()) },
+    { error: message },
     { status: 400 }
   )
 }
