@@ -183,12 +183,17 @@ export async function getBlueprint() {
       // Student cannot pick their own department's tagged papers
       // Target = tag e.g. "MDC-1"
       if (rule === SLOT_RULES.GLOBAL_BASKET) {
-        const { data: options } = await query
-          .neq('department_id', student.department_id)
-          .eq('tag', target)
+  let q = query.eq('tag', target)
 
-        return { slot, rule, name, options: options ?? [] }
-      }
+  // If target contains "MDC", exclude student's department
+  if (target.includes("MDC")) {
+    q = q.neq('department_id', student.department_id)
+  }
+
+  const { data: options } = await q
+
+  return { slot, rule, name, options: options ?? [] }
+}
 
       // Unknown rule — return empty safely
       return { slot, rule, name, options: [] }
