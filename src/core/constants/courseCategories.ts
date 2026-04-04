@@ -17,4 +17,5 @@ export const SLOT_RULES = {
   GLOBAL_BASKET: 'GLOBAL_BASKET',
 } as const
 
+
 export type SlotRule = typeof SLOT_RULES[keyof typeof SLOT_RULES]

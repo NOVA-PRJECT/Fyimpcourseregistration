@@ -8,4 +8,4 @@ export const BulkUploadRowSchema = z.object({
 })
 
 export const BulkUploadSchema = z.array(BulkUploadRowSchema)
-export type BulkUploadRow = z.infer<typeof
+export type BulkUploadRow = z.infer<typeof BulkUploadRowSchema>
