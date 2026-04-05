@@ -1,7 +1,7 @@
 'use client'
 
 export const dynamic = 'force-dynamic'
-
+import BlueprintTab from './BlueprintTab'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -41,7 +41,7 @@ interface UploadResult {
   errors?: { row: number; issues: string[] }[]
 }
 
-type Tab = 'upload' | 'students' | 'defaulters'
+type Tab = 'defaulters' | 'upload' | 'students' | 'blueprint'
 
 export default function HodDashboard() {
   const router = useRouter()
@@ -355,6 +355,12 @@ export default function HodDashboard() {
   >
     👥 Students
   </button>
+  <button
+  className={`${styles.tabBtn} ${activeTab === 'blueprint' ? styles.tabActive : ''}`}
+  onClick={() => setActiveTab('blueprint')}
+>
+  📐 Blueprint
+</button>
 </div>
 
       {/* Main Content */}
@@ -709,6 +715,11 @@ export default function HodDashboard() {
             )}
           </>
         )}
+        
+        
+        {activeTab === 'blueprint' && <BlueprintTab />}
+        
+        
 
         {/* ══════════════════════════════════════
             TAB 3 — DEFAULTERS

@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Kannur University | FYIMP Digital Ledger',
+  title: 'FYIMP COURSE REGISTRATION KUC',
   description: 'Academic Excellence Digitally Preserved.',
 };
 

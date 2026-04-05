@@ -1,0 +1,152 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { z } from 'zod'
+
+export const dynamic = 'force-dynamic'
+
+const CourseSchema = z.object({
+  course_code: z.string().min(1, 'Course code is required'),
+  title: z.string().min(1, 'Title is required'),
+  semester: z.number().int().min(1).max(10),
+  credits: z.number().int().min(1),
+  category: z.enum(['DSC', 'MDC', 'DSE', 'SEC', 'VAC', 'MOOC']),
+  tag: z.string().optional().or(z.literal('')),
+})
+
+async function verifyHod(cookieStore: any) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll(cookiesToSet: any) {
+          cookiesToSet.forEach(({ name, value, options }: any) =>
+            cookieStore.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: hod } = await supabase
+    .from('faculty')
+    .select('role, department_id, campus_id')
+    .eq('id', user.id)
+    .single()
+  if (!hod || hod.role !== 'hod') return null
+  return { user, hod }
+}
+
+// GET — fetch courses for dept + semester
+export async function GET(request: NextRequest) {
+  const cookieStore = await cookies()
+  const result = await verifyHod(cookieStore)
+  if (!result) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(request.url)
+  const semester = searchParams.get('semester')
+  if (!semester) return NextResponse.json({ error: 'Semester required' }, { status: 400 })
+
+  const { data, error } = await supabaseAdmin
+    .from('courses')
+    .select('*')
+    .eq('department_id', result.hod.department_id)
+    .eq('semester', Number(semester))
+    .order('category')
+
+  if (error) return NextResponse.json({ error: 'Failed to fetch courses' }, { status: 500 })
+  return NextResponse.json(data ?? [])
+}
+
+// POST — add new course
+export async function POST(request: NextRequest) {
+  const cookieStore = await cookies()
+  const result = await verifyHod(cookieStore)
+  if (!result) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await request.json()
+  const parsed = CourseSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  }
+
+  const { error } = await supabaseAdmin
+    .from('courses')
+    .insert({
+      course_code: parsed.data.course_code,
+      title: parsed.data.title,
+      department_id: result.hod.department_id,
+      semester: parsed.data.semester,
+      credits: parsed.data.credits,
+      category: parsed.data.category,
+      tag: parsed.data.tag || null,
+    })
+
+  if (error) {
+    if (error.code === '23505') {
+      return NextResponse.json({ error: 'Course code already exists' }, { status: 409 })
+    }
+    return NextResponse.json({ error: 'Failed to add course' }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true, message: 'Course added successfully' })
+}
+
+// PUT — edit course
+export async function PUT(request: NextRequest) {
+  const cookieStore = await cookies()
+  const result = await verifyHod(cookieStore)
+  if (!result) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await request.json()
+  const { id, ...rest } = body
+
+  if (!id) return NextResponse.json({ error: 'Course ID required' }, { status: 400 })
+
+  // Verify course belongs to HOD's department
+  const { data: course } = await supabaseAdmin
+    .from('courses').select('department_id').eq('id', id).single()
+
+  if (!course || course.department_id !== result.hod.department_id) {
+    return NextResponse.json({ error: 'Course not found' }, { status: 404 })
+  }
+
+  const { error } = await supabaseAdmin
+    .from('courses')
+    .update({
+      title: rest.title,
+      credits: rest.credits,
+      category: rest.category,
+      tag: rest.tag || null,
+    })
+    .eq('id', id)
+
+  if (error) return NextResponse.json({ error: 'Failed to update course' }, { status: 500 })
+  return NextResponse.json({ success: true, message: 'Course updated successfully' })
+}
+
+// DELETE — delete course
+export async function DELETE(request: NextRequest) {
+  const cookieStore = await cookies()
+  const result = await verifyHod(cookieStore)
+  if (!result) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { course_id } = await request.json()
+  if (!course_id) return NextResponse.json({ error: 'Course ID required' }, { status: 400 })
+
+  // Verify belongs to HOD's department
+  const { data: course } = await supabaseAdmin
+    .from('courses').select('department_id').eq('id', course_id).single()
+
+  if (!course || course.department_id !== result.hod.department_id) {
+    return NextResponse.json({ error: 'Course not found' }, { status: 404 })
+  }
+
+  const { error } = await supabaseAdmin.from('courses').delete().eq('id', course_id)
+  if (error) return NextResponse.json({ error: 'Failed to delete course' }, { status: 500 })
+  return NextResponse.json({ success: true, message: 'Course deleted successfully' })
+}

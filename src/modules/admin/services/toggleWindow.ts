@@ -2,6 +2,21 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { CampusSettingsInput } from '@/modules/admin/schemas/campusSettingsSchema'
 
+
+// Add this helper function at the top
+function getCurrentAcademicYear(): string {
+  const now = new Date()
+  const month = now.getMonth() + 1 // 1-12
+  const year = now.getFullYear()
+  // Academic year starts in June
+  // June 2025 → August 2026 = '2025-26'
+  // January 2026 → May 2026 = '2025-26'
+  if (month >= 6) {
+    return `${year}-${String(year + 1).slice(2)}`
+  } else {
+    return `${year - 1}-${String(year).slice(2)}`
+  }
+}
 export async function toggleWindow({
   status,
   deadline,
@@ -62,6 +77,9 @@ export async function toggleWindow({
     }
   }
 
+const academic_year = getCurrentAcademicYear() // ← auto calculated
+
+
   const { error: upsertError } = await supabase
     .from('campus_settings')
     .upsert({
@@ -70,10 +88,12 @@ export async function toggleWindow({
       deadline: deadlineDate.toISOString(),
       min_credits,
       max_credits,
-      academic_year,
+      academic_year, // ← from function, not from input
     }, {
       onConflict: 'campus_id',
     })
+  // ... rest stays same
+}
 
   if (upsertError) {
     return {

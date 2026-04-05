@@ -357,6 +357,60 @@
   padding: 3rem 1rem;
   gap: 1rem;
 }
+.creditsRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.creditField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.slotsEditorContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.slotEditorCard {
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.75rem;
+  padding: 0.9rem 1rem;
+}
+
+.slotEditorTitle {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #002147;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.75rem 0;
+}
+
+.saveBtn {
+  width: 100%;
+  padding: 0.85rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #ffffff;
+  background: #002147;
+  border: none;
+  border-radius: 0.6rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.saveBtn:hover:not(:disabled) { background: #001633; }
+.saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .spinner {
   width: 2rem;

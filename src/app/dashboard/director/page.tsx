@@ -310,17 +310,20 @@ const [showConfirm, setShowConfirm] = useState(false)
                 onChange={e => setDeadline(e.target.value)}
               />
             </div>
-
+            
             <div className={styles.field}>
-              <label className={styles.label}>Academic Year</label>
-              <input
-                type="text"
-                className={styles.input}
-                value={academicYear}
-                onChange={e => setAcademicYear(e.target.value)}
-                placeholder="e.g. 2025-26"
-              />
-            </div>
+  <label className={styles.label}>Academic Year</label>
+  <div className={styles.readOnlyField}>
+    {new Date().getMonth() + 1 >= 6
+      ? `${new Date().getFullYear()}-${String(new Date().getFullYear() + 1).slice(2)}`
+      : `${new Date().getFullYear() - 1}-${String(new Date().getFullYear()).slice(2)}`
+    }
+    <span className={styles.autoLabel}>Auto</span>
+  </div>
+</div>
+            
+
+
 
             <div className={styles.inputRow}>
               <div className={styles.field}>
