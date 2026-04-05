@@ -29,7 +29,7 @@ interface RosterData {
 
 export default function TeacherDashboard() {
   const router = useRouter()
-
+  const [searchQuery, setSearchQuery] = useState('')
   const [teacherName, setTeacherName] = useState('')
   const [loadingTeacher, setLoadingTeacher] = useState(true)
   const [courses, setCourses] = useState<Course[]>([])
@@ -215,29 +215,61 @@ export default function TeacherDashboard() {
         {/* Course Search */}
         <p className={styles.searchLabel}>Select a Course</p>
         <div className={styles.searchRow}>
-          <select
-            className={styles.courseSelect}
-            value={selectedCourseId}
-            onChange={e => {
-              setSelectedCourseId(e.target.value)
-              setRosterData(null)
-              setError('')
+          {/* NEW — search input */}
+<div className={styles.searchWrapper}>
+  <input
+    type="text"
+    className={styles.searchInput}
+    placeholder="Search course name or code..."
+    value={searchQuery}
+    onChange={e => {
+      setSearchQuery(e.target.value)
+      setSelectedCourseId('')
+      setRosterData(null)
+      setError('')
+    }}
+    autoComplete="off"
+  />
+
+  {/* Search results dropdown */}
+  {searchQuery.length > 1 && !selectedCourseId && (
+    <div className={styles.searchResults}>
+      {courses
+        .filter(c =>
+          c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          c.course_code.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+        .slice(0, 8)
+        .map(course => (
+          <button
+            key={course.id}
+            className={styles.searchResultItem}
+            onClick={() => {
+              setSelectedCourseId(course.id)
+              setSearchQuery(`${course.title} — ${course.course_code}`)
             }}
           >
-            <option value="">— Choose a course —</option>
-            {courses.map(course => (
-              <option key={course.id} value={course.id}>
-                {course.title} — {course.course_code}
-              </option>
-            ))}
-          </select>
-          <button
-            className={styles.fetchBtn}
-            onClick={handleFetch}
-            disabled={loading || !selectedCourseId}
-          >
-            {loading ? 'Loading...' : 'Get Roster →'}
+            <span className={styles.searchResultTitle}>{course.title}</span>
+            <span className={styles.searchResultCode}>{course.course_code}</span>
           </button>
+        ))
+      }
+      {courses.filter(c =>
+        c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.course_code.toLowerCase().includes(searchQuery.toLowerCase())
+      ).length === 0 && (
+        <div className={styles.searchNoResult}>No courses found</div>
+      )}
+    </div>
+  )}
+</div>
+          <button
+  className={styles.fetchBtn}
+  onClick={handleFetch}
+  disabled={loading || !selectedCourseId}
+>
+  {loading ? 'Loading...' : 'Get Roster →'}
+</button>
         </div>
 
         {/* Loading */}

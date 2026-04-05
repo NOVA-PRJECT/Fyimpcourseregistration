@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import styles from './student-dashboard.module.css'
 import StudentPlaceholderSlots from '@/component/StudentPlaceholderSlots';
-
+import ResourceBanner from '@/component/ResourceBanner';
 
 interface Course {
   id: string
@@ -51,6 +51,7 @@ export default function StudentDashboard() {
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [loadingStudent, setLoadingStudent] = useState(true)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -188,6 +189,7 @@ export default function StudentDashboard() {
 
   // Logout
   async function handleLogout() {
+    setLoggingOut(true)
     await supabase.auth.signOut()
     router.push('/login')
   }
@@ -211,8 +213,8 @@ export default function StudentDashboard() {
             <p className={styles.topBarSubtitle}>Student Dashboard</p>
           </div>
         </div>
-        <button className={styles.logoutBtn} onClick={handleLogout}>
-          Logout
+        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
+           {loggingOut ? 'Logging out...' : 'Logout'}
         </button>
       </div>
 
@@ -254,6 +256,8 @@ export default function StudentDashboard() {
 
       {/* Main Content */}
       <div className={styles.mainContent}>
+        {/* Resource Hub Banner */}
+  <ResourceBanner />
 
         
 

@@ -667,6 +667,206 @@
 .errorItem:last-child {
   border-bottom: none;
 }
+/* ── TAB BAR ── */
+.tabBar {
+  display: flex;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e5ea;
+  width: 100%;
+}
+
+.tabBtn {
+  flex: 1;
+  padding: 0.75rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #9ba1ab;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.tabBtn:hover {
+  color: #002147;
+  background: #f8f9fa;
+}
+
+.tabActive {
+  color: #002147;
+  border-bottom-color: #c9a227;
+  background: #f8f9fa;
+}
+
+/* ── ADD BUTTON ── */
+.addBtn {
+  padding: 0.5rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #002147;
+  background: #c9a227;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+
+.addBtn:hover {
+  background: #b8911f;
+}
+
+/* ── MODAL ── */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+
+.modal {
+  background: #ffffff;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 22rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  animation: modalReveal 0.2s ease both;
+}
+
+@keyframes modalReveal {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.modalTitle {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #002147;
+  margin: 0 0 0.35rem 0;
+}
+
+.modalSubtitle {
+  font-size: 0.78rem;
+  color: #44474e;
+  margin: 0 0 1.25rem 0;
+  line-height: 1.5;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #44474e;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.input {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #191c1d;
+  background: #f8f9fa;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  border-color: #002147;
+  background: #ffffff;
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.modalCancelBtn {
+  flex: 1;
+  padding: 0.7rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #44474e;
+  background: #f0f2f5;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.modalCancelBtn:hover:not(:disabled) {
+  background: #e2e5ea;
+}
+
+.modalCancelBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.modalConfirmBtn {
+  flex: 1;
+  padding: 0.7rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #002147;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.modalConfirmBtn:hover:not(:disabled) {
+  background: #001633;
+}
+
+.modalConfirmBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.modalDeleteBtn {
+  flex: 1;
+  padding: 0.7rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #c0392b;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.modalDeleteBtn:hover:not(:disabled) {
+  background: #a93226;
+}
+
+.modalDeleteBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 
 @media (min-width: 640px) {
   .topBar { padding: 1rem 1.5rem; }
