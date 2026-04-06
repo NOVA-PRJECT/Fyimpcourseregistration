@@ -56,7 +56,7 @@ export async function getBlueprint() {
       .single(),
     supabase
       .from('departments')
-      .select('id, name')
+      .select('id, name, code')
   ])
 
   if (settingsError || !settings) {
@@ -72,7 +72,7 @@ export async function getBlueprint() {
   const windowOpen = settings.registration_is_open && deadline && now < deadline
 
   // Build department name → id map for O(1) lookup
-  const deptMap = new Map(departmentsData?.map(d => [d.name, d.id]) || [])
+  const deptMap = new Map(departmentsData?.map(d => [d.code, d.id]) || [])
 
   // 4. PRE-FLIGHT: Identify all slots and batch-fetch FIXED courses
   const slotsInfo = Array.from({ length: 6 }).map((_, i) => ({
