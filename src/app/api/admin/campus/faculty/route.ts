@@ -28,13 +28,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: director } = await supabase
-    .from('faculty')
-    .select('role, campus_id')
+  const { data: superadmin } = await supabase
+    .from('admins')
+    .select('role')
     .eq('id', user.id)
     .single()
 
-  if (!director || director.role !== 'campus_director') {
+  if (!superadmin || superadmin.role !== 'superadmin') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
