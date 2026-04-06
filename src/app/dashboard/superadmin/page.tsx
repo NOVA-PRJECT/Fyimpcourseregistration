@@ -68,6 +68,7 @@ export default function SuperAdminDashboard() {
   const [faculty, setFaculty] = useState<Faculty[]>([])
   const [loadingFaculty, setLoadingFaculty] = useState(false)
   const [showAddFaculty, setShowAddFaculty] = useState(false)
+  const [editFaculty, setEditFaculty] = useState<Faculty | null>(null)   // ← NEW
   const [deleteFaculty, setDeleteFaculty] = useState<Faculty | null>(null)
   const [facultyName, setFacultyName] = useState('')
   const [facultyEmail, setFacultyEmail] = useState('')
@@ -77,6 +78,13 @@ export default function SuperAdminDashboard() {
   const [facultyCampusId, setFacultyCampusId] = useState('')
   const [savingFaculty, setSavingFaculty] = useState(false)
   const [deletingFaculty, setDeletingFaculty] = useState(false)
+
+  // Edit faculty form state (separate from add form)  ← NEW
+  const [editFacultyName, setEditFacultyName] = useState('')
+  const [editFacultyRole, setEditFacultyRole] = useState<'hod' | 'campus_director'>('hod')
+  const [editFacultyDeptId, setEditFacultyDeptId] = useState('')
+  const [editFacultyCampusId, setEditFacultyCampusId] = useState('')
+  const [updatingFaculty, setUpdatingFaculty] = useState(false)          // ← NEW
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -219,7 +227,7 @@ export default function SuperAdminDashboard() {
     }
     setSavingFaculty(true)
     clearMessages()
-    const res = await fetch('/api/admin/campus/faculty', {
+    const res = await fetch('/api/admin/faculty-list', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -241,6 +249,51 @@ export default function SuperAdminDashboard() {
       fetchFaculty()
     }
     setSavingFaculty(false)
+  }
+
+  // ── NEW: Edit Faculty ──
+  function openEditFaculty(f: Faculty) {
+    setEditFaculty(f)
+    setEditFacultyName(f.full_name)
+    setEditFacultyRole(f.role as 'hod' | 'campus_director')
+    // Find the campus_id from campuses list by matching campus name
+    const matchedCampus = campuses.find(c => c.name === (f.campuses as any)?.name)
+    setEditFacultyCampusId(matchedCampus?.id ?? '')
+    // Find the dept_id from departments list by matching dept name
+    const matchedDept = departments.find(d => d.name === (f.departments as any)?.name)
+    setEditFacultyDeptId(matchedDept?.id ?? '')
+    clearMessages()
+  }
+
+  async function handleUpdateFaculty() {
+    if (!editFaculty) return
+    if (!editFacultyName) { setError('Name is required'); return }
+    if (editFacultyRole === 'hod' && !editFacultyDeptId) {
+      setError('Department is required for HOD')
+      return
+    }
+    setUpdatingFaculty(true)
+    clearMessages()
+    const res = await fetch('/api/admin/faculty-list', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: editFaculty.id,
+        full_name: editFacultyName,
+        role: editFacultyRole,
+        department_id: editFacultyRole === 'hod' ? editFacultyDeptId : null,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error ?? 'Failed to update faculty') }
+    else {
+      setSuccess(data.message)
+      setEditFaculty(null)
+      setEditFacultyName(''); setEditFacultyRole('hod')
+      setEditFacultyDeptId(''); setEditFacultyCampusId('')
+      fetchFaculty()
+    }
+    setUpdatingFaculty(false)
   }
 
   async function handleDeleteFaculty() {
@@ -466,9 +519,13 @@ export default function SuperAdminDashboard() {
                         <td><span className={styles.rolePill}>{roleLabel(f.role)}</span></td>
                         <td>{(f.departments as any)?.name ?? '—'}</td>
                         <td>
-                          <button className={styles.deleteBtn} onClick={() => {
-                            setDeleteFaculty(f); clearMessages()
-                          }}>🗑️</button>
+                          <div className={styles.actionBtns}>
+                            {/* ← NEW edit button */}
+                            <button className={styles.editBtn} onClick={() => openEditFaculty(f)}>✏️</button>
+                            <button className={styles.deleteBtn} onClick={() => {
+                              setDeleteFaculty(f); clearMessages()
+                            }}>🗑️</button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -603,10 +660,94 @@ export default function SuperAdminDashboard() {
             </div>
             <div className={styles.modalActions}>
               <button className={styles.modalCancelBtn}
-                onClick={() => { setShowAddFaculty(false); setFacultyName(''); setFacultyEmail(''); setFacultyPassword(''); setFacultyDeptId(''); setFacultyCampusId('') }}
+                onClick={() => {
+                  setShowAddFaculty(false)
+                  setFacultyName(''); setFacultyEmail(''); setFacultyPassword('')
+                  setFacultyDeptId(''); setFacultyCampusId('')
+                }}
                 disabled={savingFaculty}>Cancel</button>
               <button className={styles.modalConfirmBtn} onClick={handleAddFaculty} disabled={savingFaculty}>
                 {savingFaculty ? 'Creating...' : 'Create Account →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── NEW: Edit Faculty Modal ── */}
+      {editFaculty && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Edit Faculty</h3>
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Full Name</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="Dr. Name"
+                  value={editFacultyName}
+                  onChange={e => setEditFacultyName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Email</label>
+                {/* Email is read-only — Supabase auth email change needs a separate flow */}
+                <input
+                  type="email"
+                  className={styles.input}
+                  value={editFaculty.email}
+                  disabled
+                  style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Role</label>
+                <select
+                  className={styles.input}
+                  value={editFacultyRole}
+                  onChange={e => {
+                    setEditFacultyRole(e.target.value as 'hod' | 'campus_director')
+                    // Clear dept if switching away from HOD
+                    if (e.target.value !== 'hod') setEditFacultyDeptId('')
+                  }}
+                >
+                  <option value="hod">HOD</option>
+                  <option value="campus_director">Campus Director</option>
+                </select>
+              </div>
+              {editFacultyRole === 'hod' && (
+                <div className={styles.field}>
+                  <label className={styles.label}>Department</label>
+                  <select
+                    className={styles.input}
+                    value={editFacultyDeptId}
+                    onChange={e => setEditFacultyDeptId(e.target.value)}
+                  >
+                    <option value="">— Select Department —</option>
+                    {departments
+                      .filter(d => !editFacultyCampusId || d.campus_id === editFacultyCampusId)
+                      .map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => {
+                  setEditFaculty(null)
+                  setEditFacultyName(''); setEditFacultyRole('hod')
+                  setEditFacultyDeptId(''); setEditFacultyCampusId('')
+                }}
+                disabled={updatingFaculty}
+              >Cancel</button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleUpdateFaculty}
+                disabled={updatingFaculty}
+              >
+                {updatingFaculty ? 'Saving...' : 'Save Changes →'}
               </button>
             </div>
           </div>
@@ -674,3 +815,4 @@ export default function SuperAdminDashboard() {
     </div>
   )
 }
+
