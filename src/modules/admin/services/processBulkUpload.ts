@@ -1,14 +1,5 @@
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { z } from 'zod'
-
-const HodUploadRowSchema = z.object({
-  cap_application_number: z.string().min(1, 'CAP number is required'),
-  date_of_birth: z.string().min(1, 'Date of birth is required'),
-  full_name: z.string().min(1, 'Full name is required'),
-  email: z.string().email().optional().or(z.literal('')),
-})
-
-export type HodUploadRow = z.infer<typeof HodUploadRowSchema>
+import { BulkUploadRowSchema, BulkUploadRow } from '@/modules/admin/schemas/bulkUploadSchema'
 
 export async function processBulkUpload(
   rows: unknown[],
@@ -21,11 +12,11 @@ export async function processBulkUpload(
     return { success: false, error: 'No data provided', status: 400 }
   }
 
-  const validRows: HodUploadRow[] = []
+  const validRows: BulkUploadRow[] = []
   const errors: { row: number; issues: string[] }[] = []
 
   rows.forEach((row, index) => {
-    const result = HodUploadRowSchema.safeParse(row)
+    const result = BulkUploadRowSchema.safeParse(row)
     if (result.success) {
       validRows.push(result.data)
     } else {
@@ -40,7 +31,7 @@ export async function processBulkUpload(
     return { success: false, error: 'No valid rows found', errors, status: 400 }
   }
 
-  // Build insert payload — department and campus come from HOD session
+  // Build insert payload — department and campus come from HOD session (passed in from route)
   const insertPayload = validRows.map(row => ({
     cap_application_number: row.cap_application_number,
     date_of_birth: row.date_of_birth,
@@ -65,10 +56,10 @@ export async function processBulkUpload(
         status: 409,
       }
     }
+    console.error('processBulkUpload — insert failed:', insertError)
     return {
       success: false,
       error: 'Failed to insert data',
-      details: insertError.message,
       status: 500,
     }
   }

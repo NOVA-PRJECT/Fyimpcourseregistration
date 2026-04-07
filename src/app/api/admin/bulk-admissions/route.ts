@@ -1,53 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { processBulkUpload } from '@/modules/admin/services/processBulkUpload'
+import { verifyHod } from '@/core/auth/verifyRole'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { processBulkUpload } from '@/modules/admin/services/processBulkUpload'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
 
+  // Auth — verified HOD only
+  const auth = await verifyHod()
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
+  // Use session client so RLS applies — HOD can only read their own campus settings
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) =>
           cookiesToSet.forEach(({ name, value, options }) =>
             cookieStore.set(name, value, options)
-          )
-        },
+          ),
       },
     }
   )
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // Verify HOD
-  const { data: hod } = await supabase
-    .from('faculty')
-    .select('role, department_id, campus_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!hod || hod.role !== 'hod') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-  }
-
-  if (!hod.department_id) {
-    return NextResponse.json({ error: 'HOD has no department assigned' }, { status: 400 })
-  }
 
   // Get academic year from campus settings
   const { data: settings } = await supabase
     .from('campus_settings')
     .select('academic_year')
-    .eq('campus_id', hod.campus_id)
+    .eq('campus_id', auth.campus_id)
     .single()
 
   const academic_year = settings?.academic_year ?? new Date().getFullYear().toString()
@@ -63,8 +50,8 @@ export async function POST(request: NextRequest) {
 
   const response = await processBulkUpload(
     body,
-    hod.department_id,
-    hod.campus_id,
+    auth.department_id,
+    auth.campus_id,
     academic_year
   )
 

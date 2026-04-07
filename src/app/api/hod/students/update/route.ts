@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { verifyHod } from '@/core/auth/verifyRole'
 import { z } from 'zod'
+
+export const dynamic = 'force-dynamic'
 
 const UpdateStudentSchema = z.object({
   student_id: z.string().uuid('Invalid student ID'),
@@ -10,36 +11,10 @@ const UpdateStudentSchema = z.object({
   current_semester: z.number().int().min(1).max(10),
 })
 
-export const dynamic = 'force-dynamic'
-
 export async function PUT(request: NextRequest) {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: hod } = await supabase
-    .from('faculty')
-    .select('role, department_id, campus_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!hod || hod.role !== 'hod') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const auth = await verifyHod()
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
   }
 
   const body = await request.json()
@@ -59,11 +34,11 @@ export async function PUT(request: NextRequest) {
     .eq('id', result.data.student_id)
     .single()
 
-  if (!student || student.department_id !== hod.department_id) {
+  if (!student || student.department_id !== auth.department_id) {
     return NextResponse.json({ error: 'Student not found' }, { status: 404 })
   }
 
-  const { error: updateError } = await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from('students')
     .update({
       full_name: result.data.full_name,
@@ -71,7 +46,8 @@ export async function PUT(request: NextRequest) {
     })
     .eq('id', result.data.student_id)
 
-  if (updateError) {
+  if (error) {
+    console.error('hod/students/update PUT failed:', error)
     return NextResponse.json({ error: 'Failed to update student' }, { status: 500 })
   }
 

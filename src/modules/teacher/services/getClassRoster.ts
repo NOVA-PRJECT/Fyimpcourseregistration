@@ -1,60 +1,27 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { verifyTeacher } from '@/core/auth/verifyRole'
 
 export async function getClassRoster(courseId: string) {
 
-  const cookieStore = await cookies()
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  // Get logged in teacher
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { success: false, error: 'Unauthorized', status: 401 }
+  // Auth — verified teaching_staff only
+  const auth = await verifyTeacher()
+  if (!auth.success) {
+    return { success: false, error: auth.error, status: auth.status }
   }
 
-  // Verify teacher role
-  const { data: teacher, error: teacherError } = await supabase
-    .from('faculty')
-    .select('role, campus_id')
-    .eq('id', user.id)
+  const { campus_id } = auth
+
+  // Get current academic year from campus settings
+  const { data: campusSettings } = await supabaseAdmin
+    .from('campus_settings')
+    .select('academic_year')
+    .eq('campus_id', campus_id)
     .single()
 
-  if (teacherError || !teacher) {
-    return { success: false, error: 'Faculty not found', status: 404 }
-  }
-
-  if (teacher.role !== 'teaching_staff') {
-    return { success: false, error: 'Unauthorized', status: 403 }
-  }
-  
-  // Get current academic year from campus settings
-const { data: campusSettings } = await supabase
-  .from('campus_settings')
-  .select('academic_year')
-  .eq('campus_id', teacher.campus_id)
-  .single()
-
-const academicYear = campusSettings?.academic_year ?? ''
+  const academicYear = campusSettings?.academic_year ?? ''
 
   // Verify the course exists
-  const { data: course, error: courseError } = await supabase
+  const { data: course, error: courseError } = await supabaseAdmin
     .from('courses')
     .select('id, title, course_code')
     .eq('id', courseId)
@@ -65,28 +32,29 @@ const academicYear = campusSettings?.academic_year ?? ''
   }
 
   // Scan all 6 slots for this course ID
-  const { data: registrations, error: regError } = await supabase
-  .from('student_registrations')
-  .select(`
-    student_id,
-    slot_1_course_id,
-    slot_2_course_id,
-    slot_3_course_id,
-    slot_4_course_id,
-    slot_5_course_id,
-    slot_6_course_id
-  `)
-  .eq('academic_year', academicYear)
-  .or(
-    `slot_1_course_id.eq.${courseId},` +
-    `slot_2_course_id.eq.${courseId},` +
-    `slot_3_course_id.eq.${courseId},` +
-    `slot_4_course_id.eq.${courseId},` +
-    `slot_5_course_id.eq.${courseId},` +
-    `slot_6_course_id.eq.${courseId}`
-  )
+  const { data: registrations, error: regError } = await supabaseAdmin
+    .from('student_registrations')
+    .select(`
+      student_id,
+      slot_1_course_id,
+      slot_2_course_id,
+      slot_3_course_id,
+      slot_4_course_id,
+      slot_5_course_id,
+      slot_6_course_id
+    `)
+    .eq('academic_year', academicYear)
+    .or(
+      `slot_1_course_id.eq.${courseId},` +
+      `slot_2_course_id.eq.${courseId},` +
+      `slot_3_course_id.eq.${courseId},` +
+      `slot_4_course_id.eq.${courseId},` +
+      `slot_5_course_id.eq.${courseId},` +
+      `slot_6_course_id.eq.${courseId}`
+    )
 
   if (regError) {
+    console.error('getClassRoster — registrations fetch failed:', regError)
     return { success: false, error: 'Failed to fetch registrations', status: 500 }
   }
 
@@ -98,15 +66,14 @@ const academicYear = campusSettings?.academic_year ?? ''
         total_students: 0,
         department_breakdown: {},
         students: [],
-      }
+      },
     }
   }
 
-  // Get student IDs from registrations
   const studentIds = registrations.map(r => r.student_id)
 
   // Fetch student details with department names
-  const { data: students, error: studentError } = await supabase
+  const { data: students, error: studentError } = await supabaseAdmin
     .from('students')
     .select(`
       id,
@@ -120,12 +87,12 @@ const academicYear = campusSettings?.academic_year ?? ''
     .in('id', studentIds)
 
   if (studentError || !students) {
+    console.error('getClassRoster — student details fetch failed:', studentError)
     return { success: false, error: 'Failed to fetch student details', status: 500 }
   }
 
   // Build department breakdown stats
   const departmentBreakdown: Record<string, number> = {}
-
   students.forEach(student => {
     const deptName = (student.departments as any)?.name ?? 'Unknown'
     departmentBreakdown[deptName] = (departmentBreakdown[deptName] ?? 0) + 1
@@ -147,6 +114,6 @@ const academicYear = campusSettings?.academic_year ?? ''
       total_students: roster.length,
       department_breakdown: departmentBreakdown,
       students: roster,
-    }
+    },
   }
 }

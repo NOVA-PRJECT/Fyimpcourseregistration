@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { verifyHod } from '@/core/auth/verifyRole'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { z } from 'zod'
+
+export const dynamic = 'force-dynamic'
 
 const AddStudentSchema = z.object({
   cap_application_number: z.string().min(1, 'CAP number is required'),
@@ -11,36 +14,10 @@ const AddStudentSchema = z.object({
   email: z.string().email().optional().or(z.literal('')),
 })
 
-export const dynamic = 'force-dynamic'
-
 export async function POST(request: NextRequest) {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: hod } = await supabase
-    .from('faculty')
-    .select('role, department_id, campus_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!hod || hod.role !== 'hod') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  const auth = await verifyHod()
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
   }
 
   const body = await request.json()
@@ -53,11 +30,26 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Get academic year from campus settings
+  // Use session client for campus_settings read — RLS applies
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) =>
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          ),
+      },
+    }
+  )
+
   const { data: settings } = await supabase
     .from('campus_settings')
     .select('academic_year')
-    .eq('campus_id', hod.campus_id)
+    .eq('campus_id', auth.campus_id)
     .single()
 
   const { error: insertError } = await supabaseAdmin
@@ -67,8 +59,8 @@ export async function POST(request: NextRequest) {
       date_of_birth: result.data.date_of_birth,
       full_name: result.data.full_name,
       email: result.data.email || null,
-      department_id: hod.department_id,
-      campus_id: hod.campus_id,
+      department_id: auth.department_id,
+      campus_id: auth.campus_id,
       academic_year: settings?.academic_year ?? new Date().getFullYear().toString(),
       is_claimed: false,
     })
@@ -80,10 +72,8 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       )
     }
-    return NextResponse.json(
-      { error: 'Failed to add student' },
-      { status: 500 }
-    )
+    console.error('hod/students/add POST failed:', insertError)
+    return NextResponse.json({ error: 'Failed to add student' }, { status: 500 })
   }
 
   return NextResponse.json({ success: true, message: 'Student added successfully' })

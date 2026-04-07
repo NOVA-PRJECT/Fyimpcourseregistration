@@ -1,48 +1,24 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { verifyDirector } from '@/core/auth/verifyRole'
+
+export const dynamic = 'force-dynamic'
 
 export async function POST() {
 
-  const cookieStore = await cookies()
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const { data: director } = await supabase
-    .from('faculty')
-    .select('role, campus_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!director || director.role !== 'campus_director') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  // Auth — verified campus_director only
+  const auth = await verifyDirector()
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
   }
 
   const { data: promotedCount, error } = await supabaseAdmin
-    .rpc('promote_campus_students', { p_campus_id: director.campus_id })
+    .rpc('promote_campus_students', { p_campus_id: auth.campus_id })
 
   if (error) {
+    console.error('promote-students RPC failed:', error)
     return NextResponse.json(
-      { error: 'Failed to promote students', details: error.message },
+      { error: 'Failed to promote students' },
       { status: 500 }
     )
   }

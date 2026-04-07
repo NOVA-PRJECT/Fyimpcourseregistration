@@ -1,41 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { verifySuperAdmin } from '@/core/auth/verifyRole'
 import { AddFacultySchema } from '@/modules/admin/schemas/addFacultySchema'
 import { createFacultyUser } from '@/modules/admin/services/createFacultyUser'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
-async function verifyAdmin(cookieStore: any) {
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet: any) {
-          cookiesToSet.forEach(({ name, value, options }: any) =>
-  cookieStore.set(name, value, options)
-)
-        },
-      },
-    }
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data: admin } = await supabase
-    .from('admins').select('role').eq('id', user.id).single()
-  if (!admin || admin.role !== 'superadmin') return null
-  return user
-}
-
 // GET — list all faculty
 export async function GET() {
-  const cookieStore = await cookies()
-  const user = await verifyAdmin(cookieStore)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await verifySuperAdmin()
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
 
   const { data, error } = await supabaseAdmin
     .from('faculty')
@@ -46,7 +23,11 @@ export async function GET() {
     `)
     .order('role')
 
-  if (error) return NextResponse.json({ error: 'Failed to fetch faculty' }, { status: 500 })
+  if (error) {
+    console.error('admin/faculty-list GET failed:', error)
+    return NextResponse.json({ error: 'Failed to fetch faculty' }, { status: 500 })
+  }
+
   return NextResponse.json(data ?? [])
 }
 
@@ -56,9 +37,10 @@ const SuperAdminAddFacultySchema = AddFacultySchema.extend({
 })
 
 export async function POST(request: NextRequest) {
-  const cookieStore = await cookies()
-  const user = await verifyAdmin(cookieStore)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await verifySuperAdmin()
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
 
   const body = await request.json()
   const result = SuperAdminAddFacultySchema.safeParse(body)
@@ -73,10 +55,7 @@ export async function POST(request: NextRequest) {
   const response = await createFacultyUser(result.data)
 
   if (!response.success) {
-    return NextResponse.json(
-      { error: response.error },
-      { status: response.status }
-    )
+    return NextResponse.json({ error: response.error }, { status: response.status })
   }
 
   return NextResponse.json({ success: true, message: response.message })
@@ -86,14 +65,15 @@ export async function POST(request: NextRequest) {
 const UpdateFacultySchema = z.object({
   id: z.string().uuid('Invalid faculty ID'),
   full_name: z.string().min(1, 'Name is required').optional(),
-  role: z.enum(['hod', 'campus_director']).optional(),
+  role: z.enum(['hod', 'campus_director', 'teaching_staff']).optional(),
   department_id: z.string().uuid().nullable().optional(),
 })
 
 export async function PUT(request: NextRequest) {
-  const cookieStore = await cookies()
-  const user = await verifyAdmin(cookieStore)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await verifySuperAdmin()
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
 
   const body = await request.json()
   const result = UpdateFacultySchema.safeParse(body)
@@ -107,8 +87,8 @@ export async function PUT(request: NextRequest) {
 
   const { id, ...updates } = result.data
 
-  // If switching to campus_director, clear department
-  if (updates.role === 'campus_director') {
+  // If switching to campus_director or teaching_staff, clear department
+  if (updates.role === 'campus_director' || updates.role === 'teaching_staff') {
     updates.department_id = null
   }
 
@@ -125,19 +105,25 @@ export async function PUT(request: NextRequest) {
     .update(updates)
     .eq('id', id)
 
-  if (error) return NextResponse.json({ error: 'Failed to update faculty' }, { status: 500 })
+  if (error) {
+    console.error('admin/faculty-list PUT failed:', error)
+    return NextResponse.json({ error: 'Failed to update faculty' }, { status: 500 })
+  }
 
   return NextResponse.json({ success: true, message: 'Faculty updated successfully' })
 }
 
 // DELETE — delete faculty account
 export async function DELETE(request: NextRequest) {
-  const cookieStore = await cookies()
-  const user = await verifyAdmin(cookieStore)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await verifySuperAdmin()
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
 
   const { faculty_id } = await request.json()
-  if (!faculty_id) return NextResponse.json({ error: 'Faculty ID required' }, { status: 400 })
+  if (!faculty_id) {
+    return NextResponse.json({ error: 'Faculty ID required' }, { status: 400 })
+  }
 
   await supabaseAdmin.from('faculty').delete().eq('id', faculty_id)
   await supabaseAdmin.auth.admin.deleteUser(faculty_id)
