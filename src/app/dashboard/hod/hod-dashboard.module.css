@@ -276,7 +276,7 @@
   background: #ffffff;
   border: 1px solid #e2e5ea;
   border-radius: 0.75rem;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .table {

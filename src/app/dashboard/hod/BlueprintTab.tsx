@@ -324,7 +324,7 @@ export default function BlueprintTab() {
               <div className={styles.field}>
                 <label className={styles.label}>Category</label>
                 <select className={styles.input} value={courseCategory} onChange={e => setCourseCategory(e.target.value)}>
-                  {['DSC','MDC','DSE','SEC','VAC','AEC','MOOC'].map(c => (
+                  {['DSS','DSC','DSE','VAC','SEC','MDC','MOOC','AEC','INT','FWD','RPH','CIP'].map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
