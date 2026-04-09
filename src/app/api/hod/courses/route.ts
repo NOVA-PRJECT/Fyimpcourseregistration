@@ -10,7 +10,7 @@ const CourseSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   semester: z.number().int().min(1).max(10),
   credits: z.number().int().min(1),
-  category: z.enum(['DSC', 'MDC', 'DSE', 'SEC', 'VAC', 'MOOC']),
+  category: z.enum(['INT','FWD','RPH','CPT','DSS','DSC','DSE','VAC','SEC','MDC','MOOC','AEC']),
   tag: z.string().optional().or(z.literal('')),
 })
 
