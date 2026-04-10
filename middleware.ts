@@ -35,6 +35,8 @@ export async function middleware(request: NextRequest) {
   const isSignupRoute = pathname.startsWith('/signup')
   const isDashboardRoute = pathname.startsWith('/dashboard')
   const isApiRoute = pathname.startsWith('/api')
+  const isResetRoute = pathname.startsWith('/reset-password')
+if (isResetRoute) return response
 
   // API routes handle their own auth
   if (isApiRoute) return response

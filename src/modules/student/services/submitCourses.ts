@@ -53,7 +53,7 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
   ] = await Promise.all([
     supabase
       .from('campus_settings')
-      .select('registration_is_open, deadline, min_credits, max_credits, academic_year')
+      .select('deadline, min_credits, max_credits, academic_year')
       .eq('campus_id', student.campus_id)
       .single(),
     supabase
@@ -74,7 +74,7 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
   // 5. Check registration window
   const now = new Date()
   const deadline = settings.deadline ? new Date(settings.deadline) : null
-  const windowOpen = settings.registration_is_open && deadline && now < deadline
+  const windowOpen = deadline !== null && now < deadline
 
   if (!windowOpen) {
     return { success: false, error: 'Registration window is closed', status: 403 }

@@ -178,8 +178,11 @@ export default function LoginPage() {
             Claim your account{' '}
             <Link href="/signup">here →</Link>
           </p>
-
+        <p className={styles.forgotLink}>
+  <Link href="/reset-password">Forgot password?</Link>
+</p>
         </div>
+
       </div>
 
       {/* Footer */}

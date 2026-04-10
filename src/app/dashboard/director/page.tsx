@@ -11,32 +11,29 @@ interface Department {
   name: string
 }
 
-interface WindowSettings {
-  registration_is_open: boolean
-  deadline: string | null
-  min_credits: number
-  max_credits: number
-  academic_year: string
-}
-
 export default function DirectorDashboard() {
   const router = useRouter()
 
   const [directorName, setDirectorName] = useState('')
   const [campusName, setCampusName] = useState('')
+  const [campusId, setCampusId] = useState('')
   const [loadingDirector, setLoadingDirector] = useState(true)
   const [departments, setDepartments] = useState<Department[]>([])
 
-  // Window state
-  const [windowSettings, setWindowSettings] = useState<WindowSettings | null>(null)
-  const [windowOpen, setWindowOpen] = useState(false)
+  // Window settings state
+  const [currentDeadline, setCurrentDeadline] = useState<string | null>(null)
   const [deadline, setDeadline] = useState('')
-  const [academicYear, setAcademicYear] = useState('2025-26')
   const [minCredits, setMinCredits] = useState(18)
   const [maxCredits, setMaxCredits] = useState(26)
   const [savingWindow, setSavingWindow] = useState(false)
   const [windowSuccess, setWindowSuccess] = useState('')
   const [windowError, setWindowError] = useState('')
+
+  // Promotion state
+  const [promoting, setPromoting] = useState(false)
+  const [promoteSuccess, setPromoteSuccess] = useState('')
+  const [promoteError, setPromoteError] = useState('')
+  const [showConfirm, setShowConfirm] = useState(false)
 
   // Add faculty state
   const [facultyName, setFacultyName] = useState('')
@@ -47,74 +44,94 @@ export default function DirectorDashboard() {
   const [addingFaculty, setAddingFaculty] = useState(false)
   const [facultySuccess, setFacultySuccess] = useState('')
   const [facultyError, setFacultyError] = useState('')
-  const [promoting, setPromoting] = useState(false)
-const [promoteSuccess, setPromoteSuccess] = useState('')
-const [promoteError, setPromoteError] = useState('')
-const [showConfirm, setShowConfirm] = useState(false)
-
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Load director info on mount
+  // Derived window status from deadline alone
+  const windowIsOpen = currentDeadline !== null && new Date() < new Date(currentDeadline)
+
   useEffect(() => {
     async function loadData() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      // Get director info
+      // Get faculty (director) info
       const { data: faculty } = await supabase
         .from('faculty')
         .select('full_name, campus_id')
         .eq('id', user.id)
         .single()
 
-      if (faculty) {
-        setDirectorName(faculty.full_name)
+      if (!faculty) { router.push('/login'); return }
 
-        // Get campus name
-        const { data: campus } = await supabase
-          .from('campuses')
-          .select('name')
-          .eq('id', faculty.campus_id)
-          .single()
+      setDirectorName(faculty.full_name)
+      setCampusId(faculty.campus_id)
 
-        if (campus) setCampusName(campus.name)
+      // Get campus name
+      const { data: campus } = await supabase
+        .from('campuses')
+        .select('name')
+        .eq('id', faculty.campus_id)
+        .single()
 
-        // Get campus settings
-        const { data: settings } = await supabase
-          .from('campus_settings')
-          .select('*')
-          .eq('campus_id', faculty.campus_id)
-          .single()
+      if (campus) setCampusName(campus.name)
 
-        if (settings) {
-          setWindowSettings(settings)
-          setWindowOpen(settings.registration_is_open)
-          setDeadline(settings.deadline ? settings.deadline.slice(0, 16) : '')
-          setAcademicYear(settings.academic_year)
-          setMinCredits(settings.min_credits)
-          setMaxCredits(settings.max_credits)
-        }
+      // Get campus settings
+      const { data: settings } = await supabase
+        .from('campus_settings')
+        .select('deadline, min_credits, max_credits')
+        .eq('campus_id', faculty.campus_id)
+        .single()
 
-        // Get departments for this campus
-        const { data: depts } = await supabase
-          .from('departments')
-          .select('id, name')
-          .eq('campus_id', faculty.campus_id)
-
-        if (depts) setDepartments(depts)
+      if (settings) {
+        setCurrentDeadline(settings.deadline)
+        setDeadline(
+          settings.deadline
+            ? new Date(settings.deadline).toISOString().slice(0, 16)
+            : ''
+        )
+        setMinCredits(settings.min_credits ?? 18)
+        setMaxCredits(settings.max_credits ?? 26)
       }
+
+      // Get departments for this campus
+      const { data: depts } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('campus_id', faculty.campus_id)
+
+      if (depts) setDepartments(depts)
 
       setLoadingDirector(false)
     }
     loadData()
   }, [])
 
+  // Academic year helper
+  function getAcademicYear(): string {
+    const now = new Date()
+    const month = now.getMonth() + 1
+    const year = now.getFullYear()
+    if (month >= 6) return `${year}-${String(year + 1).slice(2)}`
+    return `${year - 1}-${String(year).slice(2)}`
+  }
+
   // Save window settings
   async function handleSaveWindow() {
+    if (!deadline) {
+      setWindowError('Please set a deadline')
+      return
+    }
+
+    const deadlineDate = new Date(deadline)
+    if (isNaN(deadlineDate.getTime())) {
+      setWindowError('Invalid deadline date')
+      return
+    }
+
     setSavingWindow(true)
     setWindowError('')
     setWindowSuccess('')
@@ -123,49 +140,48 @@ const [showConfirm, setShowConfirm] = useState(false)
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        status: windowOpen ? 'OPEN' : 'CLOSED',
-        deadline: deadline ? new Date(deadline).toISOString() : new Date().toISOString(),
+        deadline: deadlineDate.toISOString(),
         min_credits: minCredits,
         max_credits: maxCredits,
-        academic_year: academicYear,
       }),
     })
 
     const data = await response.json()
 
     if (!response.ok) {
-      setWindowError(data.error ?? 'Failed to update window settings.')
+      setWindowError(data.error ?? 'Failed to update settings.')
       setSavingWindow(false)
       return
     }
 
+    setCurrentDeadline(deadlineDate.toISOString())
     setWindowSuccess(data.message)
     setSavingWindow(false)
   }
-  
-  //update semester 
+
+  // Promote students
   async function handlePromoteStudents() {
-  setPromoting(true)
-  setPromoteError('')
-  setPromoteSuccess('')
+    setPromoting(true)
+    setPromoteError('')
+    setPromoteSuccess('')
 
-  const response = await fetch('/api/admin/campus/promote-students', {
-    method: 'POST',
-  })
+    const response = await fetch('/api/admin/campus/promote-students', {
+      method: 'POST',
+    })
 
-  const data = await response.json()
+    const data = await response.json()
 
-  if (!response.ok) {
-    setPromoteError(data.error ?? 'Failed to promote students.')
+    if (!response.ok) {
+      setPromoteError(data.error ?? 'Failed to promote students.')
+      setPromoting(false)
+      setShowConfirm(false)
+      return
+    }
+
+    setPromoteSuccess(data.message)
     setPromoting(false)
     setShowConfirm(false)
-    return
   }
-
-  setPromoteSuccess(data.message)
-  setPromoting(false)
-  setShowConfirm(false)
-}
 
   // Add faculty
   async function handleAddFaculty() {
@@ -173,7 +189,6 @@ const [showConfirm, setShowConfirm] = useState(false)
       setFacultyError('All fields are required')
       return
     }
-
     if (facultyRole === 'hod' && !facultyDeptId) {
       setFacultyError('Please select a department for the HOD')
       return
@@ -211,7 +226,6 @@ const [showConfirm, setShowConfirm] = useState(false)
     setAddingFaculty(false)
   }
 
-  // Logout
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/login')
@@ -231,9 +245,7 @@ const [showConfirm, setShowConfirm] = useState(false)
             <p className={styles.topBarSubtitle}>Campus Director</p>
           </div>
         </div>
-        <button className={styles.logoutBtn} onClick={handleLogout}>
-          Logout
-        </button>
+        <button className={styles.logoutBtn} onClick={handleLogout}>Logout</button>
       </div>
 
       {/* Director Info Card */}
@@ -242,16 +254,10 @@ const [showConfirm, setShowConfirm] = useState(false)
           <div style={{ height: '2.5rem' }} />
         ) : (
           <>
-            <p className={styles.directorName}>
-              {directorName || 'Campus Director'}
-            </p>
+            <p className={styles.directorName}>{directorName || 'Campus Director'}</p>
             <div className={styles.directorDetails}>
-              <span className={`${styles.detailBadge} ${styles.roleBadge}`}>
-                Campus Director
-              </span>
-              <span className={styles.detailBadge}>
-                {campusName}
-              </span>
+              <span className={`${styles.detailBadge} ${styles.roleBadge}`}>Campus Director</span>
+              <span className={styles.detailBadge}>{campusName}</span>
             </div>
           </>
         )}
@@ -268,62 +274,45 @@ const [showConfirm, setShowConfirm] = useState(false)
 
         <div className={styles.windowCard}>
 
-          {/* Status + Toggle */}
-          <div className={styles.windowStatusRow}>
-            <div className={styles.windowStatusLeft}>
-              <div className={`${styles.windowDot} ${windowOpen ? styles.open : styles.closed}`} />
-              <div>
-                <p className={styles.windowStatusText}>
-                  {windowOpen ? 'Registration Open' : 'Registration Closed'}
-                </p>
-                {windowSettings?.deadline && (
-                  <p className={styles.windowDeadline}>
-                    Deadline: {new Date(windowSettings.deadline).toLocaleDateString('en-IN', {
-                      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                    })}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className={styles.toggleWrapper}>
-              <span className={styles.toggleLabel}>{windowOpen ? 'Open' : 'Closed'}</span>
-              <label className={styles.toggle}>
-                <input
-                  type="checkbox"
-                  checked={windowOpen}
-                  onChange={e => setWindowOpen(e.target.checked)}
-                />
-                <span className={styles.toggleSlider} />
-              </label>
-            </div>
+          {/* Live Status Banner */}
+          <div className={windowIsOpen ? styles.Banner : styles.windowClosedBanner}>
+            {windowIsOpen ? (
+              <>
+                <span className={styles.statusDot} />
+                Open — closes {new Date(currentDeadline!).toLocaleString('en-IN')}
+              </>
+            ) : (
+              <>
+                ⛔ Closed
+                {currentDeadline
+                  ? ` — deadline was ${new Date(currentDeadline).toLocaleString('en-IN')}`
+                  : ' — no deadline set yet'}
+              </>
+            )}
           </div>
 
-          {/* Settings */}
           <div className={styles.fieldGroup}>
+
             <div className={styles.field}>
-              <label className={styles.label}>Deadline</label>
+              <label className={styles.label}>Registration Deadline</label>
               <input
                 type="datetime-local"
                 className={styles.input}
                 value={deadline}
                 onChange={e => setDeadline(e.target.value)}
               />
+              <p className={styles.fieldHint}>
+                Window opens immediately and closes automatically at this date and time.
+              </p>
             </div>
-            
+
             <div className={styles.field}>
-  <label className={styles.label}>Academic Year</label>
-  <div className={styles.readOnlyField}>
-    {new Date().getMonth() + 1 >= 6
-      ? `${new Date().getFullYear()}-${String(new Date().getFullYear() + 1).slice(2)}`
-      : `${new Date().getFullYear() - 1}-${String(new Date().getFullYear()).slice(2)}`
-    }
-    <span className={styles.autoLabel}>Auto</span>
-  </div>
-</div>
-            
-
-
+              <label className={styles.label}>Academic Year</label>
+              <div className={styles.readOnlyField}>
+                {getAcademicYear()}
+                <span className={styles.autoLabel}>Auto</span>
+              </div>
+            </div>
 
             <div className={styles.inputRow}>
               <div className={styles.field}>
@@ -345,6 +334,7 @@ const [showConfirm, setShowConfirm] = useState(false)
                 />
               </div>
             </div>
+
           </div>
 
           <button
@@ -352,64 +342,63 @@ const [showConfirm, setShowConfirm] = useState(false)
             onClick={handleSaveWindow}
             disabled={savingWindow}
           >
-            {savingWindow ? (
-              <><span className={styles.spinner} /> Saving...</>
-            ) : (
-              'Save Window Settings →'
-            )}
+            {savingWindow
+              ? <><span className={styles.spinner} /> Saving...</>
+              : 'Save Settings →'
+            }
           </button>
+
         </div>
-        
+
         {/* ── SEMESTER PROMOTION ── */}
-<p className={styles.sectionTitle}>Semester Promotion</p>
+        <p className={styles.sectionTitle}>Semester Promotion</p>
 
-{promoteError && <div className={styles.errorBanner}>{promoteError}</div>}
-{promoteSuccess && <div className={styles.successBanner}>✓ {promoteSuccess}</div>}
+        {promoteError && <div className={styles.errorBanner}>{promoteError}</div>}
+        {promoteSuccess && <div className={styles.successBanner}>✓ {promoteSuccess}</div>}
 
-<div className={styles.windowCard}>
-  <p style={{ fontSize: '0.82rem', color: '#44474e', margin: '0 0 1rem 0' }}>
-    Promote all students in this campus to the next semester. 
-    This action cannot be undone. Use only at the start of a new semester.
-  </p>
+        <div className={styles.windowCard}>
+          <p style={{ fontSize: '0.82rem', color: '#44474e', margin: '0 0 1rem 0' }}>
+            Promote all students in this campus to the next semester.
+            This action cannot be undone. Use only at the start of a new semester.
+          </p>
 
-  {!showConfirm ? (
-    <button
-      className={styles.primaryBtn}
-      onClick={() => setShowConfirm(true)}
-      style={{ background: '#c9a227' }}
-    >
-      Promote All Students →
-    </button>
-  ) : (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      <p style={{ fontSize: '0.82rem', color: '#c0392b', fontWeight: 700, margin: 0 }}>
-        ⚠️ Are you sure? This will increment all student semesters by 1.
-      </p>
-      <div style={{ display: 'flex', gap: '0.75rem' }}>
-        <button
-          className={styles.primaryBtn}
-          onClick={handlePromoteStudents}
-          disabled={promoting}
-          style={{ background: '#c0392b' }}
-        >
-          {promoting ? (
-            <><span className={styles.spinner} /> Promoting...</>
+          {!showConfirm ? (
+            <button
+              className={styles.primaryBtn}
+              onClick={() => setShowConfirm(true)}
+              style={{ background: '#c9a227', color: '#002147' }}
+            >
+              Promote All Students →
+            </button>
           ) : (
-            'Yes, Promote →'
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <p style={{ fontSize: '0.82rem', color: '#c0392b', fontWeight: 700, margin: 0 }}>
+                ⚠️ Are you sure? This will increment all student semesters by 1.
+              </p>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  className={styles.primaryBtn}
+                  onClick={handlePromoteStudents}
+                  disabled={promoting}
+                  style={{ background: '#c0392b' }}
+                >
+                  {promoting
+                    ? <><span className={styles.spinner} /> Promoting...</>
+                    : 'Yes, Promote →'
+                  }
+                </button>
+                <button
+                  className={styles.primaryBtn}
+                  onClick={() => setShowConfirm(false)}
+                  disabled={promoting}
+                  style={{ background: '#9ba1ab' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           )}
-        </button>
-        <button
-          className={styles.primaryBtn}
-          onClick={() => setShowConfirm(false)}
-          style={{ background: '#9ba1ab' }}
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  )}
-</div>
-
+        </div>
 
         {/* ── ADD FACULTY ── */}
         <p className={styles.sectionTitle}>Add Faculty</p>
@@ -456,11 +445,12 @@ const [showConfirm, setShowConfirm] = useState(false)
             <div className={styles.field}>
               <label className={styles.label}>Role</label>
               <select
-                className={styles.roleSelect}
+                className={styles.input}
                 value={facultyRole}
                 onChange={e => setFacultyRole(e.target.value as 'hod' | 'campus_director')}
               >
                 <option value="hod">HOD</option>
+                <option value="campus_director">Campus Director</option>
               </select>
             </div>
 
@@ -468,15 +458,13 @@ const [showConfirm, setShowConfirm] = useState(false)
               <div className={styles.field}>
                 <label className={styles.label}>Department</label>
                 <select
-                  className={styles.deptSelect}
+                  className={styles.input}
                   value={facultyDeptId}
                   onChange={e => setFacultyDeptId(e.target.value)}
                 >
                   <option value="">— Select Department —</option>
                   {departments.map(dept => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
                   ))}
                 </select>
               </div>
@@ -489,11 +477,10 @@ const [showConfirm, setShowConfirm] = useState(false)
             onClick={handleAddFaculty}
             disabled={addingFaculty}
           >
-            {addingFaculty ? (
-              <><span className={styles.spinner} /> Creating Account...</>
-            ) : (
-              'Create Faculty Account →'
-            )}
+            {addingFaculty
+              ? <><span className={styles.spinner} /> Creating Account...</>
+              : 'Create Faculty Account →'
+            }
           </button>
         </div>
 

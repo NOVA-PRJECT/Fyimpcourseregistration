@@ -69,7 +69,7 @@ export async function getBlueprint() {
   // Check registration window
   const now = new Date()
   const deadline = settings.deadline ? new Date(settings.deadline) : null
-  const windowOpen = settings.registration_is_open && deadline && now < deadline
+  const windowOpen = deadline !== null && now < deadline
 
   // Build department name → id map for O(1) lookup
   const deptMap = new Map(departmentsData?.map(d => [d.code, d.id]) || [])

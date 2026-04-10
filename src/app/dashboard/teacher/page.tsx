@@ -96,73 +96,20 @@ export default function TeacherDashboard() {
 
   // Generate and download PDF attendance sheet
   async function handleDownloadPDF() {
-    if (!rosterData) return
+  if (!rosterData || rosterData.students.length === 0) return
 
-    const { jsPDF } = await import('jspdf')
-    const doc = new jsPDF()
+  const { generateAttendanceSheet } = await import('@/core/utils/exportPdf')
 
-    const pageWidth = doc.internal.pageSize.getWidth()
-    let y = 20
-
-    // Header
-    doc.setFontSize(16)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Kannur University — FYIMP', pageWidth / 2, y, { align: 'center' })
-    y += 8
-
-    doc.setFontSize(12)
-    doc.text('Attendance Sheet', pageWidth / 2, y, { align: 'center' })
-    y += 10
-
-    // Course info
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Course: ${rosterData.course.title}`, 14, y)
-    y += 6
-    doc.text(`Code: ${rosterData.course.course_code}`, 14, y)
-    y += 6
-    doc.text(`Total Students: ${rosterData.total_students}`, 14, y)
-    y += 6
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')}`, 14, y)
-    y += 10
-
-    // Divider
-    doc.setDrawColor(0, 33, 71)
-    doc.line(14, y, pageWidth - 14, y)
-    y += 8
-
-    // Table header
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    doc.text('#', 14, y)
-    doc.text('Name', 24, y)
-    doc.text('Roll Number', 110, y)
-    doc.text('Department', 155, y)
-    y += 5
-
-    doc.line(14, y, pageWidth - 14, y)
-    y += 6
-
-    // Table rows
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-
-    rosterData.students.forEach((student, index) => {
-      if (y > 270) {
-        doc.addPage()
-        y = 20
-      }
-
-      doc.text(`${index + 1}`, 14, y)
-      doc.text(student.full_name, 24, y)
-      doc.text(student.roll_number, 110, y)
-      doc.text(student.department_code || student.department, 155, y)
-      y += 7
-    })
-
-    // Save
-    doc.save(`attendance_${rosterData.course.course_code}_${new Date().toISOString().slice(0, 10)}.pdf`)
-  }
+  await generateAttendanceSheet({
+    courseTitle: rosterData.course_title,
+    courseCode: rosterData.course_code,
+    students: rosterData.students.map(s => ({
+      full_name: s.full_name,
+      roll_number: s.roll_number,
+      department_name: s.department_name,
+    })),
+  })
+}
 
   // Logout
   async function handleLogout() {
