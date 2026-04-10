@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { verifyHod } from '@/core/auth/verifyRole'
 
 export const dynamic = 'force-dynamic'
@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Semester required' }, { status: 400 })
   }
 
-  const { data: students, error } = await supabaseAdmin
+  const supabase = await getSupabaseServerClient()
+  const { data: students, error } = await supabase
     .from('students')
     .select('id, full_name, current_semester, cap_application_number')
     .eq('department_id', auth.department_id)

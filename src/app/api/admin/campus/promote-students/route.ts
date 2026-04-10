@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { verifyDirector } from '@/core/auth/verifyRole'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +12,8 @@ export async function POST() {
     return NextResponse.json({ error: auth.error }, { status: auth.status })
   }
 
-  const { data: promotedCount, error } = await supabaseAdmin
+  const supabase = await getSupabaseServerClient()
+  const { data: promotedCount, error } = await supabase
     .rpc('promote_campus_students', { p_campus_id: auth.campus_id })
 
   if (error) {

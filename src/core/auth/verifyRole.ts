@@ -174,3 +174,40 @@ export async function verifyTeacher(): Promise<AuthSuccess<VerifiedTeacher> | Au
     role: 'teaching_staff',
   }
 }
+
+// ─────────────────────────────────────────────
+// verifyStudent
+// Returns the verified student's userId and department_id.
+// Use at the top of every student route handler.
+// ─────────────────────────────────────────────
+
+export type VerifiedStudent = {
+  userId: string
+  department_id: string
+  campus_id: string
+  role: 'student'
+}
+
+export async function verifyStudent(): Promise<AuthSuccess<VerifiedStudent> | AuthError> {
+  const cookieStore = await cookies()
+  const supabase = buildSupabaseClient(cookieStore)
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: 'Unauthorized', status: 401 }
+
+  const { data: student, error } = await supabase
+    .from('students')
+    .select('department_id, campus_id')
+    .eq('id', user.id)
+    .single()
+
+  if (error || !student) return { success: false, error: 'Student not found', status: 404 }
+
+  return {
+    success: true,
+    userId: user.id,
+    department_id: student.department_id,
+    campus_id: student.campus_id,
+    role: 'student',
+  }
+}

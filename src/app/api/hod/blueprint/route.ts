@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { verifyHod } from '@/core/auth/verifyRole'
 
 export const dynamic = 'force-dynamic'
@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Semester required' }, { status: 400 })
   }
 
-  const { data, error } = await supabaseAdmin
+  const supabase = await getSupabaseServerClient()
+  const { data, error } = await supabase
     .from('semester_blueprints')
     .select('*')
     .eq('department_id', auth.department_id)
@@ -60,7 +61,8 @@ export async function PUT(request: NextRequest) {
     payload[`slot_${i}_name`] = slot?.name || null
   }
 
-  const { error } = await supabaseAdmin
+  const supabase = await getSupabaseServerClient()
+  const { error } = await supabase
     .from('semester_blueprints')
     .upsert(payload, { onConflict: 'department_id,semester' })
 

@@ -65,6 +65,6 @@ export async function createFacultyUser({
 
   return {
     success: true,
-    message: `${role === 'hod' ? 'HOD' : 'Campus Director'} account created successfully`,
+    message: `${role === 'hod' ? 'HOD' : role === 'campus_director' ? 'Campus Director' : 'Teacher'} account created successfully`,
   }
 }

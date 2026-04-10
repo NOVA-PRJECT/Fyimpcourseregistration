@@ -87,8 +87,8 @@ export async function PUT(request: NextRequest) {
 
   const { id, ...updates } = result.data
 
-  // If switching to campus_director or teaching_staff, clear department
-  if (updates.role === 'campus_director' || updates.role === 'teaching_staff') {
+  // If switching to campus_director, clear department
+  if (updates.role === 'campus_director') {
     updates.department_id = null
   }
 

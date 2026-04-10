@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { verifyHod } from '@/core/auth/verifyRole'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     .eq('campus_id', auth.campus_id)
     .single()
 
-  const { error: insertError } = await supabaseAdmin
+  const { error: insertError } = await supabase
     .from('admissions_master')
     .insert({
       cap_application_number: result.data.cap_application_number,

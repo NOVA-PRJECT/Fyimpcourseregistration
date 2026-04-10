@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { verifyHod } from '@/core/auth/verifyRole'
 import { z } from 'zod'
 
@@ -28,7 +28,8 @@ export async function PUT(request: NextRequest) {
   }
 
   // Verify student belongs to HOD's department
-  const { data: student } = await supabaseAdmin
+  const supabase = await getSupabaseServerClient()
+  const { data: student } = await supabase
     .from('students')
     .select('id, department_id')
     .eq('id', result.data.student_id)
@@ -38,7 +39,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Student not found' }, { status: 404 })
   }
 
-  const { error } = await supabaseAdmin
+  const { error } = await supabase
     .from('students')
     .update({
       full_name: result.data.full_name,

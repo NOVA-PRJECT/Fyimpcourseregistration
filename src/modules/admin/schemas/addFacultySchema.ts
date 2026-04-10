@@ -4,7 +4,7 @@ export const AddFacultySchema = z.object({
   full_name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  role: z.enum(['hod', 'campus_director']),
+  role: z.enum(['hod', 'campus_director', 'teaching_staff']),
   department_id: z.string().uuid().optional(),
 })
 

@@ -81,7 +81,7 @@ export default function SuperAdminDashboard() {
 
   // Edit faculty form state (separate from add form)  ← NEW
   const [editFacultyName, setEditFacultyName] = useState('')
-  const [editFacultyRole, setEditFacultyRole] = useState<'hod' | 'campus_director'>('hod')
+  const [editFacultyRole, setEditFacultyRole] = useState<'hod' | 'campus_director' | 'teaching_staff'>('hod')
   const [editFacultyDeptId, setEditFacultyDeptId] = useState('')
   const [editFacultyCampusId, setEditFacultyCampusId] = useState('')
   const [updatingFaculty, setUpdatingFaculty] = useState(false)          // ← NEW
@@ -707,16 +707,17 @@ export default function SuperAdminDashboard() {
                   className={styles.input}
                   value={editFacultyRole}
                   onChange={e => {
-                    setEditFacultyRole(e.target.value as 'hod' | 'campus_director')
+                    setEditFacultyRole(e.target.value as 'hod' | 'campus_director' | 'teaching_staff')
                     // Clear dept if switching away from HOD
-                    if (e.target.value !== 'hod') setEditFacultyDeptId('')
+                    if (e.target.value === 'campus_director') setEditFacultyDeptId('')
                   }}
                 >
                   <option value="hod">HOD</option>
                   <option value="campus_director">Campus Director</option>
+                  <option value="teaching_staff">Teaching Staff</option>
                 </select>
               </div>
-              {editFacultyRole === 'hod' && (
+              {editFacultyRole === 'hod' || editFacultyRole === 'teaching_staff' && (
                 <div className={styles.field}>
                   <label className={styles.label}>Department</label>
                   <select

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { verifyHod } from '@/core/auth/verifyRole'
 import { z } from 'zod'
 
@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Semester required' }, { status: 400 })
   }
 
-  const { data, error } = await supabaseAdmin
+  const supabase = await getSupabaseServerClient()
+  const { data, error } = await supabase
     .from('courses')
     .select('*')
     .eq('department_id', auth.department_id)
@@ -55,7 +56,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
   }
 
-  const { error } = await supabaseAdmin
+  const supabase = await getSupabaseServerClient()
+  const { error } = await supabase
     .from('courses')
     .insert({
       course_code: parsed.data.course_code,
@@ -92,8 +94,10 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Course ID required' }, { status: 400 })
   }
 
+  const supabase = await getSupabaseServerClient()
+
   // Verify course belongs to HOD's department
-  const { data: course } = await supabaseAdmin
+  const { data: course } = await supabase
     .from('courses')
     .select('department_id')
     .eq('id', id)
@@ -103,7 +107,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Course not found' }, { status: 404 })
   }
 
-  const { error } = await supabaseAdmin
+  const { error } = await supabase
     .from('courses')
     .update({
       title: rest.title,
@@ -133,8 +137,10 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Course ID required' }, { status: 400 })
   }
 
+  const supabase = await getSupabaseServerClient()
+
   // Verify course belongs to HOD's department
-  const { data: course } = await supabaseAdmin
+  const { data: course } = await supabase
     .from('courses')
     .select('department_id')
     .eq('id', course_id)
@@ -144,7 +150,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Course not found' }, { status: 404 })
   }
 
-  const { error } = await supabaseAdmin
+  const { error } = await supabase
     .from('courses')
     .delete()
     .eq('id', course_id)
