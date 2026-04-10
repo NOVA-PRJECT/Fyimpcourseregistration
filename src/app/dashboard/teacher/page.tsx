@@ -101,12 +101,12 @@ export default function TeacherDashboard() {
   const { generateAttendanceSheet } = await import('@/core/utils/exportPdf')
 
   await generateAttendanceSheet({
-    courseTitle: rosterData.course_title,
-    courseCode: rosterData.course_code,
+    courseTitle: rosterData.course.title,
+    courseCode: rosterData.course.course_code,
     students: rosterData.students.map(s => ({
       full_name: s.full_name,
       roll_number: s.roll_number,
-      department_name: s.department_name,
+      department_name: s.department,
     })),
   })
 }
