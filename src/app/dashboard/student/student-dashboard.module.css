@@ -185,6 +185,64 @@
   box-sizing: border-box;
 }
 
+/* ── CLOSED STATE ── */
+.closedState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2.5rem 1.25rem;
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.75rem;
+}
+
+.closedIcon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.closedTitle {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #002147;
+  margin: 0 0 0.5rem 0;
+}
+
+.closedSubtitle {
+  font-size: 0.78rem;
+  color: #44474e;
+  line-height: 1.5;
+  margin: 0 0 1rem 0;
+}
+
+.closedDeadline {
+  font-size: 0.72rem;
+  color: #9ba1ab;
+  background: #f0f2f5;
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.closedBackBtn {
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #002147;
+  background: transparent;
+  border: 1.5px solid #002147;
+  border-radius: 0.5rem;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.closedBackBtn:hover {
+  background: #002147;
+  color: #ffffff;
+}
+
 /* Window status banner */
 .windowBanner {
   display: flex;

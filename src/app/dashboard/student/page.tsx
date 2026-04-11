@@ -5,8 +5,8 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import styles from './student-dashboard.module.css'
-import StudentPlaceholderSlots from '@/component/StudentPlaceholderSlots';
-import ResourceBanner from '@/component/ResourceBanner';
+import StudentPlaceholderSlots from '@/component/StudentPlaceholderSlots'
+import ResourceBanner from '@/component/ResourceBanner'
 
 interface Course {
   id: string
@@ -38,7 +38,7 @@ interface StudentInfo {
   department_name: string
 }
 
-type DashboardState = 'idle' | 'loading_blueprint' | 'ready' | 'submitting' | 'submitted'
+type DashboardState = 'idle' | 'loading_blueprint' | 'closed' | 'ready' | 'submitting' | 'submitted'
 
 export default function StudentDashboard() {
   const router = useRouter()
@@ -105,6 +105,12 @@ export default function StudentDashboard() {
 
     setBlueprint(data.data)
 
+    // Window is closed — show closed state immediately
+    if (data.data.window_status === 'CLOSED') {
+      setDashState('closed')
+      return
+    }
+
     // If existing submission — pre-fill selections
     if (data.existing) {
       const existing = data.existing
@@ -169,9 +175,9 @@ export default function StudentDashboard() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-  semester: Number(studentInfo?.current_semester),
-  courses,
-}),
+        semester: Number(studentInfo?.current_semester),
+        courses,
+      }),
     })
 
     const data = await response.json()
@@ -214,7 +220,7 @@ export default function StudentDashboard() {
           </div>
         </div>
         <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
-           {loggingOut ? 'Logging out...' : 'Logout'}
+          {loggingOut ? 'Logging out...' : 'Logout'}
         </button>
       </div>
 
@@ -236,14 +242,16 @@ export default function StudentDashboard() {
               <span className={styles.detailBadge}>
                 {studentInfo?.department_name}
               </span>
-              <span className={styles.detailBadge}>
-                {studentInfo?.roll_number}
-              </span>
+              {studentInfo?.roll_number && (
+                <span className={styles.detailBadge}>
+                  {studentInfo.roll_number}
+                </span>
+              )}
             </div>
           </div>
         )}
 
-        {(dashState === 'idle' || dashState === 'submitted') && (
+        {(dashState === 'idle' || dashState === 'submitted' || dashState === 'closed') && (
           <button
             className={styles.registerBtn}
             onClick={handleRegisterClick}
@@ -256,15 +264,19 @@ export default function StudentDashboard() {
 
       {/* Main Content */}
       <div className={styles.mainContent}>
-        {/* Resource Hub Banner */}
-  <ResourceBanner />
 
-        
+        {/* Resource Hub Banner */}
+        <ResourceBanner />
+
+        {/* Global error — shown in idle state when API fails */}
+        {dashState === 'idle' && error && (
+          <div className={styles.errorBanner}>{error}</div>
+        )}
 
         {/* ── IDLE STATE ── */}
-       {dashState === 'idle' && <StudentPlaceholderSlots />}
+        {dashState === 'idle' && <StudentPlaceholderSlots />}
 
-        {/* ── LOADING ── */}
+        {/* ── LOADING STATE ── */}
         {dashState === 'loading_blueprint' && (
           <div className={styles.loadingState}>
             <div className={styles.spinner} />
@@ -272,18 +284,54 @@ export default function StudentDashboard() {
           </div>
         )}
 
+        {/* ── CLOSED STATE ── */}
+        {dashState === 'closed' && (
+          <div className={styles.closedState}>
+            <div className={styles.closedIcon}>🔒</div>
+            <p className={styles.closedTitle}>Registration Window is Closed</p>
+            <p className={styles.closedSubtitle}>
+              The registration window for this semester is currently closed.
+              Please check back when your Campus Director opens it.
+            </p>
+            {blueprint?.deadline && (
+              <div className={styles.closedDeadline}>
+                Last deadline was{' '}
+                {new Date(blueprint.deadline).toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </div>
+            )}
+            <button
+              className={styles.closedBackBtn}
+              onClick={() => {
+                setDashState('idle')
+                setBlueprint(null)
+                setError('')
+              }}
+            >
+              ← Go Back
+            </button>
+          </div>
+        )}
+
         {/* ── READY / SUBMITTING / SUBMITTED ── */}
         {(dashState === 'ready' || dashState === 'submitting' || dashState === 'submitted') && blueprint && (
           <>
-            {/* Window Status */}
+            {/* Window Status Banner */}
             <div className={`${styles.windowBanner} ${blueprint.window_status === 'OPEN' ? styles.open : styles.closed}`}>
               <div className={styles.windowDot} />
               {blueprint.window_status === 'OPEN'
-                ? `Registration open — closes ${new Date(blueprint.deadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                ? `Registration open — closes ${new Date(blueprint.deadline).toLocaleDateString('en-IN', {
+                    day: 'numeric', month: 'short', year: 'numeric',
+                  })}`
                 : 'Registration window is closed'}
             </div>
 
-            {/* Read only banner */}
+            {/* Submitted read-only banner */}
             {dashState === 'submitted' && (
               <div className={styles.readOnlyBanner}>
                 ✓ Submitted — click Update to make changes
@@ -293,7 +341,9 @@ export default function StudentDashboard() {
             {/* Credit Counter */}
             <div className={styles.creditCounter}>
               <span className={styles.creditLabel}>Total Credits</span>
-              <span className={`${styles.creditValue} ${totalCredits === 0 ? '' : isValidCredits ? styles.valid : styles.invalid}`}>
+              <span className={`${styles.creditValue} ${
+                totalCredits === 0 ? '' : isValidCredits ? styles.valid : styles.invalid
+              }`}>
                 {totalCredits}
                 <span className={styles.creditRange}>
                   &nbsp;(min {blueprint.min_credits} — max {blueprint.max_credits})
@@ -303,7 +353,7 @@ export default function StudentDashboard() {
 
             <p className={styles.sectionTitle}>Select Your Papers</p>
 
-            {/* Slots */}
+            {/* Slot Cards */}
             <div className={styles.slotsContainer}>
               {blueprint.slots.map(slot => (
                 <div
@@ -321,9 +371,7 @@ export default function StudentDashboard() {
                         <p className={styles.fixedCourseTitle}>{slot.course.title}</p>
                         <p className={styles.fixedCourseCode}>{slot.course.course_code}</p>
                       </div>
-                      <span className={styles.creditPill}>
-                        {slot.course.credits} cr
-                      </span>
+                      <span className={styles.creditPill}>{slot.course.credits} cr</span>
                     </div>
                   )}
 
@@ -346,10 +394,12 @@ export default function StudentDashboard() {
                 </div>
               ))}
             </div>
-            {error && <div className={styles.errorBanner}>{error}</div>}
-        {successMsg && <div className={styles.successBanner}>✓ {successMsg}</div>}
 
-            {/* Submit Button */}
+            {/* Error / Success */}
+            {error && <div className={styles.errorBanner}>{error}</div>}
+            {successMsg && <div className={styles.successBanner}>✓ {successMsg}</div>}
+
+            {/* Submit Button — only when window open */}
             {(dashState === 'ready' || dashState === 'submitting') && blueprint.window_status === 'OPEN' && (
               <button
                 className={styles.submitBtn}
@@ -357,10 +407,7 @@ export default function StudentDashboard() {
                 disabled={dashState === 'submitting' || !isValidCredits}
               >
                 {dashState === 'submitting' ? (
-                  <>
-                    <span className={styles.smallSpinner} />
-                    Submitting...
-                  </>
+                  <><span className={styles.smallSpinner} /> Submitting...</>
                 ) : existingSubmission ? (
                   'Update Registration →'
                 ) : (

@@ -1,4 +1,3 @@
-
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { SLOT_RULES } from '@/core/constants/courseCategories'
@@ -45,7 +44,7 @@ export async function getBlueprint() {
   ] = await Promise.all([
     supabase
       .from('campus_settings')
-      .select('registration_is_open, deadline, min_credits, max_credits, academic_year')
+      .select('deadline, min_credits, max_credits, academic_year')
       .eq('campus_id', student.campus_id)
       .single(),
     supabase
@@ -62,19 +61,21 @@ export async function getBlueprint() {
   if (settingsError || !settings) {
     return { success: false, error: 'Campus settings not found', status: 404 }
   }
+
   if (blueprintError || !blueprint) {
     return { success: false, error: 'Blueprint not found for this semester', status: 404 }
   }
 
-  // Check registration window
+  // 4. Check registration window — do NOT return early here
+  // Always return full blueprint with window_status so frontend can handle it
   const now = new Date()
   const deadline = settings.deadline ? new Date(settings.deadline) : null
   const windowOpen = deadline !== null && now < deadline
 
-  // Build department name → id map for O(1) lookup
+  // 5. Build department code → id map for O(1) lookup
   const deptMap = new Map(departmentsData?.map(d => [d.code, d.id]) || [])
 
-  // 4. PRE-FLIGHT: Identify all slots and batch-fetch FIXED courses
+  // 6. PRE-FLIGHT: Identify all slots and batch-fetch FIXED courses
   const slotsInfo = Array.from({ length: 6 }).map((_, i) => ({
     slot: i + 1,
     rule: blueprint[`slot_${i + 1}_rule`],
@@ -101,7 +102,7 @@ export async function getBlueprint() {
     }
   }
 
-  // 5. FINAL PARALLEL PASS: existing registration + all slot queries simultaneously
+  // 7. FINAL PARALLEL PASS: existing registration + all slot queries simultaneously
   const [existingRegistrationRes, ...resolvedSlots] = await Promise.all([
 
     // Check if student already submitted this semester
@@ -136,70 +137,52 @@ export async function getBlueprint() {
       }
 
       // DEPT_RESTRICTED
-      // Student picks a DSC or DSE paper from one specific named department
-      // Target = department name e.g. "Mathematical Sciences"
       if (rule === SLOT_RULES.DEPT_RESTRICTED) {
         const deptId = deptMap.get(target)
         if (!deptId) return { slot, rule, name, options: [] }
-
         const { data: options } = await query
           .eq('department_id', deptId)
           .eq('semester', student.current_semester)
           .in('category', ['DSC', 'DSE'])
-
         return { slot, rule, name, options: options ?? [] }
       }
 
       // EXCLUDE_DEPT
-      // Student picks a DSC or DSE paper from any department EXCEPT the specified one
-      // Target = department name to exclude e.g. "Mathematical Sciences"
       if (rule === SLOT_RULES.EXCLUDE_DEPT) {
         const deptId = deptMap.get(target)
         if (!deptId) return { slot, rule, name, options: [] }
-
         const { data: options } = await query
           .neq('department_id', deptId)
           .eq('semester', student.current_semester)
           .in('category', ['DSC', 'DSE'])
-
         return { slot, rule, name, options: options ?? [] }
       }
 
-      // POOL_RESTRICTED
-      // Student picks from their OWN department's courses matching the tag
-      // Used for internal department elective pools e.g. POOL-A, POOL-B
-      // Target = pool tag e.g. "POOL-A"
+      // POOL_RESTRICTED — own department by tag
       if (rule === SLOT_RULES.POOL_RESTRICTED) {
         const { data: options } = await query
           .eq('department_id', student.department_id)
           .eq('tag', target)
-
         return { slot, rule, name, options: options ?? [] }
       }
 
-      // GLOBAL_BASKET
-      // Student picks from ANY department EXCEPT their own, matching the tag
-      // Used for cross-department pools like MDC
-      // Student cannot pick their own department's tagged papers
-      // Target = tag e.g. "MDC-1"
+      // GLOBAL_BASKET — other departments by tag
+      // Only exclude own department if tag contains MDC
       if (rule === SLOT_RULES.GLOBAL_BASKET) {
-  let q = query.eq('tag', target)
-
-  // If target contains "MDC", exclude student's department
-  if (target.includes("MDC")) {
-    q = q.neq('department_id', student.department_id)
-  }
-
-  const { data: options } = await q
-
-  return { slot, rule, name, options: options ?? [] }
-}
+        let q = query.eq('tag', target)
+        if (target.includes('MDC')) {
+          q = q.neq('department_id', student.department_id)
+        }
+        const { data: options } = await q
+        return { slot, rule, name, options: options ?? [] }
+      }
 
       // Unknown rule — return empty safely
       return { slot, rule, name, options: [] }
     })
   ])
 
+  // 8. Build and return the full response — always includes window_status
   const response: BlueprintResponse = {
     window_status: windowOpen ? 'OPEN' : 'CLOSED',
     deadline: settings.deadline ?? '',
