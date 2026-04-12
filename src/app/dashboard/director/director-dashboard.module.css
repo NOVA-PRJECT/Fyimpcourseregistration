@@ -10,6 +10,50 @@
   display: flex;
   flex-direction: column;
 }
+/* Window status banners */
+.Banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #f0faf4;
+  border: 1px solid #a8d5b5;
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #1a6b3c;
+  margin-bottom: 1rem;
+}
+
+.windowClosedBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #fdf2f2;
+  border: 1px solid #f5c6c6;
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #c0392b;
+  margin-bottom: 1rem;
+}
+
+.statusDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #2ecc71;
+  flex-shrink: 0;
+  animation: pulse 1.5s infinite;
+}
+
+.fieldHint {
+  font-size: 0.68rem;
+  color: #9ba1ab;
+  margin: 0.2rem 0 0 0;
+  line-height: 1.4;
+}
 
 /* ── TOP BAR ── */
 .topBar {

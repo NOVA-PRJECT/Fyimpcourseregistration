@@ -1,17 +1,7 @@
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { verifyTeacher } from '@/core/auth/verifyRole'
 
-export async function getClassRoster(courseId: string) {
+export async function getClassRoster(courseId: string, campus_id: string) {
 
-  // Auth — verified teaching_staff only
-  const auth = await verifyTeacher()
-  if (!auth.success) {
-    return { success: false, error: auth.error, status: auth.status }
-  }
-
-  const { campus_id } = auth
-
-  // Get current academic year from campus settings
   const { data: campusSettings } = await supabaseAdmin
     .from('campus_settings')
     .select('academic_year')
@@ -20,7 +10,6 @@ export async function getClassRoster(courseId: string) {
 
   const academicYear = campusSettings?.academic_year ?? ''
 
-  // Verify the course exists
   const { data: course, error: courseError } = await supabaseAdmin
     .from('courses')
     .select('id, title, course_code')
@@ -31,7 +20,6 @@ export async function getClassRoster(courseId: string) {
     return { success: false, error: 'Course not found', status: 404 }
   }
 
-  // Scan all 6 slots for this course ID
   const { data: registrations, error: regError } = await supabaseAdmin
     .from('student_registrations')
     .select(`
@@ -72,7 +60,6 @@ export async function getClassRoster(courseId: string) {
 
   const studentIds = registrations.map(r => r.student_id)
 
-  // Fetch student details with department names
   const { data: students, error: studentError } = await supabaseAdmin
     .from('students')
     .select(`
@@ -91,14 +78,12 @@ export async function getClassRoster(courseId: string) {
     return { success: false, error: 'Failed to fetch student details', status: 500 }
   }
 
-  // Build department breakdown stats
   const departmentBreakdown: Record<string, number> = {}
   students.forEach(student => {
     const deptName = (student.departments as any)?.name ?? 'Unknown'
     departmentBreakdown[deptName] = (departmentBreakdown[deptName] ?? 0) + 1
   })
 
-  // Format final roster
   const roster = students.map(student => ({
     id: student.id,
     full_name: student.full_name,

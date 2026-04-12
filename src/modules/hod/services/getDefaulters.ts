@@ -1,16 +1,10 @@
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { verifyHod } from '@/core/auth/verifyRole'
 
-export async function getDefaulters(semester: number) {
-
-  // Auth — verified HOD only
-  const auth = await verifyHod()
-  if (!auth.success) {
-    return { success: false, error: auth.error, status: auth.status }
-  }
-
-  const { department_id, campus_id } = auth
-
+export async function getDefaulters(
+  semester: number,
+  department_id: string,
+  campus_id: string
+) {
   // Get current academic year from campus settings
   const { data: campusSettings } = await supabaseAdmin
     .from('campus_settings')
@@ -20,7 +14,6 @@ export async function getDefaulters(semester: number) {
 
   const academicYear = campusSettings?.academic_year ?? ''
 
-  // Query 1 — all students in this department + campus + semester
   const { data: allStudents, error: allError } = await supabaseAdmin
     .from('students')
     .select('id, full_name, roll_number')
@@ -45,7 +38,6 @@ export async function getDefaulters(semester: number) {
     }
   }
 
-  // Query 2 — students who HAVE submitted registrations this academic year
   const { data: submitted, error: submittedError } = await supabaseAdmin
     .from('student_registrations')
     .select('student_id')
@@ -58,7 +50,6 @@ export async function getDefaulters(semester: number) {
     return { success: false, error: 'Failed to fetch registration data', status: 500 }
   }
 
-  // Subtract — students who have NOT submitted
   const submittedIds = new Set(submitted?.map(r => r.student_id) ?? [])
   const defaulters = allStudents.filter(s => !submittedIds.has(s.id))
 

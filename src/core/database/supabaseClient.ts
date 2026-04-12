@@ -18,7 +18,9 @@ export async function getSupabaseServerClient() {
           return cookieStore.getAll()
         },
         setAll() {
-          // Empty implementation for pure data fetching in API routes
+          // Intentionally empty — this client is used for read-only operations
+          // in API routes. Routes that need session refresh create their own
+          // client inline with a full setAll implementation.
         },
       },
     }

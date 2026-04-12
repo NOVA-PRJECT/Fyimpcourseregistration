@@ -100,41 +100,33 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Department ID required' }, { status: 400 })
   }
 
-  await supabaseAdmin.from('semester_blueprints').delete().eq('department_id', department_id)
-  await supabaseAdmin.from('courses').delete().eq('department_id', department_id)
-
+  // Collect auth IDs before deleting
   const { data: students } = await supabaseAdmin
     .from('students')
     .select('id')
     .eq('department_id', department_id)
-
-  for (const student of students ?? []) {
-    await supabaseAdmin.from('student_registrations').delete().eq('student_id', student.id)
-    await supabaseAdmin.auth.admin.deleteUser(student.id)
-  }
-
-  await supabaseAdmin.from('students').delete().eq('department_id', department_id)
-  await supabaseAdmin.from('admissions_master').delete().eq('department_id', department_id)
 
   const { data: faculty } = await supabaseAdmin
     .from('faculty')
     .select('id')
     .eq('department_id', department_id)
 
-  for (const f of faculty ?? []) {
-    await supabaseAdmin.auth.admin.deleteUser(f.id)
-  }
-
-  await supabaseAdmin.from('faculty').delete().eq('department_id', department_id)
-
-  const { error } = await supabaseAdmin
-    .from('departments')
-    .delete()
-    .eq('id', department_id)
+  // Delete all DB rows atomically via RPC
+  const { error } = await supabaseAdmin.rpc('delete_department_cascade', {
+    p_department_id: department_id
+  })
 
   if (error) {
     console.error('admin/departments DELETE failed:', error)
     return NextResponse.json({ error: 'Failed to delete department' }, { status: 500 })
+  }
+
+  // Delete auth accounts after DB rows are gone
+  for (const s of students ?? []) {
+    await supabaseAdmin.auth.admin.deleteUser(s.id)
+  }
+  for (const f of faculty ?? []) {
+    await supabaseAdmin.auth.admin.deleteUser(f.id)
   }
 
   return NextResponse.json({ success: true, message: 'Department deleted successfully' })

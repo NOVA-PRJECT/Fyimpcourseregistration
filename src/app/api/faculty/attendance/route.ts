@@ -3,8 +3,6 @@ import { getClassRoster } from '@/modules/teacher/services/getClassRoster'
 import { verifyTeacher } from '@/core/auth/verifyRole'
 
 export async function GET(request: NextRequest) {
-  
-    // Auth — verified HOD only
   const auth = await verifyTeacher()
   if (!auth.success) {
     return NextResponse.json({ error: auth.error }, { status: auth.status })
@@ -14,19 +12,13 @@ export async function GET(request: NextRequest) {
   const courseId = searchParams.get('course_id')
 
   if (!courseId) {
-    return NextResponse.json(
-      { error: 'course_id parameter is required' },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'course_id parameter is required' }, { status: 400 })
   }
 
-  const response = await getClassRoster(courseId)
+  const response = await getClassRoster(courseId, auth.campus_id)
 
   if (!response.success) {
-    return NextResponse.json(
-      { error: response.error },
-      { status: response.status }
-    )
+    return NextResponse.json({ error: response.error }, { status: response.status })
   }
 
   return NextResponse.json(response.data)
