@@ -5,17 +5,7 @@ import { loginLimiter } from '@/core/security/rateLimiter'
 
 export async function POST(request: NextRequest) {
 
-  const { auth_user_id } = await request.json()
-
-  if (!auth_user_id) {
-    return NextResponse.json(
-      { error: 'No user ID provided' },
-      { status: 400 }
-    )
-  }
-
   // Rate Limiting (prevent brute force logins from the same IP)
-  export async function POST(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
   const { success } = await loginLimiter.limit(ip)
 
@@ -23,6 +13,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: 'Too many attempts. Please try again later.' },
       { status: 429 }
+    )
+  }
+
+  // Parse request body
+  const { auth_user_id } = await request.json()
+
+  if (!auth_user_id) {
+    return NextResponse.json(
+      { error: 'No user ID provided' },
+      { status: 400 }
     )
   }
 

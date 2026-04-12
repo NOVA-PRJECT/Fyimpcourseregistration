@@ -4,8 +4,9 @@ import { checkEligibility } from '@/modules/student/services/checkEligibility'
 import { eligibilityLimiter } from '@/core/security/rateLimiter'
 
 export async function POST(request: NextRequest) {
-  export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+
+  // Rate limiting
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown'
   const { success } = await eligibilityLimiter.limit(ip)
 
   if (!success) {
@@ -15,9 +16,18 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Parse body safely
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid JSON' },
+      { status: 400 }
+    )
+  }
 
-
-  const body = await request.json()
+  // Validate input
   const result = EligibilitySchema.safeParse(body)
 
   if (!result.success) {
@@ -27,6 +37,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Business logic
   const response = await checkEligibility(result.data)
 
   if (!response.success) {

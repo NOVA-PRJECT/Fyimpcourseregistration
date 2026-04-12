@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDefaulters } from '@/modules/hod/services/getDefaulters'
+import {verifyHod} from '@core/auth/verifyRole'
 
 export async function GET(request: NextRequest) {
     // Auth — verified HOD only
