@@ -85,9 +85,9 @@ export async function PUT(request: NextRequest) {
 
 // DELETE — delete campus and all data under it
 export async function DELETE(request: NextRequest) {
-  const cookieStore = await cookies()
-  const user = await verifyAdmin(cookieStore)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  const auth = await verifySuperAdmin()
+if (!auth.success) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   const { campus_id } = await request.json()
   if (!campus_id) return NextResponse.json({ error: 'Campus ID required' }, { status: 400 })

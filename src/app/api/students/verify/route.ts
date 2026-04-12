@@ -28,10 +28,6 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Reset rate limit on success — no need to block a legitimate user
-  // who successfully created their account
-  resetRateLimit(`verify:ip:${ip}`)
-  resetRateLimit(`verify:cap:${capNumber}`)
 
   return NextResponse.json({ success: true })
 }
