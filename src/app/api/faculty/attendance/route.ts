@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClassRoster } from '@/modules/teacher/services/getClassRoster'
+import { verifyTeacher } from '@/core/auth/verifyRole'
 
 export async function GET(request: NextRequest) {
+  
+    // Auth — verified HOD only
+  const auth = await verifyTeacher()
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
 
   const { searchParams } = new URL(request.url)
   const courseId = searchParams.get('course_id')

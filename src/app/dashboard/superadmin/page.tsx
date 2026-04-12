@@ -717,7 +717,7 @@ export default function SuperAdminDashboard() {
                   <option value="teaching_staff">Teaching Staff</option>
                 </select>
               </div>
-              {editFacultyRole === 'hod' || editFacultyRole === 'teaching_staff' && (
+              {(editFacultyRole === 'hod' )&& (
                 <div className={styles.field}>
                   <label className={styles.label}>Department</label>
                   <select

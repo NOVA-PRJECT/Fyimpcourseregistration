@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { determineUserRoute } from '@/modules/auth/services/routeUser'
 import { Role } from '@/core/constants/roles'
-import { checkRateLimit } from '@/core/security/rateLimiter'
+import { loginLimiter } from '@/core/security/rateLimiter'
 
 export async function POST(request: NextRequest) {
 
@@ -15,12 +15,13 @@ export async function POST(request: NextRequest) {
   }
 
   // Rate Limiting (prevent brute force logins from the same IP)
-  const ip = request.headers.get('x-forwarded-for') ?? 'unknown-ip'
-  const isAllowed = checkRateLimit(`login:${ip}`, 5, 2 * 60 * 1000) // 5 attempts per 2 mins
+  export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  const { success } = await loginLimiter.limit(ip)
 
-  if (!isAllowed) {
+  if (!success) {
     return NextResponse.json(
-      { error: 'Too many login attempts. Please try again later.' },
+      { error: 'Too many attempts. Please try again later.' },
       { status: 429 }
     )
   }

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDefaulters } from '@/modules/hod/services/getDefaulters'
 
 export async function GET(request: NextRequest) {
+    // Auth — verified HOD only
+  const auth = await verifyHod()
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
 
   const { searchParams } = new URL(request.url)
   const semesterParam = searchParams.get('semester')

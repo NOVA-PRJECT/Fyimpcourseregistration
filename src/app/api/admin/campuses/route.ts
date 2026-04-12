@@ -85,61 +85,35 @@ export async function PUT(request: NextRequest) {
 
 // DELETE — delete campus and all data under it
 export async function DELETE(request: NextRequest) {
-  const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const cookieStore = await cookies()
+  const user = await verifyAdmin(cookieStore)
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { campus_id } = await request.json()
-  if (!campus_id) {
-    return NextResponse.json({ error: 'Campus ID required' }, { status: 400 })
-  }
+  if (!campus_id) return NextResponse.json({ error: 'Campus ID required' }, { status: 400 })
 
-  const { data: departments } = await supabaseAdmin
-    .from('departments')
-    .select('id')
-    .eq('campus_id', campus_id)
-
-  const deptIds = departments?.map(d => d.id) ?? []
-
-  await supabaseAdmin.from('student_registrations').delete().eq('campus_id', campus_id)
-
+  // Get all students and faculty auth IDs before deleting
   const { data: students } = await supabaseAdmin
-    .from('students')
-    .select('id')
-    .eq('campus_id', campus_id)
-
-  for (const student of students ?? []) {
-    await supabaseAdmin.auth.admin.deleteUser(student.id)
-  }
-
-  await supabaseAdmin.from('students').delete().eq('campus_id', campus_id)
-  await supabaseAdmin.from('admissions_master').delete().eq('campus_id', campus_id)
-
-  if (deptIds.length > 0) {
-    await supabaseAdmin.from('semester_blueprints').delete().in('department_id', deptIds)
-    await supabaseAdmin.from('courses').delete().in('department_id', deptIds)
-  }
+    .from('students').select('id').eq('campus_id', campus_id)
 
   const { data: faculty } = await supabaseAdmin
-    .from('faculty')
-    .select('id')
-    .eq('campus_id', campus_id)
+    .from('faculty').select('id').eq('campus_id', campus_id)
 
+  // Delete all database rows atomically via RPC
+  const { error } = await supabaseAdmin.rpc('delete_campus_cascade', {
+    p_campus_id: campus_id
+  })
+
+  if (error) return NextResponse.json({ error: 'Failed to delete campus' }, { status: 500 })
+
+  // Delete auth accounts after DB rows are gone
+  // These can't be in the Postgres function
+  for (const s of students ?? []) {
+    await supabaseAdmin.auth.admin.deleteUser(s.id)
+  }
   for (const f of faculty ?? []) {
     await supabaseAdmin.auth.admin.deleteUser(f.id)
   }
 
-  await supabaseAdmin.from('faculty').delete().eq('campus_id', campus_id)
-  await supabaseAdmin.from('campus_settings').delete().eq('campus_id', campus_id)
-  await supabaseAdmin.from('departments').delete().eq('campus_id', campus_id)
-
-  const { error } = await supabaseAdmin.from('campuses').delete().eq('id', campus_id)
-
-  if (error) {
-    console.error('admin/campuses DELETE failed:', error)
-    return NextResponse.json({ error: 'Failed to delete campus' }, { status: 500 })
-  }
-
-  return NextResponse.json({ success: true, message: 'Campus and all data deleted successfully' })
+  return NextResponse.json({ success: true, message: 'Campus deleted successfully' })
 }
