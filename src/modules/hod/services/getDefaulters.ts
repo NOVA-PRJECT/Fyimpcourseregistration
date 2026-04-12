@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { verifyHod } from '@/core/auth/verifyRole'
+import { verifyHod } from '../../../core/auth/verifyRole'
 
 export async function getDefaulters(semester: number) {
 
