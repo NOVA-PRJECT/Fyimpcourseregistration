@@ -25,6 +25,11 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { success: false, error: 'Unauthorized', status: 401 }
 
+  // M3 fix: Server-side duplicate course check (defense against schema bypass)
+  if (new Set(courses).size !== courses.length) {
+    return { success: false, error: 'Duplicate courses detected', status: 400 }
+  }
+
   // 2. Get student details
   const { data: student, error: studentError } = await supabase
     .from('students')

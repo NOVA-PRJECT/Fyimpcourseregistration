@@ -26,10 +26,16 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Student not found' }, { status: 404 })
   }
 
-  // Delete registrations first, then student record, then auth account
+  // M5 fix: Delete auth account first (irreversible step) — if this fails, DB is untouched
+  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(student_id)
+  if (authDeleteError) {
+    console.error('hod/students/remove — auth deletion failed:', authDeleteError)
+    return NextResponse.json({ error: 'Failed to delete student account' }, { status: 500 })
+  }
+
+  // Then delete DB rows (recoverable if these fail)
   await supabaseAdmin.from('student_registrations').delete().eq('student_id', student_id)
   await supabaseAdmin.from('students').delete().eq('id', student_id)
-  await supabaseAdmin.auth.admin.deleteUser(student_id)
 
   return NextResponse.json({ success: true, message: 'Student removed successfully' })
 }

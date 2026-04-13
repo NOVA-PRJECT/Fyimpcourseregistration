@@ -83,6 +83,11 @@ export async function getBlueprint() {
     name: blueprint[`slot_${i + 1}_name`] ?? `Paper ${i + 1}`
   })).filter(s => s.rule && s.target)
 
+  // L4 fix: Return error if blueprint has no configured slots
+  if (slotsInfo.length === 0) {
+    return { success: false, error: 'Blueprint has no configured course slots for this semester', status: 400 }
+  }
+
   const fixedTargets = slotsInfo
     .filter(s => s.rule === SLOT_RULES.FIXED)
     .map(s => s.target)

@@ -29,6 +29,7 @@ interface Faculty {
   full_name: string
   email: string
   role: string
+  campus_id: string
   departments: { name: string } | null
   campuses: { name: string }
 }
@@ -256,9 +257,8 @@ export default function SuperAdminDashboard() {
     setEditFaculty(f)
     setEditFacultyName(f.full_name)
     setEditFacultyRole(f.role as 'hod' | 'campus_director')
-    // Find the campus_id from campuses list by matching campus name
-    const matchedCampus = campuses.find(c => c.name === (f.campuses as any)?.name)
-    setEditFacultyCampusId(matchedCampus?.id ?? '')
+    // L6 fix: Use campus_id directly instead of reverse-lookup by name
+    setEditFacultyCampusId(f.campus_id ?? '')
     // Find the dept_id from departments list by matching dept name
     const matchedDept = departments.find(d => d.name === (f.departments as any)?.name)
     setEditFacultyDeptId(matchedDept?.id ?? '')

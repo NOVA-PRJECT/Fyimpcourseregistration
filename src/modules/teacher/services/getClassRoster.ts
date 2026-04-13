@@ -12,12 +12,23 @@ export async function getClassRoster(courseId: string, campus_id: string) {
 
   const { data: course, error: courseError } = await supabaseAdmin
     .from('courses')
-    .select('id, title, course_code')
+    .select('id, title, course_code, department_id')
     .eq('id', courseId)
     .single()
 
   if (courseError || !course) {
     return { success: false, error: 'Course not found', status: 404 }
+  }
+
+  // C3 fix: Verify the course belongs to a department within the teacher's campus
+  const { data: courseDept } = await supabaseAdmin
+    .from('departments')
+    .select('campus_id')
+    .eq('id', course.department_id)
+    .single()
+
+  if (!courseDept || courseDept.campus_id !== campus_id) {
+    return { success: false, error: 'Course does not belong to your campus', status: 403 }
   }
 
   const { data: registrations, error: regError } = await supabaseAdmin

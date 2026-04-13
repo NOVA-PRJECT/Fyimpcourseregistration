@@ -17,7 +17,7 @@ export async function GET() {
   const { data, error } = await supabaseAdmin
     .from('faculty')
     .select(`
-      id, full_name, email, role,
+      id, full_name, email, role, campus_id,
       departments (name),
       campuses (name)
     `)
@@ -125,8 +125,15 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Faculty ID required' }, { status: 400 })
   }
 
+  // M5 fix: Delete auth account first (irreversible step)
+  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(faculty_id)
+  if (authDeleteError) {
+    console.error('admin/faculty-list DELETE — auth deletion failed:', authDeleteError)
+    return NextResponse.json({ error: 'Failed to delete faculty account' }, { status: 500 })
+  }
+
+  // Then delete DB row (recoverable)
   await supabaseAdmin.from('faculty').delete().eq('id', faculty_id)
-  await supabaseAdmin.auth.admin.deleteUser(faculty_id)
 
   return NextResponse.json({ success: true, message: 'Faculty removed successfully' })
 }

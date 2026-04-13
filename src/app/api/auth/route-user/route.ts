@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { determineUserRoute } from '@/modules/auth/services/routeUser'
 import { Role } from '@/core/constants/roles'
 import { loginLimiter } from '@/core/security/rateLimiter'
+import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 
 export async function POST(request: NextRequest) {
 
@@ -19,10 +22,33 @@ export async function POST(request: NextRequest) {
   // Parse request body
   const { auth_user_id } = await request.json()
 
-  if (!auth_user_id) {
+  // 1. Initialize Supabase client to check session
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) =>
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          ),
+      },
+    }
+  )
+
+  // 2. Verify Session
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // 3. Security Check: Block if trying to spoof another user ID
+  if (user.id !== auth_user_id) {
     return NextResponse.json(
-      { error: 'No user ID provided' },
-      { status: 400 }
+      { error: 'Security violation: User ID mismatch' },
+      { status: 403 }
     )
   }
 
@@ -34,6 +60,12 @@ export async function POST(request: NextRequest) {
       { status: 403 }
     )
   }
+
+  // 4. Sync role to Supabase Auth metadata for secure middleware checks
+  await supabaseAdmin.auth.admin.updateUserById(auth_user_id, {
+    user_metadata: { role }, // for client-side easy access
+    app_metadata: { role }   // for secure server-side middleware access
+  })
 
   const response = NextResponse.json({ redirectTo })
 

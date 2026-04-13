@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { EligibilitySchema } from '@/modules/student/schemas/eligibilitySchema'
 import { checkEligibility } from '@/modules/student/services/checkEligibility'
-import { eligibilityLimiter } from '@/core/security/rateLimiter'
+import { eligibilityLimiter, capNumberLimiter } from '@/core/security/rateLimiter'
 
 export async function POST(request: NextRequest) {
 
@@ -39,6 +39,15 @@ export async function POST(request: NextRequest) {
 
   // Business logic
   const response = await checkEligibility(result.data)
+
+  // H3 fix: Rate limit by CAP number (prevents targeted DOB enumeration)
+  const { success: capWithinLimit } = await capNumberLimiter.limit(result.data.cap_number)
+  if (!capWithinLimit) {
+    return NextResponse.json(
+      { error: 'Too many attempts for this CAP number. Please try again tomorrow.' },
+      { status: 429 }
+    )
+  }
 
   if (!response.success) {
     return NextResponse.json(

@@ -19,3 +19,17 @@ export const loginLimiter = new Ratelimit({
   limiter: Ratelimit.slidingWindow(10, '15 m'),
   prefix: 'fyimp:login',
 })
+
+// 10 submissions per hour per student (keyed by user ID)
+export const submitLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, '1 h'),
+  prefix: 'fyimp:submit',
+})
+
+// 10 attempts per day per CAP number (prevents targeted DOB enumeration)
+export const capNumberLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, '1 d'),
+  prefix: 'fyimp:cap',
+})

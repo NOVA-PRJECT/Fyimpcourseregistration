@@ -163,7 +163,7 @@ export default function BlueprintTab() {
         <span className={styles.semesterLabel}>Semester:</span>
         <select className={styles.semesterSelect} value={semester}
           onChange={e => setSemester(Number(e.target.value))}>
-          {[1,2,3,4,5,6,7,8,9,10].map(s => (
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(s => (
             <option key={s} value={s}>Semester {s}</option>
           ))}
         </select>
@@ -219,13 +219,13 @@ export default function BlueprintTab() {
                       <label className={styles.label}>
                         Target {slot.rule === 'FIXED' ? '(Course Code)' :
                           slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? '(Department Name)' :
-                          '(Tag e.g. POOL-A, MDC-1)'}
+                            '(Tag e.g. POOL-A, MDC-1)'}
                       </label>
                       <input type="text" className={styles.input}
                         placeholder={
                           slot.rule === 'FIXED' ? 'e.g. KU01DSCMAT101' :
-                          slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? 'e.g. Mathematical Sciences' :
-                          'e.g. POOL-A or MDC-1'
+                            slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? 'e.g. Mathematical Sciences' :
+                              'e.g. POOL-A or MDC-1'
                         }
                         value={slot.target}
                         onChange={e => updateSlot(slot.slot, 'target', e.target.value)} />
@@ -324,7 +324,7 @@ export default function BlueprintTab() {
               <div className={styles.field}>
                 <label className={styles.label}>Category</label>
                 <select className={styles.input} value={courseCategory} onChange={e => setCourseCategory(e.target.value)}>
-                  {['DSS','DSC','DSE','VAC','SEC','MDC','MOOC','AEC','INT','FWD','RPH','CIP'].map(c => (
+                  {['DSS', 'DSC', 'DSE', 'VAC', 'SEC', 'MDC', 'MOOC', 'AEC', 'INT', 'FWD', 'RPH', 'CIP'].map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>

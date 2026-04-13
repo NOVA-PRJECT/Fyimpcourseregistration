@@ -31,42 +31,48 @@ export async function processBulkUpload(
     return { success: false, error: 'No valid rows found', errors, status: 400 }
   }
 
-  // Build insert payload — department and campus come from HOD session (passed in from route)
-  const insertPayload = validRows.map(row => ({
-    cap_application_number: row.cap_application_number,
-    date_of_birth: row.date_of_birth,
-    full_name: row.full_name,
-    email: row.email === '' ? null : row.email,
-    department_id,
-    campus_id,
-    academic_year,
-    is_claimed: false,
-  }))
+  // H4 fix: Insert rows individually to collect per-row errors instead of failing all on one duplicate
+  let insertedCount = 0
+  const skippedCaps: string[] = []
 
-  const { data, error: insertError } = await supabaseAdmin
-    .from('admissions_master')
-    .insert(insertPayload)
-    .select('id')
-
-  if (insertError) {
-    if (insertError.code === '23505') {
-      return {
-        success: false,
-        error: 'Some CAP numbers already exist. Remove duplicates and try again.',
-        status: 409,
-      }
+  for (const row of validRows) {
+    const payload = {
+      cap_application_number: row.cap_application_number,
+      date_of_birth: row.date_of_birth,
+      full_name: row.full_name,
+      email: row.email === '' ? null : row.email,
+      department_id,
+      campus_id,
+      academic_year,
+      is_claimed: false,
     }
-    console.error('processBulkUpload — insert failed:', insertError)
-    return {
-      success: false,
-      error: 'Failed to insert data',
-      status: 500,
+
+    const { error: insertError } = await supabaseAdmin
+      .from('admissions_master')
+      .insert(payload)
+
+    if (insertError) {
+      if (insertError.code === '23505') {
+        // Duplicate CAP number — skip and record
+        skippedCaps.push(row.cap_application_number)
+      } else {
+        // Unexpected error — record as validation error
+        const rowIndex = validRows.indexOf(row) + errors.filter(e => e.row <= validRows.indexOf(row) + 1).length + 1
+        errors.push({
+          row: rowIndex,
+          issues: [insertError.message || 'Database insert failed'],
+        })
+      }
+    } else {
+      insertedCount++
     }
   }
 
   return {
     success: true,
-    inserted_count: data?.length ?? 0,
+    inserted_count: insertedCount,
+    skipped_count: skippedCaps.length,
+    skipped_caps: skippedCaps.length > 0 ? skippedCaps : undefined,
     error_count: errors.length,
     errors: errors.length > 0 ? errors : undefined,
   }

@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { SubmitCoursesSchema } from '@/modules/student/schemas/submitSchema'
 import { submitCourses } from '@/modules/student/services/submitCourses'
+import { verifyStudent } from '@/core/auth/verifyRole'
+import { submitLimiter } from '@/core/security/rateLimiter'
 
 export async function POST(request: NextRequest) {
+
+  // C1 fix: Auth guard — verify the caller is a valid student
+  const auth = await verifyStudent()
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
+  // C1 fix: Rate limit by student user ID
+  const { success: withinLimit } = await submitLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json(
+      { error: 'Too many submission attempts. Please try again later.' },
+      { status: 429 }
+    )
+  }
 
   const body = await request.json()
   const result = SubmitCoursesSchema.safeParse(body)
