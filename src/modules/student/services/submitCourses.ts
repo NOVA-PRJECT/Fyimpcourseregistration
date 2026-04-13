@@ -259,7 +259,7 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
   // 12. Upsert — insert if new, update if already submitted
   const { error: upsertError } = await supabase
     .from('student_registrations')
-    .upsert(payload, { onConflict: 'student_id, semester' })
+    .upsert(payload, { onConflict: 'student_id,semester,academic_year'})
 
   if (upsertError) {
     console.error('submitCourses — upsert failed:', upsertError)
