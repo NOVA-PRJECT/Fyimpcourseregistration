@@ -1,78 +1,52 @@
-import { createServerClient } from '@supabase/ssr'
+import { getToken } from 'next-auth/jwt'
 import { NextRequest, NextResponse } from 'next/server'
-import { DASHBOARD_ROLE_MAP, ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
-import { Role } from '@/core/constants/roles'
+
+const ROLE_DASHBOARD_MAP: Record<string, string> = {
+  superadmin: '/dashboard/superadmin',
+  campus_director: '/dashboard/director',
+  hod: '/dashboard/hod',
+  teaching_staff: '/dashboard/teacher',
+  student: '/dashboard/student',
+}
+
+const DASHBOARD_ROLE_MAP: Record<string, string> = {
+  '/dashboard/superadmin': 'superadmin',
+  '/dashboard/director': 'campus_director',
+  '/dashboard/hod': 'hod',
+  '/dashboard/teacher': 'teaching_staff',
+  '/dashboard/student': 'student',
+}
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
 
-  // Guard against missing environment variables
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    console.warn('Supabase environment variables are missing. Middleware is bypassed.')
-    return NextResponse.next()
-  }
+  // These routes never need auth
+  if (pathname.startsWith('/api')) return NextResponse.next()
+  if (pathname.startsWith('/reset-password')) return NextResponse.next()
 
-  let response = NextResponse.next({
-    request: { headers: request.headers },
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
   })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return request.cookies.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
-          response = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
+  const isDashboard = pathname.startsWith('/dashboard')
+  const isLogin = pathname === '/login'
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const role = user?.app_metadata?.role as Role | undefined
-  const cookieRole = request.cookies.get('user_role')?.value as Role | undefined
-
-  const pathname = request.nextUrl.pathname
-  const isLoginRoute = pathname.startsWith('/login')
-  const isSignupRoute = pathname.startsWith('/signup')
-  const isDashboardRoute = pathname.startsWith('/dashboard')
-  const isApiRoute = pathname.startsWith('/api')
-  const isResetRoute = pathname.startsWith('/reset-password')
-  if (isResetRoute) return response
-
-  // API routes handle their own auth
-  if (isApiRoute) return response
-
-  // Signup and pending approval pages — always accessible
-  if (isSignupRoute) return response
-
-  // No user — kick to login
-  if (!user && isDashboardRoute) {
+  // Not logged in trying to access dashboard
+  if (!token && isDashboard) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Logged in user tries to access login — send to their dashboard
-  if (user && isLoginRoute) {
-    const targetRole = role || cookieRole
-    if (targetRole && ROLE_DASHBOARD_MAP[targetRole]) {
-      return NextResponse.redirect(new URL(ROLE_DASHBOARD_MAP[targetRole], request.url))
-    }
-    return NextResponse.redirect(new URL('/dashboard/student', request.url))
+  // Logged in trying to access login page
+  if (token && isLogin) {
+    const role = token.role as string
+    const redirectTo = ROLE_DASHBOARD_MAP[role] ?? '/login'
+    return NextResponse.redirect(new URL(redirectTo, request.url))
   }
 
-  // Logged in user tries to access a dashboard — check their role
-  if (user && isDashboardRoute) {
-    const targetRole = role || cookieRole
-
-    if (!targetRole) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
+  // Logged in accessing a dashboard — verify correct role
+  if (token && isDashboard) {
+    const role = token.role as string
 
     const matchedRoute = Object.keys(DASHBOARD_ROLE_MAP).find(route =>
       pathname.startsWith(route)
@@ -83,13 +57,15 @@ export async function middleware(request: NextRequest) {
     }
 
     const requiredRole = DASHBOARD_ROLE_MAP[matchedRoute]
-    if (targetRole !== requiredRole) {
-      const fallback = ROLE_DASHBOARD_MAP[targetRole] || '/dashboard/student'
-      return NextResponse.redirect(new URL(fallback, request.url))
+
+    if (role !== requiredRole) {
+      return NextResponse.redirect(
+        new URL(ROLE_DASHBOARD_MAP[role] ?? '/login', request.url)
+      )
     }
   }
 
-  return response
+  return NextResponse.next()
 }
 
 export const config = {

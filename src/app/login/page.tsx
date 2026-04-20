@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { signIn } from 'next-auth/react'
 import styles from './login.module.css'
 
 export default function LoginPage() {
@@ -30,48 +30,40 @@ export default function LoginPage() {
     return Object.keys(errors).length === 0
   }
 
-  async function handleLogin() {
-    if (!validate()) return
+async function handleLogin() {
+  if (!email) { setFieldErrors(prev => ({ ...prev, email: 'Email is required' })); return }
+  if (!password) { setFieldErrors(prev => ({ ...prev, password: 'Password is required' })); return }
 
-    setLoading(true)
-    setError('')
+  setLoading(true)
+  setError('')
 
-    try {
-      // Step 1 — Sign in with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+  const result = await signIn('credentials', {
+    email: email.toLowerCase().trim(),
+    password,
+    redirect: false,
+  })
 
-      if (authError || !authData.user) {
-        setError('Invalid email or password. Please try again.')
-        setLoading(false)
-        return
-      }
-
-      // Step 2 — Call route-user API to determine role and get redirect
-      const response = await fetch('/api/auth/route-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ auth_user_id: authData.user.id }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError('Account not recognized. Please contact your administrator.')
-        setLoading(false)
-        return
-      }
-
-      // Step 3 — Redirect to correct dashboard
-      router.push(data.redirectTo)
-
-    } catch {
-      setError('Something went wrong. Please try again.')
-      setLoading(false)
-    }
+  if (result?.error) {
+    setError('Invalid email or password')
+    setLoading(false)
+    return
   }
+
+  // Get session to find role for redirect
+  const { getSession } = await import('next-auth/react')
+  const session = await getSession()
+  const role = (session?.user as any)?.role
+
+  const ROLE_DASHBOARD_MAP: Record<string, string> = {
+    superadmin: '/dashboard/superadmin',
+    campus_director: '/dashboard/director',
+    hod: '/dashboard/hod',
+    teaching_staff: '/dashboard/teacher',
+    student: '/dashboard/student',
+  }
+
+  router.push(ROLE_DASHBOARD_MAP[role] ?? '/login')
+}
 
   return (
     <div className={styles.pageWrapper}>
