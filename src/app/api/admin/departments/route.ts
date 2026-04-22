@@ -1,133 +1,87 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { verifySuperAdmin } from '@/core/auth/verifyRole'
+import { connectDB } from '@/core/database/mongoose'
+import { Department } from '@/core/database/models/Department'
+import { User } from '@/core/database/models/User'
+import { verifyRole } from '@/core/security/auth'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
-const DepartmentSchema = z.object({
-  name: z.string().min(1, 'Department name is required'),
-  code: z.string().min(1, 'Department code is required'),
-  campus_id: z.string().uuid('Invalid campus ID'),
+const DeptSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  code: z.string().min(1, 'Code is required'),
+  campus_id: z.string().min(1, 'Campus is required'),
 })
 
-// GET — list all departments
 export async function GET() {
-  const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
 
-  const { data, error } = await supabaseAdmin
-    .from('departments')
-    .select('id, name, code, campus_id, campuses (name)')
-    .order('name')
-
-  if (error) {
-    console.error('admin/departments GET failed:', error)
-    return NextResponse.json({ error: 'Failed to fetch departments' }, { status: 500 })
-  }
-
-  return NextResponse.json(data ?? [])
+  await connectDB()
+  const departments = await Department.find()
+    .populate('campus_id', 'name code')
+    .sort({ name: 1 })
+  return NextResponse.json(departments)
 }
 
-// POST — add department
 export async function POST(request: NextRequest) {
-  const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
 
+  await connectDB()
   const body = await request.json()
-  const result = DepartmentSchema.safeParse(body)
+  const result = DeptSchema.safeParse(body)
   if (!result.success) {
-    return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
+    return NextResponse.json(
+      { error: result.error.issues[0].message },
+      { status: 400 }
+    )
   }
 
-  const { error } = await supabaseAdmin
-    .from('departments')
-    .insert({
+  try {
+    const dept = await Department.create({
       name: result.data.name,
       code: result.data.code.toUpperCase(),
       campus_id: result.data.campus_id,
     })
-
-  if (error) {
-    if (error.code === '23505') {
-      return NextResponse.json({ error: 'Department name or code already exists' }, { status: 409 })
+    return NextResponse.json({ success: true, message: 'Department created', dept })
+  } catch (err: any) {
+    if (err.code === 11000) {
+      return NextResponse.json(
+        { error: 'Department name or code already exists' },
+        { status: 409 }
+      )
     }
-    console.error('admin/departments POST failed:', error)
-    return NextResponse.json({ error: 'Failed to add department' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to create department' }, { status: 500 })
   }
-
-  return NextResponse.json({ success: true, message: 'Department added successfully' })
 }
 
-// PUT — edit department
 export async function PUT(request: NextRequest) {
-  const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
 
+  await connectDB()
   const { id, name, code } = await request.json()
   if (!id || !name || !code) {
-    return NextResponse.json({ error: 'ID, name and code are required' }, { status: 400 })
+    return NextResponse.json({ error: 'ID, name and code required' }, { status: 400 })
   }
 
-  const { error } = await supabaseAdmin
-    .from('departments')
-    .update({ name, code: code.toUpperCase() })
-    .eq('id', id)
-
-  if (error) {
-    console.error('admin/departments PUT failed:', error)
-    return NextResponse.json({ error: 'Failed to update department' }, { status: 500 })
-  }
-
-  return NextResponse.json({ success: true, message: 'Department updated successfully' })
+  await Department.findByIdAndUpdate(id, { name, code: code.toUpperCase() })
+  return NextResponse.json({ success: true, message: 'Department updated' })
 }
 
-// DELETE — delete department and everything under it
 export async function DELETE(request: NextRequest) {
-  const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
 
+  await connectDB()
   const { department_id } = await request.json()
   if (!department_id) {
     return NextResponse.json({ error: 'Department ID required' }, { status: 400 })
   }
 
-  // Collect auth IDs before deleting
-  const { data: students } = await supabaseAdmin
-    .from('students')
-    .select('id')
-    .eq('department_id', department_id)
+  await User.deleteMany({ department_id })
+  await Department.findByIdAndDelete(department_id)
 
-  const { data: faculty } = await supabaseAdmin
-    .from('faculty')
-    .select('id')
-    .eq('department_id', department_id)
-
-  // Delete all DB rows atomically via RPC
-  const { error } = await supabaseAdmin.rpc('delete_department_cascade', {
-    p_department_id: department_id
-  })
-
-  if (error) {
-    console.error('admin/departments DELETE failed:', error)
-    return NextResponse.json({ error: 'Failed to delete department' }, { status: 500 })
-  }
-
-  // Delete auth accounts after DB rows are gone
-  for (const s of students ?? []) {
-    await supabaseAdmin.auth.admin.deleteUser(s.id)
-  }
-  for (const f of faculty ?? []) {
-    await supabaseAdmin.auth.admin.deleteUser(f.id)
-  }
-
-  return NextResponse.json({ success: true, message: 'Department deleted successfully' })
+  return NextResponse.json({ success: true, message: 'Department deleted' })
 }

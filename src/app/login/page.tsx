@@ -4,8 +4,16 @@ import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
+import { signIn, getSession } from 'next-auth/react'
 import styles from './login.module.css'
+
+const ROLE_DASHBOARD_MAP: Record<string, string> = {
+  superadmin: '/dashboard/superadmin',
+  campus_director: '/dashboard/director',
+  hod: '/dashboard/hod',
+  teaching_staff: '/dashboard/teacher',
+  student: '/dashboard/student',
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -14,12 +22,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const [fieldErrors, setFieldErrors] = useState<{
+    email?: string
+    password?: string
+  }>({})
 
   function validate() {
     const errors: { email?: string; password?: string } = {}
@@ -30,40 +36,28 @@ export default function LoginPage() {
     return Object.keys(errors).length === 0
   }
 
-async function handleLogin() {
-  if (!email) { setFieldErrors(prev => ({ ...prev, email: 'Email is required' })); return }
-  if (!password) { setFieldErrors(prev => ({ ...prev, password: 'Password is required' })); return }
+  async function handleLogin() {
+    if (!validate()) return
 
-  setLoading(true)
-  setError('')
+    setLoading(true)
+    setError('')
 
-  const result = await signIn('credentials', {
-    email: email.toLowerCase().trim(),
-    password,
-    redirect: false,
-  })
+    const result = await signIn('credentials', {
+      email: email.toLowerCase().trim(),
+      password,
+      redirect: false,
+    })
 
-  if (result?.error) {
-    setError('Invalid email or password')
-    setLoading(false)
-    return
+    if (result?.error) {
+      setError('Invalid email or password')
+      setLoading(false)
+      return
+    }
+
+    const session = await getSession()
+    const role = (session?.user as any)?.role
+    router.push(ROLE_DASHBOARD_MAP[role] ?? '/login')
   }
-
-  // Get session to find role for redirect
-  const { getSession } = await import('next-auth/react')
-  const session = await getSession()
-  const role = (session?.user as any)?.role
-
-  const ROLE_DASHBOARD_MAP: Record<string, string> = {
-    superadmin: '/dashboard/superadmin',
-    campus_director: '/dashboard/director',
-    hod: '/dashboard/hod',
-    teaching_staff: '/dashboard/teacher',
-    student: '/dashboard/student',
-  }
-
-  router.push(ROLE_DASHBOARD_MAP[role] ?? '/login')
-}
 
   return (
     <div className={styles.pageWrapper}>
@@ -82,9 +76,7 @@ async function handleLogin() {
             />
           </div>
           <p className={styles.universityName}>Kannur University</p>
-          <h1 className={styles.portalTitle}>
-            FYIMP Registration Portal
-          </h1>
+          <h1 className={styles.portalTitle}>FYIMP Registration Portal</h1>
           <div className={styles.goldLine} />
         </div>
 
@@ -93,14 +85,8 @@ async function handleLogin() {
 
           <p className={styles.formTitle}>Sign In</p>
 
-          {/* Global Error */}
-          {error && (
-            <div className={styles.errorBanner}>
-              {error}
-            </div>
-          )}
+          {error && <div className={styles.errorBanner}>{error}</div>}
 
-          {/* Form Fields */}
           <div className={styles.fieldGroup}>
 
             <div className={styles.field}>
@@ -142,42 +128,25 @@ async function handleLogin() {
 
           </div>
 
-          {/* Submit */}
           <button
             className={styles.submitBtn}
             onClick={handleLogin}
             disabled={loading}
           >
             {loading ? (
-              <>
-                <span className={styles.spinner} />
-                Signing in...
-              </>
+              <><span className={styles.spinner} /> Signing in...</>
             ) : (
               'Sign In →'
             )}
           </button>
 
-          {/* Divider */}
-          <div className={styles.divider}>
-            <div className={styles.dividerLine} />
-            <span className={styles.dividerText}>New Student?</span>
-            <div className={styles.dividerLine} />
-          </div>
-
-          {/* Signup Link */}
-          <p className={styles.signupLink}>
-            Claim your account{' '}
-            <Link href="/signup">here →</Link>
-          </p>
           <p className={styles.forgotLink}>
             <Link href="/reset-password">Forgot password?</Link>
           </p>
-        </div>
 
+        </div>
       </div>
 
-      {/* Footer */}
       <p className={styles.footer}>
         © 2026 Kannur University • Internal Systems Division
       </p>

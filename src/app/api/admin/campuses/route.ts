@@ -1,119 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { verifySuperAdmin } from '@/core/auth/verifyRole'
+import { connectDB } from '@/core/database/mongoose'
+import { Campus } from '@/core/database/models/Campus'
+import { Department } from '@/core/database/models/Department'
+import { User } from '@/core/database/models/User'
+import { verifyRole } from '@/core/security/auth'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
 const CampusSchema = z.object({
-  name: z.string().min(1, 'Campus name is required'),
-  code: z.string().min(1, 'Campus code is required'),
+  name: z.string().min(1, 'Name is required'),
+  code: z.string().min(1, 'Code is required'),
 })
 
-// GET — list all campuses
 export async function GET() {
-  const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
 
-  const { data, error } = await supabaseAdmin
-    .from('campuses')
-    .select('*')
-    .order('name')
-
-  if (error) {
-    console.error('admin/campuses GET failed:', error)
-    return NextResponse.json({ error: 'Failed to fetch campuses' }, { status: 500 })
-  }
-
-  return NextResponse.json(data ?? [])
+  await connectDB()
+  const campuses = await Campus.find().sort({ name: 1 })
+  return NextResponse.json(campuses)
 }
 
-// POST — add campus
 export async function POST(request: NextRequest) {
-  const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
 
+  await connectDB()
   const body = await request.json()
   const result = CampusSchema.safeParse(body)
   if (!result.success) {
-    return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
+    return NextResponse.json(
+      { error: result.error.issues[0].message },
+      { status: 400 }
+    )
   }
 
-  const { error } = await supabaseAdmin
-    .from('campuses')
-    .insert({ name: result.data.name, code: result.data.code.toUpperCase() })
-
-  if (error) {
-    if (error.code === '23505') {
-      return NextResponse.json({ error: 'Campus name or code already exists' }, { status: 409 })
+  try {
+    const campus = await Campus.create({
+      name: result.data.name,
+      code: result.data.code.toUpperCase(),
+    })
+    return NextResponse.json({ success: true, message: 'Campus created', campus })
+  } catch (err: any) {
+    if (err.code === 11000) {
+      return NextResponse.json(
+        { error: 'Campus name or code already exists' },
+        { status: 409 }
+      )
     }
-    console.error('admin/campuses POST failed:', error)
-    return NextResponse.json({ error: 'Failed to add campus' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to create campus' }, { status: 500 })
   }
-
-  return NextResponse.json({ success: true, message: 'Campus added successfully' })
 }
 
-// PUT — edit campus
 export async function PUT(request: NextRequest) {
-  const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
 
+  await connectDB()
   const { id, name, code } = await request.json()
   if (!id || !name || !code) {
-    return NextResponse.json({ error: 'ID, name and code are required' }, { status: 400 })
+    return NextResponse.json({ error: 'ID, name and code required' }, { status: 400 })
   }
 
-  const { error } = await supabaseAdmin
-    .from('campuses')
-    .update({ name, code: code.toUpperCase() })
-    .eq('id', id)
-
-  if (error) {
-    console.error('admin/campuses PUT failed:', error)
-    return NextResponse.json({ error: 'Failed to update campus' }, { status: 500 })
-  }
-
-  return NextResponse.json({ success: true, message: 'Campus updated successfully' })
+  await Campus.findByIdAndUpdate(id, { name, code: code.toUpperCase() })
+  return NextResponse.json({ success: true, message: 'Campus updated' })
 }
 
-// DELETE — delete campus and all data under it
 export async function DELETE(request: NextRequest) {
-  
-  const auth = await verifySuperAdmin()
-if (!auth.success) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
 
+  await connectDB()
   const { campus_id } = await request.json()
-  if (!campus_id) return NextResponse.json({ error: 'Campus ID required' }, { status: 400 })
-
-  // Get all students and faculty auth IDs before deleting
-  const { data: students } = await supabaseAdmin
-    .from('students').select('id').eq('campus_id', campus_id)
-
-  const { data: faculty } = await supabaseAdmin
-    .from('faculty').select('id').eq('campus_id', campus_id)
-
-  // Delete all database rows atomically via RPC
-  const { error } = await supabaseAdmin.rpc('delete_campus_cascade', {
-    p_campus_id: campus_id
-  })
-
-  if (error) return NextResponse.json({ error: 'Failed to delete campus' }, { status: 500 })
-
-  // Delete auth accounts after DB rows are gone
-  // These can't be in the Postgres function
-  for (const s of students ?? []) {
-    await supabaseAdmin.auth.admin.deleteUser(s.id)
-  }
-  for (const f of faculty ?? []) {
-    await supabaseAdmin.auth.admin.deleteUser(f.id)
+  if (!campus_id) {
+    return NextResponse.json({ error: 'Campus ID required' }, { status: 400 })
   }
 
-  return NextResponse.json({ success: true, message: 'Campus deleted successfully' })
+  // Get all departments under this campus
+  const departments = await Department.find({ campus_id })
+  const deptIds = departments.map(d => d._id)
+
+  // Delete all users in this campus
+  const students = await User.find({ campus_id })
+  await User.deleteMany({ campus_id })
+
+  // Delete departments
+  await Department.deleteMany({ campus_id })
+
+  // Delete campus
+  await Campus.findByIdAndDelete(campus_id)
+
+  return NextResponse.json({ success: true, message: 'Campus deleted' })
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { useSession } from 'next-auth/react'
 import styles from './director-dashboard.module.css'
 
 interface Department {
@@ -45,17 +45,13 @@ export default function DirectorDashboard() {
   const [facultySuccess, setFacultySuccess] = useState('')
   const [facultyError, setFacultyError] = useState('')
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   // Derived window status from deadline alone
   const windowIsOpen = currentDeadline !== null && new Date() < new Date(currentDeadline)
 
   useEffect(() => {
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: session } = useSession()
+const user = session?.user as any
       if (!user) { router.push('/login'); return }
 
       // Get faculty (director) info
