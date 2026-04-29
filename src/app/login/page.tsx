@@ -132,6 +132,7 @@ export default function LoginPage() {
             className={styles.submitBtn}
             onClick={handleLogin}
             disabled={loading}
+            disabled={loading}
           >
             {loading ? (
               <><span className={styles.spinner} /> Signing in...</>

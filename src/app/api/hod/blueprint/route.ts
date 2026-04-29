@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseServerClient } from '@/core/database/supabaseClient'
-import { verifyHod } from '@/core/auth/verifyRole'
+import { connectDB } from '@/core/database/mongoose'
+import { Blueprint } from '@/core/database/models/Blueprint'
+import { verifyRole } from '@/core/security/auth'
+import mongoose from 'mongoose'
 
 export const dynamic = 'force-dynamic'
 
-// GET — fetch blueprint for dept + semester
 export async function GET(request: NextRequest) {
-  const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { user, error } = await verifyRole(['hod'])
+  if (error) return error
 
   const { searchParams } = new URL(request.url)
   const semester = searchParams.get('semester')
@@ -17,59 +16,46 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Semester required' }, { status: 400 })
   }
 
-  const supabase = await getSupabaseServerClient()
-  const { data, error } = await supabase
-    .from('semester_blueprints')
-    .select('*')
-    .eq('department_id', auth.department_id)
-    .eq('semester', Number(semester))
-    .single()
+  await connectDB()
 
-  if (error && error.code !== 'PGRST116') {
-    console.error('hod/blueprint GET failed:', error)
-    return NextResponse.json({ error: 'Failed to fetch blueprint' }, { status: 500 })
-  }
+  const blueprint = await Blueprint.findOne({
+    department_id: new mongoose.Types.ObjectId(user.department_id!),
+    semester: Number(semester),
+  })
 
-  return NextResponse.json(data ?? null)
+  return NextResponse.json(blueprint ?? null)
 }
 
-// PUT — save blueprint changes (upsert)
 export async function PUT(request: NextRequest) {
-  const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { user, error } = await verifyRole(['hod'])
+  if (error) return error
 
   const body = await request.json()
   const { semester, min_credits, max_credits, slots } = body
 
   if (!semester || !slots) {
-    return NextResponse.json({ error: 'Semester and slots are required' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Semester and slots are required' },
+      { status: 400 }
+    )
   }
 
-  const payload: Record<string, any> = {
-    department_id: auth.department_id,
-    semester: Number(semester),
-    min_credits: min_credits ?? 18,
-    max_credits: max_credits ?? 26,
-  }
+  await connectDB()
 
-  for (let i = 1; i <= 6; i++) {
-    const slot = slots.find((s: any) => s.slot === i)
-    payload[`slot_${i}_rule`] = slot?.rule || null
-    payload[`slot_${i}_target`] = slot?.target || null
-    payload[`slot_${i}_name`] = slot?.name || null
-  }
-
-  const supabase = await getSupabaseServerClient()
-  const { error } = await supabase
-    .from('semester_blueprints')
-    .upsert(payload, { onConflict: 'department_id,semester' })
-
-  if (error) {
-    console.error('hod/blueprint PUT failed:', error)
-    return NextResponse.json({ error: 'Failed to save blueprint' }, { status: 500 })
-  }
+  await Blueprint.findOneAndUpdate(
+    {
+      department_id: new mongoose.Types.ObjectId(user.department_id!),
+      semester: Number(semester),
+    },
+    {
+      department_id: user.department_id,
+      semester: Number(semester),
+      min_credits: min_credits ?? 18,
+      max_credits: max_credits ?? 26,
+      slots,
+    },
+    { upsert: true, new: true }
+  )
 
   return NextResponse.json({ success: true, message: 'Blueprint saved successfully' })
 }
