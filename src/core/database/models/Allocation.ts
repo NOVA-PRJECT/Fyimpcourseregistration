@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 
 export type AllocationStatus = 'ALLOCATED' | 'UNALLOCATED' | 'MANUALLY_ALLOCATED'
 export type AllocatedBy = 'SYSTEM' | 'ALGORITHM' | 'HOD'
+export type SemesterType = 'ODD' | 'EVEN'
 
 export interface IAllocationSlot {
   slot: number
@@ -20,6 +21,7 @@ export interface IAllocation {
   department_id: mongoose.Types.ObjectId
   campus_id: mongoose.Types.ObjectId
   semester: number
+  semester_type: SemesterType
   academic_year: string
   allocation_run_id: mongoose.Types.ObjectId
   total_credits: number
@@ -52,8 +54,9 @@ const AllocationSchema = new mongoose.Schema<IAllocation>(
     department_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
     campus_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Campus', required: true },
     semester: { type: Number, required: true },
+    semester_type: { type: String, required: true, enum: ['ODD', 'EVEN'] },
     academic_year: { type: String, required: true },
-    allocation_run_id: { type: mongoose.Schema.Types.ObjectId, ref: 'AllocationRun', required: true },
+    allocation_run_id: { type: mongoose.Schema.Types.ObjectId, required: true },
     total_credits: { type: Number, default: 0 },
     slots: { type: [AllocationSlotSchema], default: [] },
   },
@@ -62,6 +65,7 @@ const AllocationSchema = new mongoose.Schema<IAllocation>(
 
 AllocationSchema.index({ student_id: 1, semester: 1, academic_year: 1 }, { unique: true })
 AllocationSchema.index({ department_id: 1, semester: 1, academic_year: 1 })
+AllocationSchema.index({ academic_year: 1, semester_type: 1 })
 
 export const Allocation =
   (mongoose.models.Allocation as mongoose.Model<IAllocation>) ||

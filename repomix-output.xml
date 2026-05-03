@@ -66,6 +66,11 @@ src/
           route.ts
         results/
           route.ts
+      superadmin/
+        campus/
+          route.ts
+        departments/
+          route.ts
       teacher/
         courses/
           route.ts
@@ -83,6 +88,9 @@ src/
         layout.tsx
         page.tsx
         student-dashboard.module.css
+      superadmin/
+        page.tsx
+        superadmin-dashboard.module.css
       teacher/
         layout.tsx
         page.tsx
@@ -244,6 +252,305 @@ export { handler as GET, handler as POST }
 
 <file path="src/app/api/student/results/route.ts">
 
+</file>
+
+<file path="src/app/api/superadmin/campus/route.ts">
+import { NextRequest, NextResponse } from 'next/server'
+import { connectDB } from '@/core/database/mongoose'
+import { Campus } from '@/core/database/models/Campus'
+import { Department } from '@/core/database/models/Department'
+import { verifyRole } from '@/core/security/auth'
+
+export const dynamic = 'force-dynamic'
+
+// GET — list all campuses
+export async function GET() {
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
+
+  await connectDB()
+
+  const campuses = await Campus.find().sort({ name: 1 }).lean()
+
+  return NextResponse.json(
+    campuses.map(c => ({
+      _id: c._id.toString(),
+      name: c.name,
+      code: c.code,
+      createdAt: c.createdAt,
+    }))
+  )
+}
+
+// POST — create campus
+export async function POST(request: NextRequest) {
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
+
+  const { name, code } = await request.json()
+
+  if (!name?.trim() || !code?.trim()) {
+    return NextResponse.json(
+      { error: 'Name and code are required' },
+      { status: 400 }
+    )
+  }
+
+  await connectDB()
+
+  try {
+    const campus = await Campus.create({
+      name: name.trim(),
+      code: code.trim().toUpperCase(),
+    })
+
+    return NextResponse.json(
+      { success: true, message: 'Campus created successfully', _id: campus._id.toString() },
+      { status: 201 }
+    )
+  } catch (err: any) {
+    if (err.code === 11000) {
+      const field = err.keyPattern?.code ? 'code' : 'name'
+      return NextResponse.json(
+        { error: `Campus with this ${field} already exists` },
+        { status: 409 }
+      )
+    }
+    console.error('campus POST failed:', err)
+    return NextResponse.json({ error: 'Failed to create campus' }, { status: 500 })
+  }
+}
+
+// PUT — update campus
+export async function PUT(request: NextRequest) {
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
+
+  const { id, name, code } = await request.json()
+
+  if (!id || !name?.trim() || !code?.trim()) {
+    return NextResponse.json(
+      { error: 'ID, name and code are required' },
+      { status: 400 }
+    )
+  }
+
+  await connectDB()
+
+  try {
+    const campus = await Campus.findByIdAndUpdate(
+      id,
+      { name: name.trim(), code: code.trim().toUpperCase() },
+      { new: true, runValidators: true }
+    )
+
+    if (!campus) {
+      return NextResponse.json({ error: 'Campus not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, message: 'Campus updated successfully' })
+  } catch (err: any) {
+    if (err.code === 11000) {
+      const field = err.keyPattern?.code ? 'code' : 'name'
+      return NextResponse.json(
+        { error: `Campus with this ${field} already exists` },
+        { status: 409 }
+      )
+    }
+    console.error('campus PUT failed:', err)
+    return NextResponse.json({ error: 'Failed to update campus' }, { status: 500 })
+  }
+}
+
+// DELETE — delete campus
+export async function DELETE(request: NextRequest) {
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
+
+  const { id } = await request.json()
+
+  if (!id) {
+    return NextResponse.json({ error: 'Campus ID required' }, { status: 400 })
+  }
+
+  await connectDB()
+
+  // Check if campus has departments
+  const deptCount = await Department.countDocuments({ campus_id: id })
+  if (deptCount > 0) {
+    return NextResponse.json(
+      {
+        error: `Cannot delete — this campus has ${deptCount} department${deptCount > 1 ? 's' : ''} linked to it. Remove them first.`,
+      },
+      { status: 409 }
+    )
+  }
+
+  const campus = await Campus.findByIdAndDelete(id)
+  if (!campus) {
+    return NextResponse.json({ error: 'Campus not found' }, { status: 404 })
+  }
+
+  return NextResponse.json({ success: true, message: 'Campus deleted successfully' })
+}
+</file>
+
+<file path="src/app/api/superadmin/departments/route.ts">
+import { NextRequest, NextResponse } from 'next/server'
+import { connectDB } from '@/core/database/mongoose'
+import { Department } from '@/core/database/models/Department'
+import { Campus } from '@/core/database/models/Campus'
+import { verifyRole } from '@/core/security/auth'
+import mongoose from 'mongoose'
+
+export const dynamic = 'force-dynamic'
+
+// GET — list departments, optionally filtered by campus_id
+export async function GET(request: NextRequest) {
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
+
+  const { searchParams } = new URL(request.url)
+  const campusId = searchParams.get('campus_id')
+
+  await connectDB()
+
+  const filter = campusId ? { campus_id: new mongoose.Types.ObjectId(campusId) } : {}
+
+  const departments = await Department.find(filter)
+    .populate('campus_id', 'name code')
+    .sort({ name: 1 })
+    .lean()
+
+  return NextResponse.json(
+    departments.map(d => ({
+      _id: d._id.toString(),
+      name: d.name,
+      code: d.code,
+      campus_id: (d.campus_id as any)?._id?.toString() ?? d.campus_id?.toString(),
+      campus_name: (d.campus_id as any)?.name ?? null,
+      createdAt: d.createdAt,
+    }))
+  )
+}
+
+// POST — create department
+export async function POST(request: NextRequest) {
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
+
+  const { name, code, campus_id } = await request.json()
+
+  if (!name?.trim() || !code?.trim() || !campus_id) {
+    return NextResponse.json(
+      { error: 'Name, code and campus are required' },
+      { status: 400 }
+    )
+  }
+
+  await connectDB()
+
+  // Verify campus exists
+  const campus = await Campus.findById(campus_id)
+  if (!campus) {
+    return NextResponse.json({ error: 'Campus not found' }, { status: 404 })
+  }
+
+  try {
+    const dept = await Department.create({
+      name: name.trim(),
+      code: code.trim().toUpperCase(),
+      campus_id: new mongoose.Types.ObjectId(campus_id),
+    })
+
+    return NextResponse.json(
+      { success: true, message: 'Department created successfully', _id: dept._id.toString() },
+      { status: 201 }
+    )
+  } catch (err: any) {
+    if (err.code === 11000) {
+      const field = err.keyPattern?.code ? 'code' : 'name'
+      return NextResponse.json(
+        { error: `Department with this ${field} already exists` },
+        { status: 409 }
+      )
+    }
+    console.error('department POST failed:', err)
+    return NextResponse.json({ error: 'Failed to create department' }, { status: 500 })
+  }
+}
+
+// PUT — update department
+export async function PUT(request: NextRequest) {
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
+
+  const { id, name, code, campus_id } = await request.json()
+
+  if (!id || !name?.trim() || !code?.trim() || !campus_id) {
+    return NextResponse.json(
+      { error: 'ID, name, code and campus are required' },
+      { status: 400 }
+    )
+  }
+
+  await connectDB()
+
+  // Verify campus exists
+  const campus = await Campus.findById(campus_id)
+  if (!campus) {
+    return NextResponse.json({ error: 'Campus not found' }, { status: 404 })
+  }
+
+  try {
+    const dept = await Department.findByIdAndUpdate(
+      id,
+      {
+        name: name.trim(),
+        code: code.trim().toUpperCase(),
+        campus_id: new mongoose.Types.ObjectId(campus_id),
+      },
+      { new: true, runValidators: true }
+    )
+
+    if (!dept) {
+      return NextResponse.json({ error: 'Department not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, message: 'Department updated successfully' })
+  } catch (err: any) {
+    if (err.code === 11000) {
+      const field = err.keyPattern?.code ? 'code' : 'name'
+      return NextResponse.json(
+        { error: `Department with this ${field} already exists` },
+        { status: 409 }
+      )
+    }
+    console.error('department PUT failed:', err)
+    return NextResponse.json({ error: 'Failed to update department' }, { status: 500 })
+  }
+}
+
+// DELETE — delete department
+export async function DELETE(request: NextRequest) {
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
+
+  const { id } = await request.json()
+
+  if (!id) {
+    return NextResponse.json({ error: 'Department ID required' }, { status: 400 })
+  }
+
+  await connectDB()
+
+  const dept = await Department.findByIdAndDelete(id)
+  if (!dept) {
+    return NextResponse.json({ error: 'Department not found' }, { status: 404 })
+  }
+
+  return NextResponse.json({ success: true, message: 'Department deleted successfully' })
+}
 </file>
 
 <file path="src/app/api/teacher/courses/route.ts">
@@ -3819,6 +4126,610 @@ export default function BlueprintTab() {
       )}
     </>
   )
+}
+</file>
+
+<file path="src/app/dashboard/superadmin/superadmin-dashboard.module.css">
+/* =========================================
+   SUPERADMIN DASHBOARD — CSS MODULE
+   Matches the established FYIMP design system
+   ========================================= */
+
+.pageWrapper {
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100dvh;
+  width: 100%;
+  background-color: #f0f2f5;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── TOP BAR ── */
+.topBar {
+  background-color: #002147;
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 33, 71, 0.3);
+}
+
+.topBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logoSmall {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.topBarTitle {
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.topBarSubtitle {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.65rem;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.logoutBtn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.4rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-family: inherit;
+}
+
+.logoutBtn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+/* ── INFO CARD ── */
+.infoCard {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e5ea;
+  padding: 1rem 1.25rem;
+}
+
+.adminName {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #002147;
+  margin: 0 0 0.35rem 0;
+}
+
+.adminDetails {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.detailBadge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 2rem;
+  background: #f0f4f8;
+  color: #44474e;
+  border: 1px solid #dde1e7;
+}
+
+.detailBadge.roleBadge {
+  background: #002147;
+  color: #ffffff;
+  border-color: #002147;
+}
+
+/* ── TAB BAR ── */
+.tabBar {
+  display: flex;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e5ea;
+  width: 100%;
+}
+
+.tabBtn {
+  flex: 1;
+  padding: 0.75rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #9ba1ab;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.tabBtn:hover {
+  color: #002147;
+  background: #f8f9fa;
+}
+
+.tabActive {
+  color: #002147;
+  border-bottom-color: #c9a227;
+  background: #f8f9fa;
+}
+
+/* ── MAIN CONTENT ── */
+.mainContent {
+  flex: 1;
+  padding: 1.25rem;
+  max-width: 56rem;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── SECTION HEADER ── */
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.sectionTitle {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #9ba1ab;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0;
+}
+
+/* ── FILTER ROW ── */
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.filterSelect {
+  flex: 1;
+  min-width: 10rem;
+  padding: 0.5rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: #191c1d;
+  background: #ffffff;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  -webkit-appearance: none;
+}
+
+.filterSelect:focus {
+  border-color: #002147;
+}
+
+.fetchBtn {
+  padding: 0.5rem 1rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #002147;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.fetchBtn:hover:not(:disabled) {
+  background: #001633;
+}
+
+.fetchBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── ADD BUTTON ── */
+.addBtn {
+  padding: 0.5rem 0.9rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #002147;
+  background: #c9a227;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+
+.addBtn:hover {
+  background: #b8911f;
+}
+
+/* ── TABLE ── */
+.tableWrapper {
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tableHead {
+  background: #f8f9fa;
+  border-bottom: 1px solid #e2e5ea;
+}
+
+.tableHead th {
+  padding: 0.65rem 1rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #9ba1ab;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tableRow {
+  border-bottom: 1px solid #f0f2f5;
+  transition: background 0.1s ease;
+}
+
+.tableRow:last-child {
+  border-bottom: none;
+}
+
+.tableRow:hover {
+  background: #f8f9fa;
+}
+
+.tableRow td {
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  color: #191c1d;
+  vertical-align: middle;
+}
+
+.nameCell {
+  font-weight: 600;
+  color: #002147;
+}
+
+.dateCell {
+  font-size: 0.72rem;
+  color: #9ba1ab;
+}
+
+.campusCell {
+  font-size: 0.75rem;
+  color: #44474e;
+}
+
+.codeBadge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-family: monospace;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.35rem;
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  letter-spacing: 0.05em;
+}
+
+/* ── ACTION BUTTONS ── */
+.actionBtns {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.editBtn {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  background: #f0f4f8;
+  border: 1px solid #dde1e7;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  line-height: 1;
+}
+
+.editBtn:hover {
+  background: #e2e8f0;
+}
+
+.deleteBtn {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  background: #fdf2f2;
+  border: 1px solid #f5c6c6;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  line-height: 1;
+}
+
+.deleteBtn:hover {
+  background: #fee2e2;
+}
+
+/* ── EMPTY STATE ── */
+.emptyState {
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.emptyTitle {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #44474e;
+  margin: 0 0 0.25rem 0;
+}
+
+.emptySubtitle {
+  font-size: 0.78rem;
+  color: #9ba1ab;
+  margin: 0;
+}
+
+/* ── LOADING ── */
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  gap: 1rem;
+  min-height: 100dvh;
+}
+
+.spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid #e2e5ea;
+  border-top-color: #002147;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loadingText {
+  font-size: 0.82rem;
+  color: #9ba1ab;
+}
+
+/* ── BANNERS ── */
+.errorBanner {
+  background: #fdf2f2;
+  border: 1px solid #f5c6c6;
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  color: #c0392b;
+  margin-bottom: 1rem;
+}
+
+.successBanner {
+  background: #f0faf4;
+  border: 1px solid #a8d5b5;
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a6b3c;
+  margin-bottom: 1rem;
+}
+
+/* ── MODAL ── */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+
+.modal {
+  background: #ffffff;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 22rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  animation: modalReveal 0.2s ease both;
+}
+
+@keyframes modalReveal {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.modalTitle {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #002147;
+  margin: 0 0 0.35rem 0;
+}
+
+.modalSubtitle {
+  font-size: 0.78rem;
+  color: #44474e;
+  margin: 0 0 1.25rem 0;
+  line-height: 1.5;
+}
+
+/* ── FORM FIELDS ── */
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #44474e;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.input {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #191c1d;
+  background: #f8f9fa;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  border-color: #002147;
+  background: #ffffff;
+}
+
+/* ── MODAL ACTIONS ── */
+.modalActions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.modalCancelBtn {
+  flex: 1;
+  padding: 0.7rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #44474e;
+  background: #f0f2f5;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.modalCancelBtn:hover:not(:disabled) {
+  background: #e2e5ea;
+}
+
+.modalCancelBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modalConfirmBtn {
+  flex: 1;
+  padding: 0.7rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #002147;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.modalConfirmBtn:hover:not(:disabled) {
+  background: #001633;
+}
+
+.modalConfirmBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modalDeleteBtn {
+  flex: 1;
+  padding: 0.7rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #c0392b;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.modalDeleteBtn:hover:not(:disabled) {
+  background: #a93226;
+}
+
+.modalDeleteBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── RESPONSIVE ── */
+@media (min-width: 640px) {
+  .topBar    { padding: 1rem 1.5rem; }
+  .infoCard  { padding: 1.25rem 1.5rem; }
+  .mainContent { padding: 1.5rem; }
+  .filterRow { flex-wrap: nowrap; }
 }
 </file>
 
@@ -7468,6 +8379,881 @@ export default function LoginPage() {
       <p className={styles.footer}>
         © 2026 Kannur University • Internal Systems Division
       </p>
+
+    </div>
+  )
+}
+</file>
+
+<file path="src/app/dashboard/superadmin/page.tsx">
+'use client'
+
+export const dynamic = 'force-dynamic'
+
+import { useState, useEffect } from 'react'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { useSession, signOut } from 'next-auth/react'
+import styles from './superadmin-dashboard.module.css'
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+interface Campus {
+  _id: string
+  name: string
+  code: string
+  createdAt: string
+}
+
+interface Department {
+  _id: string
+  name: string
+  code: string
+  campus_id: string
+  campus_name?: string
+  createdAt: string
+}
+
+type Tab = 'campus' | 'departments'
+
+// ── Component ──────────────────────────────────────────────────────────────
+
+export default function SuperadminDashboard() {
+  const router = useRouter()
+  const { data: session, status } = useSession()
+  const [activeTab, setActiveTab] = useState<Tab>('campus')
+
+  // ── Campus state ──
+  const [campuses, setCampuses] = useState<Campus[]>([])
+  const [loadingCampuses, setLoadingCampuses] = useState(false)
+  const [campusError, setCampusError] = useState('')
+  const [campusSuccess, setCampusSuccess] = useState('')
+
+  const [showAddCampus, setShowAddCampus] = useState(false)
+  const [campusName, setCampusName] = useState('')
+  const [campusCode, setCampusCode] = useState('')
+  const [savingCampus, setSavingCampus] = useState(false)
+
+  const [editCampus, setEditCampus] = useState<Campus | null>(null)
+  const [editCampusName, setEditCampusName] = useState('')
+  const [editCampusCode, setEditCampusCode] = useState('')
+  const [updatingCampus, setUpdatingCampus] = useState(false)
+
+  const [deleteCampus, setDeleteCampus] = useState<Campus | null>(null)
+  const [deletingCampus, setDeletingCampus] = useState(false)
+
+  // ── Department state ──
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [loadingDepts, setLoadingDepts] = useState(false)
+  const [deptError, setDeptError] = useState('')
+  const [deptSuccess, setDeptSuccess] = useState('')
+  const [filterCampusId, setFilterCampusId] = useState('')
+
+  const [showAddDept, setShowAddDept] = useState(false)
+  const [deptName, setDeptName] = useState('')
+  const [deptCode, setDeptCode] = useState('')
+  const [deptCampusId, setDeptCampusId] = useState('')
+  const [savingDept, setSavingDept] = useState(false)
+
+  const [editDept, setEditDept] = useState<Department | null>(null)
+  const [editDeptName, setEditDeptName] = useState('')
+  const [editDeptCode, setEditDeptCode] = useState('')
+  const [editDeptCampusId, setEditDeptCampusId] = useState('')
+  const [updatingDept, setUpdatingDept] = useState(false)
+
+  const [deleteDept, setDeleteDept] = useState<Department | null>(null)
+  const [deletingDept, setDeletingDept] = useState(false)
+
+  // ── Auth guard ──
+  useEffect(() => {
+    if (status === 'unauthenticated') router.push('/login')
+  }, [status, router])
+
+  // ── Fetch on mount ──
+  useEffect(() => {
+    fetchCampuses()
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === 'departments') fetchDepartments()
+  }, [activeTab])
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // CAMPUS FUNCTIONS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async function fetchCampuses() {
+    setLoadingCampuses(true)
+    setCampusError('')
+    const res = await fetch('/api/superadmin/campus')
+    const data = await res.json()
+    if (!res.ok) setCampusError(data.error ?? 'Failed to fetch campuses')
+    else setCampuses(data)
+    setLoadingCampuses(false)
+  }
+
+  async function handleAddCampus() {
+    if (!campusName.trim() || !campusCode.trim()) {
+      setCampusError('Name and code are required')
+      return
+    }
+    setSavingCampus(true)
+    setCampusError('')
+    const res = await fetch('/api/superadmin/campus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: campusName.trim(), code: campusCode.trim() }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setCampusError(data.error ?? 'Failed to add campus')
+    } else {
+      setCampusSuccess('Campus added successfully')
+      setShowAddCampus(false)
+      setCampusName('')
+      setCampusCode('')
+      fetchCampuses()
+    }
+    setSavingCampus(false)
+  }
+
+  async function handleUpdateCampus() {
+    if (!editCampus) return
+    if (!editCampusName.trim() || !editCampusCode.trim()) {
+      setCampusError('Name and code are required')
+      return
+    }
+    setUpdatingCampus(true)
+    setCampusError('')
+    const res = await fetch('/api/superadmin/campus', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: editCampus._id,
+        name: editCampusName.trim(),
+        code: editCampusCode.trim(),
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setCampusError(data.error ?? 'Failed to update campus')
+    } else {
+      setCampusSuccess('Campus updated successfully')
+      setEditCampus(null)
+      fetchCampuses()
+    }
+    setUpdatingCampus(false)
+  }
+
+  async function handleDeleteCampus() {
+    if (!deleteCampus) return
+    setDeletingCampus(true)
+    const res = await fetch('/api/superadmin/campus', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: deleteCampus._id }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setCampusError(data.error ?? 'Failed to delete campus')
+    } else {
+      setCampusSuccess('Campus deleted successfully')
+      setDeleteCampus(null)
+      fetchCampuses()
+    }
+    setDeletingCampus(false)
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // DEPARTMENT FUNCTIONS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async function fetchDepartments() {
+    setLoadingDepts(true)
+    setDeptError('')
+    const params = filterCampusId ? `?campus_id=${filterCampusId}` : ''
+    const res = await fetch(`/api/superadmin/department${params}`)
+    const data = await res.json()
+    if (!res.ok) setDeptError(data.error ?? 'Failed to fetch departments')
+    else setDepartments(data)
+    setLoadingDepts(false)
+  }
+
+  async function handleAddDept() {
+    if (!deptName.trim() || !deptCode.trim() || !deptCampusId) {
+      setDeptError('Name, code and campus are required')
+      return
+    }
+    setSavingDept(true)
+    setDeptError('')
+    const res = await fetch('/api/superadmin/department', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: deptName.trim(),
+        code: deptCode.trim(),
+        campus_id: deptCampusId,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setDeptError(data.error ?? 'Failed to add department')
+    } else {
+      setDeptSuccess('Department added successfully')
+      setShowAddDept(false)
+      setDeptName('')
+      setDeptCode('')
+      setDeptCampusId('')
+      fetchDepartments()
+    }
+    setSavingDept(false)
+  }
+
+  async function handleUpdateDept() {
+    if (!editDept) return
+    if (!editDeptName.trim() || !editDeptCode.trim() || !editDeptCampusId) {
+      setDeptError('Name, code and campus are required')
+      return
+    }
+    setUpdatingDept(true)
+    setDeptError('')
+    const res = await fetch('/api/superadmin/department', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: editDept._id,
+        name: editDeptName.trim(),
+        code: editDeptCode.trim(),
+        campus_id: editDeptCampusId,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setDeptError(data.error ?? 'Failed to update department')
+    } else {
+      setDeptSuccess('Department updated successfully')
+      setEditDept(null)
+      fetchDepartments()
+    }
+    setUpdatingDept(false)
+  }
+
+  async function handleDeleteDept() {
+    if (!deleteDept) return
+    setDeletingDept(true)
+    const res = await fetch('/api/superadmin/department', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: deleteDept._id }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setDeptError(data.error ?? 'Failed to delete department')
+    } else {
+      setDeptSuccess('Department deleted successfully')
+      setDeleteDept(null)
+      fetchDepartments()
+    }
+    setDeletingDept(false)
+  }
+
+  async function handleLogout() {
+    await signOut({ redirect: false })
+    router.push('/login')
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className={styles.pageWrapper}>
+        <div className={styles.loadingState}>
+          <div className={styles.spinner} />
+          <p className={styles.loadingText}>Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const adminName = session?.user?.name ?? 'Super Admin'
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ══════════════════════════════════════════════════════════════════════════
+
+  return (
+    <div className={styles.pageWrapper}>
+
+      {/* ── Top Bar ── */}
+      <div className={styles.topBar}>
+        <div className={styles.topBarLeft}>
+          <div className={styles.logoSmall}>
+            <Image src="/logo.png" alt="KU" width={28} height={28} />
+          </div>
+          <div>
+            <p className={styles.topBarTitle}>FYIMP Portal</p>
+            <p className={styles.topBarSubtitle}>Superadmin Dashboard</p>
+          </div>
+        </div>
+        <button className={styles.logoutBtn} onClick={handleLogout}>
+          Logout
+        </button>
+      </div>
+
+      {/* ── Info Card ── */}
+      <div className={styles.infoCard}>
+        <p className={styles.adminName}>{adminName}</p>
+        <div className={styles.adminDetails}>
+          <span className={`${styles.detailBadge} ${styles.roleBadge}`}>
+            Super Admin
+          </span>
+          <span className={styles.detailBadge}>
+            {campuses.length} {campuses.length === 1 ? 'Campus' : 'Campuses'}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Tab Bar ── */}
+      <div className={styles.tabBar}>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'campus' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('campus')}
+        >
+          🏛️ Campuses
+        </button>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'departments' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('departments')}
+        >
+          🏫 Departments
+        </button>
+      </div>
+
+      {/* ── Main Content ── */}
+      <div className={styles.mainContent}>
+
+        {/* ════════════════════════════════════
+            TAB — CAMPUSES
+        ════════════════════════════════════ */}
+        {activeTab === 'campus' && (
+          <>
+            {campusError && <div className={styles.errorBanner}>{campusError}</div>}
+            {campusSuccess && (
+              <div className={styles.successBanner}>✓ {campusSuccess}</div>
+            )}
+
+            <div className={styles.sectionHeader}>
+              <p className={styles.sectionTitle}>
+                All Campuses ({campuses.length})
+              </p>
+              <button
+                className={styles.addBtn}
+                onClick={() => {
+                  setShowAddCampus(true)
+                  setCampusError('')
+                  setCampusSuccess('')
+                }}
+              >
+                + Add Campus
+              </button>
+            </div>
+
+            <div className={styles.tableWrapper}>
+              {loadingCampuses ? (
+                <div className={styles.loadingState}>
+                  <div className={styles.spinner} />
+                  <p className={styles.loadingText}>Loading campuses...</p>
+                </div>
+              ) : campuses.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>🏛️</div>
+                  <p className={styles.emptyTitle}>No campuses yet</p>
+                  <p className={styles.emptySubtitle}>
+                    Add your first campus to get started.
+                  </p>
+                </div>
+              ) : (
+                <table className={styles.table}>
+                  <thead className={styles.tableHead}>
+                    <tr>
+                      <th>#</th>
+                      <th>Campus Name</th>
+                      <th>Code</th>
+                      <th>Created</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {campuses.map((campus, i) => (
+                      <tr key={campus._id} className={styles.tableRow}>
+                        <td>{i + 1}</td>
+                        <td className={styles.nameCell}>{campus.name}</td>
+                        <td>
+                          <span className={styles.codeBadge}>{campus.code}</span>
+                        </td>
+                        <td className={styles.dateCell}>
+                          {new Date(campus.createdAt).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </td>
+                        <td>
+                          <div className={styles.actionBtns}>
+                            <button
+                              className={styles.editBtn}
+                              onClick={() => {
+                                setEditCampus(campus)
+                                setEditCampusName(campus.name)
+                                setEditCampusCode(campus.code)
+                                setCampusError('')
+                                setCampusSuccess('')
+                              }}
+                              title="Edit"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className={styles.deleteBtn}
+                              onClick={() => {
+                                setDeleteCampus(campus)
+                                setCampusError('')
+                                setCampusSuccess('')
+                              }}
+                              title="Delete"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ════════════════════════════════════
+            TAB — DEPARTMENTS
+        ════════════════════════════════════ */}
+        {activeTab === 'departments' && (
+          <>
+            {deptError && <div className={styles.errorBanner}>{deptError}</div>}
+            {deptSuccess && (
+              <div className={styles.successBanner}>✓ {deptSuccess}</div>
+            )}
+
+            {/* Filter + Add row */}
+            <div className={styles.filterRow}>
+              <select
+                className={styles.filterSelect}
+                value={filterCampusId}
+                onChange={e => setFilterCampusId(e.target.value)}
+              >
+                <option value="">All Campuses</option>
+                {campuses.map(c => (
+                  <option key={c._id} value={c._id}>{c.name}</option>
+                ))}
+              </select>
+              <button
+                className={styles.fetchBtn}
+                onClick={fetchDepartments}
+                disabled={loadingDepts}
+              >
+                {loadingDepts ? 'Loading...' : 'Filter →'}
+              </button>
+              <button
+                className={styles.addBtn}
+                onClick={() => {
+                  setShowAddDept(true)
+                  setDeptError('')
+                  setDeptSuccess('')
+                }}
+              >
+                + Add Dept
+              </button>
+            </div>
+
+            <div className={styles.sectionHeader}>
+              <p className={styles.sectionTitle}>
+                {filterCampusId
+                  ? `Departments — ${campuses.find(c => c._id === filterCampusId)?.name}`
+                  : `All Departments (${departments.length})`}
+              </p>
+            </div>
+
+            <div className={styles.tableWrapper}>
+              {loadingDepts ? (
+                <div className={styles.loadingState}>
+                  <div className={styles.spinner} />
+                  <p className={styles.loadingText}>Loading departments...</p>
+                </div>
+              ) : departments.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>🏫</div>
+                  <p className={styles.emptyTitle}>No departments found</p>
+                  <p className={styles.emptySubtitle}>
+                    {filterCampusId
+                      ? 'No departments for this campus yet.'
+                      : 'Add your first department to get started.'}
+                  </p>
+                </div>
+              ) : (
+                <table className={styles.table}>
+                  <thead className={styles.tableHead}>
+                    <tr>
+                      <th>#</th>
+                      <th>Department Name</th>
+                      <th>Code</th>
+                      <th>Campus</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {departments.map((dept, i) => (
+                      <tr key={dept._id} className={styles.tableRow}>
+                        <td>{i + 1}</td>
+                        <td className={styles.nameCell}>{dept.name}</td>
+                        <td>
+                          <span className={styles.codeBadge}>{dept.code}</span>
+                        </td>
+                        <td className={styles.campusCell}>
+                          {dept.campus_name ??
+                            campuses.find(c => c._id === dept.campus_id)?.name ??
+                            '—'}
+                        </td>
+                        <td>
+                          <div className={styles.actionBtns}>
+                            <button
+                              className={styles.editBtn}
+                              onClick={() => {
+                                setEditDept(dept)
+                                setEditDeptName(dept.name)
+                                setEditDeptCode(dept.code)
+                                setEditDeptCampusId(dept.campus_id)
+                                setDeptError('')
+                                setDeptSuccess('')
+                              }}
+                              title="Edit"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className={styles.deleteBtn}
+                              onClick={() => {
+                                setDeleteDept(dept)
+                                setDeptError('')
+                                setDeptSuccess('')
+                              }}
+                              title="Delete"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════════════
+          MODALS — CAMPUS
+      ════════════════════════════════════════════════════════════════════ */}
+
+      {/* Add Campus */}
+      {showAddCampus && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Add Campus</h3>
+            <p className={styles.modalSubtitle}>
+              Create a new university campus.
+            </p>
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Campus Name *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. Main Campus"
+                  value={campusName}
+                  onChange={e => setCampusName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Campus Code *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. MAIN"
+                  value={campusCode}
+                  onChange={e => setCampusCode(e.target.value.toUpperCase())}
+                />
+              </div>
+            </div>
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => {
+                  setShowAddCampus(false)
+                  setCampusName('')
+                  setCampusCode('')
+                }}
+                disabled={savingCampus}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleAddCampus}
+                disabled={savingCampus}
+              >
+                {savingCampus ? 'Adding...' : 'Add Campus →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Campus */}
+      {editCampus && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Edit Campus</h3>
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Campus Name *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={editCampusName}
+                  onChange={e => setEditCampusName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Campus Code *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={editCampusCode}
+                  onChange={e => setEditCampusCode(e.target.value.toUpperCase())}
+                />
+              </div>
+            </div>
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setEditCampus(null)}
+                disabled={updatingCampus}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleUpdateCampus}
+                disabled={updatingCampus}
+              >
+                {updatingCampus ? 'Saving...' : 'Save Changes →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Campus */}
+      {deleteCampus && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Delete Campus</h3>
+            <p className={styles.modalSubtitle}>
+              Are you sure you want to delete{' '}
+              <strong>{deleteCampus.name}</strong>?{' '}
+              This will also affect all departments under this campus.
+              This action cannot be undone.
+            </p>
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setDeleteCampus(null)}
+                disabled={deletingCampus}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalDeleteBtn}
+                onClick={handleDeleteCampus}
+                disabled={deletingCampus}
+              >
+                {deletingCampus ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════
+          MODALS — DEPARTMENT
+      ════════════════════════════════════════════════════════════════════ */}
+
+      {/* Add Department */}
+      {showAddDept && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Add Department</h3>
+            <p className={styles.modalSubtitle}>
+              Create a new department under a campus.
+            </p>
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Department Name *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. Mathematical Sciences"
+                  value={deptName}
+                  onChange={e => setDeptName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Department Code *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. MAT"
+                  value={deptCode}
+                  onChange={e => setDeptCode(e.target.value.toUpperCase())}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Campus *</label>
+                <select
+                  className={styles.input}
+                  value={deptCampusId}
+                  onChange={e => setDeptCampusId(e.target.value)}
+                >
+                  <option value="">— Select Campus —</option>
+                  {campuses.map(c => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => {
+                  setShowAddDept(false)
+                  setDeptName('')
+                  setDeptCode('')
+                  setDeptCampusId('')
+                }}
+                disabled={savingDept}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleAddDept}
+                disabled={savingDept}
+              >
+                {savingDept ? 'Adding...' : 'Add Department →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Department */}
+      {editDept && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Edit Department</h3>
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Department Name *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={editDeptName}
+                  onChange={e => setEditDeptName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Department Code *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={editDeptCode}
+                  onChange={e => setEditDeptCode(e.target.value.toUpperCase())}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Campus *</label>
+                <select
+                  className={styles.input}
+                  value={editDeptCampusId}
+                  onChange={e => setEditDeptCampusId(e.target.value)}
+                >
+                  <option value="">— Select Campus —</option>
+                  {campuses.map(c => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setEditDept(null)}
+                disabled={updatingDept}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleUpdateDept}
+                disabled={updatingDept}
+              >
+                {updatingDept ? 'Saving...' : 'Save Changes →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Department */}
+      {deleteDept && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Delete Department</h3>
+            <p className={styles.modalSubtitle}>
+              Are you sure you want to delete{' '}
+              <strong>{deleteDept.name}</strong>?{' '}
+              This cannot be undone.
+            </p>
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setDeleteDept(null)}
+                disabled={deletingDept}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalDeleteBtn}
+                onClick={handleDeleteDept}
+                disabled={deletingDept}
+              >
+                {deletingDept ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

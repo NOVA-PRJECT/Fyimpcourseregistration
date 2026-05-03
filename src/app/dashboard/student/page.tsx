@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { useSession, signOut } from 'next-auth/react'
 import styles from './student-dashboard.module.css'
 import StudentPlaceholderSlots from '@/component/StudentPlaceholderSlots'
 import ResourceBanner from '@/component/ResourceBanner'
@@ -19,184 +19,179 @@ interface BlueprintSlot {
   slot: number
   rule: string
   name: string
-  course?: Course
-  options?: Course[]
+  course?: Course       // FIXED slots
+  options?: Course[]    // elective slots
 }
 
 interface BlueprintData {
-  window_status: 'OPEN' | 'CLOSED'
-  deadline: string
   min_credits: number
   max_credits: number
   slots: BlueprintSlot[]
 }
 
-interface StudentInfo {
-  full_name: string
-  roll_number: string
-  current_semester: number
-  department_name: string
-}
+// preferences[slotNumber][rank] = courseId
+type SlotPreferences = Record<number, Record<number, string>>
 
-type DashboardState = 'idle' | 'loading_blueprint' | 'closed' | 'ready' | 'submitting' | 'submitted'
+type DashboardState = 'idle' | 'loading_blueprint' | 'ready' | 'submitting' | 'submitted'
 
 export default function StudentDashboard() {
   const router = useRouter()
+  const { data: session, status } = useSession()
 
   const [dashState, setDashState] = useState<DashboardState>('idle')
-  const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null)
   const [blueprint, setBlueprint] = useState<BlueprintData | null>(null)
-  const [selectedCourses, setSelectedCourses] = useState<Record<number, string>>({})
-  const [existingSubmission, setExistingSubmission] = useState<Record<string, string> | null>(null)
+  // slotPreferences[slotNum][rank 1..N] = courseId
+  const [slotPreferences, setSlotPreferences] = useState<SlotPreferences>({})
+  const [existingSubmission, setExistingSubmission] = useState(false)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
-  const [loadingStudent, setLoadingStudent] = useState(true)
   const [loggingOut, setLoggingOut] = useState(false)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
-  // Load student info on mount
   useEffect(() => {
-    async function loadStudentInfo() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+    if (status === 'unauthenticated') router.push('/login')
+  }, [status, router])
 
-      const { data: student } = await supabase
-        .from('students')
-        .select(`
-          full_name,
-          roll_number,
-          current_semester,
-          departments (name)
-        `)
-        .eq('id', user.id)
-        .single()
+  const studentName = session?.user?.name ?? 'Student'
+  const studentRole = (session?.user as any)?.role
 
-      if (student) {
-        setStudentInfo({
-          full_name: student.full_name,
-          roll_number: student.roll_number,
-          current_semester: student.current_semester,
-          department_name: (student.departments as any)?.name ?? 'Unknown',
-        })
-      }
-      setLoadingStudent(false)
-    }
-    loadStudentInfo()
-  }, [])
-
-  // Fetch blueprint when Register button clicked
   async function handleRegisterClick() {
     setDashState('loading_blueprint')
     setError('')
     setSuccessMsg('')
 
-    const response = await fetch('/api/registrations/blueprint')
-    const data = await response.json()
+    const res = await fetch('/api/student/blueprint')
+    const data = await res.json()
 
-    if (!response.ok) {
-      setError(data.error ?? 'Failed to load courses. Please try again.')
+    if (!res.ok) {
+      setError(data.error ?? 'Failed to load courses.')
       setDashState('idle')
       return
     }
 
     setBlueprint(data.data)
 
-    // Window is closed — show closed state immediately
-    if (data.data.window_status === 'CLOSED') {
-      setDashState('closed')
-      return
-    }
-
-    // If existing submission — pre-fill selections
+    // Pre-fill from existing submission if any
     if (data.existing) {
-      const existing = data.existing
-      const prefilled: Record<number, string> = {}
-      for (let i = 1; i <= 6; i++) {
-        const courseId = existing[`slot_${i}_course_id`]
-        if (courseId) prefilled[i] = courseId
+      setExistingSubmission(true)
+      const prefilled: SlotPreferences = {}
+      const existingSlots: any[] = data.existing.slots ?? []
+      for (const s of existingSlots) {
+        if (s.type === 'ELECTIVE' && s.preferences?.length) {
+          prefilled[s.slot] = {}
+          for (const p of s.preferences) {
+            prefilled[s.slot][p.rank] = p.course_id.toString()
+          }
+        }
       }
-      setSelectedCourses(prefilled)
-      setExistingSubmission(existing)
+      setSlotPreferences(prefilled)
+    } else {
+      setSlotPreferences({})
+      setExistingSubmission(false)
     }
 
     setDashState('ready')
   }
 
-  // Calculate total credits dynamically
-  function calculateCredits(): number {
-    if (!blueprint) return 0
-    let total = 0
-    blueprint.slots.forEach(slot => {
-      if (slot.rule === 'FIXED' && slot.course) {
-        total += slot.course.credits
-      } else {
-        const selectedId = selectedCourses[slot.slot]
-        if (selectedId && slot.options) {
-          const course = slot.options.find(c => c.id === selectedId)
-          if (course) total += course.credits
+  // Set a preference rank for a slot
+  function handlePreferenceSelect(slotNum: number, rank: number, courseId: string) {
+    setSlotPreferences(prev => {
+      const slotPrefs = { ...(prev[slotNum] ?? {}) }
+
+      // If this courseId is already selected at another rank in this slot, clear it
+      for (const r of Object.keys(slotPrefs)) {
+        if (slotPrefs[Number(r)] === courseId && Number(r) !== rank) {
+          delete slotPrefs[Number(r)]
         }
       }
-    })
-    return total
-  }
 
-  // Handle dropdown change
-  function handleCourseSelect(slotNumber: number, courseId: string) {
-    setSelectedCourses(prev => ({ ...prev, [slotNumber]: courseId }))
+      if (courseId === '') {
+        delete slotPrefs[rank]
+      } else {
+        slotPrefs[rank] = courseId
+      }
+
+      return { ...prev, [slotNum]: slotPrefs }
+    })
     setError('')
   }
 
-  // Submit courses
+  // Calculate total credits — use preference rank 1 for electives
+  function calculateCredits(): number {
+    if (!blueprint) return 0
+    let total = 0
+    for (const slot of blueprint.slots) {
+      if (slot.rule === 'FIXED' && slot.course) {
+        total += slot.course.credits
+      } else if (slot.options) {
+        const firstChoice = slotPreferences[slot.slot]?.[1]
+        if (firstChoice) {
+          const course = slot.options.find(c => c.id === firstChoice)
+          if (course) total += course.credits
+        }
+      }
+    }
+    return total
+  }
+
   async function handleSubmit() {
     if (!blueprint) return
 
-    const courses: string[] = []
+    // Validate all elective slots have at least rank 1 selected
     for (const slot of blueprint.slots) {
-      if (slot.rule === 'FIXED' && slot.course) {
-        courses.push(slot.course.id)
-      } else {
-        const selected = selectedCourses[slot.slot]
-        if (!selected) {
-          setError(`Please select a course for "${slot.name}"`)
+      if (slot.rule !== 'FIXED' && slot.options && slot.options.length > 0) {
+        if (!slotPreferences[slot.slot]?.[1]) {
+          setError(`Please select at least your first preference for "${slot.name}"`)
           return
         }
-        courses.push(selected)
       }
     }
 
     setDashState('submitting')
     setError('')
 
-    const response = await fetch('/api/registrations/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        semester: Number(studentInfo?.current_semester),
-        courses,
-      }),
+    // Build slots payload matching Preference model
+    const slotsPayload = blueprint.slots.map(slot => {
+      if (slot.rule === 'FIXED' && slot.course) {
+        return {
+          slot: slot.slot,
+          type: 'FIXED',
+          course_id: slot.course.id,
+        }
+      }
+      const prefs = slotPreferences[slot.slot] ?? {}
+      const preferences = Object.entries(prefs)
+        .map(([rank, courseId]) => ({ rank: Number(rank), course_id: courseId }))
+        .sort((a, b) => a.rank - b.rank)
+
+      return {
+        slot: slot.slot,
+        type: 'ELECTIVE',
+        preferences,
+      }
     })
 
-    const data = await response.json()
+    const res = await fetch('/api/student/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slots: slotsPayload }),
+    })
 
-    if (!response.ok) {
-      setError(data.error ?? 'Submission failed. Please try again.')
+    const data = await res.json()
+
+    if (!res.ok) {
+      setError(data.error ?? 'Submission failed.')
       setDashState('ready')
       return
     }
 
-    setSuccessMsg(`Courses submitted! Total credits: ${data.total_credits}`)
-    setExistingSubmission({})
+    setSuccessMsg('Preferences submitted successfully!')
+    setExistingSubmission(true)
     setDashState('submitted')
   }
 
-  // Logout
   async function handleLogout() {
     setLoggingOut(true)
-    await supabase.auth.signOut()
+    await signOut({ redirect: false })
     router.push('/login')
   }
 
@@ -204,6 +199,16 @@ export default function StudentDashboard() {
   const isValidCredits = blueprint
     ? totalCredits >= blueprint.min_credits && totalCredits <= blueprint.max_credits
     : false
+
+  if (status === 'loading') {
+    return (
+      <div className={styles.pageWrapper}>
+        <div className={styles.loadingState}>
+          <div className={styles.spinner} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={styles.pageWrapper}>
@@ -226,37 +231,17 @@ export default function StudentDashboard() {
 
       {/* Student Info Card */}
       <div className={styles.infoCard}>
-        {loadingStudent ? (
-          <div className={styles.studentMeta}>
-            <div className={styles.greyedBar} style={{ width: '10rem' }} />
+        <div className={styles.studentMeta}>
+          <p className={styles.studentName}>{studentName}</p>
+          <div className={styles.studentDetails}>
+            <span className={`${styles.detailBadge} ${styles.semBadge}`}>
+              {studentRole ?? 'Student'}
+            </span>
           </div>
-        ) : (
-          <div className={styles.studentMeta}>
-            <p className={styles.studentName}>
-              {studentInfo?.full_name ?? 'Student'}
-            </p>
-            <div className={styles.studentDetails}>
-              <span className={`${styles.detailBadge} ${styles.semBadge}`}>
-                Semester {studentInfo?.current_semester}
-              </span>
-              <span className={styles.detailBadge}>
-                {studentInfo?.department_name}
-              </span>
-              {studentInfo?.roll_number && (
-                <span className={styles.detailBadge}>
-                  {studentInfo.roll_number}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
+        </div>
 
-        {(dashState === 'idle' || dashState === 'submitted' || dashState === 'closed') && (
-          <button
-            className={styles.registerBtn}
-            onClick={handleRegisterClick}
-            disabled={loadingStudent}
-          >
+        {(dashState === 'idle' || dashState === 'submitted') && (
+          <button className={styles.registerBtn} onClick={handleRegisterClick}>
             {existingSubmission ? 'Update →' : 'Register →'}
           </button>
         )}
@@ -265,18 +250,14 @@ export default function StudentDashboard() {
       {/* Main Content */}
       <div className={styles.mainContent}>
 
-        {/* Resource Hub Banner */}
         <ResourceBanner />
 
-        {/* Global error — shown in idle state when API fails */}
         {dashState === 'idle' && error && (
           <div className={styles.errorBanner}>{error}</div>
         )}
 
-        {/* ── IDLE STATE ── */}
         {dashState === 'idle' && <StudentPlaceholderSlots />}
 
-        {/* ── LOADING STATE ── */}
         {dashState === 'loading_blueprint' && (
           <div className={styles.loadingState}>
             <div className={styles.spinner} />
@@ -284,54 +265,9 @@ export default function StudentDashboard() {
           </div>
         )}
 
-        {/* ── CLOSED STATE ── */}
-        {dashState === 'closed' && (
-          <div className={styles.closedState}>
-            <div className={styles.closedIcon}>🔒</div>
-            <p className={styles.closedTitle}>Registration Window is Closed</p>
-            <p className={styles.closedSubtitle}>
-              The registration window for this semester is currently closed.
-              Please check back when your Campus Director opens it.
-            </p>
-            {blueprint?.deadline && (
-              <div className={styles.closedDeadline}>
-                Last deadline was{' '}
-                {new Date(blueprint.deadline).toLocaleDateString('en-IN', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </div>
-            )}
-            <button
-              className={styles.closedBackBtn}
-              onClick={() => {
-                setDashState('idle')
-                setBlueprint(null)
-                setError('')
-              }}
-            >
-              ← Go Back
-            </button>
-          </div>
-        )}
-
-        {/* ── READY / SUBMITTING / SUBMITTED ── */}
         {(dashState === 'ready' || dashState === 'submitting' || dashState === 'submitted') && blueprint && (
           <>
-            {/* Window Status Banner */}
-            <div className={`${styles.windowBanner} ${blueprint.window_status === 'OPEN' ? styles.open : styles.closed}`}>
-              <div className={styles.windowDot} />
-              {blueprint.window_status === 'OPEN'
-                ? `Registration open — closes ${new Date(blueprint.deadline).toLocaleDateString('en-IN', {
-                    day: 'numeric', month: 'short', year: 'numeric',
-                  })}`
-                : 'Registration window is closed'}
-            </div>
-
-            {/* Submitted read-only banner */}
+            {/* Submitted banner */}
             {dashState === 'submitted' && (
               <div className={styles.readOnlyBanner}>
                 ✓ Submitted — click Update to make changes
@@ -340,7 +276,7 @@ export default function StudentDashboard() {
 
             {/* Credit Counter */}
             <div className={styles.creditCounter}>
-              <span className={styles.creditLabel}>Total Credits</span>
+              <span className={styles.creditLabel}>Estimated Credits (1st preference)</span>
               <span className={`${styles.creditValue} ${
                 totalCredits === 0 ? '' : isValidCredits ? styles.valid : styles.invalid
               }`}>
@@ -353,18 +289,18 @@ export default function StudentDashboard() {
 
             <p className={styles.sectionTitle}>Select Your Papers</p>
 
-            {/* Slot Cards */}
             <div className={styles.slotsContainer}>
               {blueprint.slots.map(slot => (
-                <div
-                  key={slot.slot}
-                  className={`${styles.slotCard} ${dashState === 'ready' ? styles.active : ''}`}
-                >
+                <div key={slot.slot} className={`${styles.slotCard} ${dashState === 'ready' ? styles.active : ''}`}>
+
                   <div className={styles.slotHeader}>
                     <span className={styles.slotLabel}>{slot.name}</span>
+                    {slot.rule === 'FIXED' && (
+                      <span className={styles.fixedBadge}>Fixed</span>
+                    )}
                   </div>
 
-                  {/* Fixed course */}
+                  {/* FIXED slot */}
                   {slot.rule === 'FIXED' && slot.course && (
                     <div className={styles.fixedCourse}>
                       <div>
@@ -375,44 +311,71 @@ export default function StudentDashboard() {
                     </div>
                   )}
 
-                  {/* Elective dropdown */}
-                  {slot.rule !== 'FIXED' && slot.options && (
-                    <select
-                      className={styles.selectInput}
-                      value={selectedCourses[slot.slot] ?? ''}
-                      onChange={e => handleCourseSelect(slot.slot, e.target.value)}
-                      disabled={dashState === 'submitting' || dashState === 'submitted'}
-                    >
-                      <option value="">— Select a paper —</option>
-                      {slot.options.map(course => (
-                        <option key={course.id} value={course.id}>
-                          {course.title} ({course.credits} cr)
-                        </option>
-                      ))}
-                    </select>
+                  {/* ELECTIVE slot — ranked preference sub-slots */}
+                  {slot.rule !== 'FIXED' && slot.options && slot.options.length > 0 && (
+                    <div className={styles.preferencesContainer}>
+                      {slot.options.map((_, idx) => {
+                        const rank = idx + 1
+                        const selectedId = slotPreferences[slot.slot]?.[rank] ?? ''
+
+                        // Options available for this rank = all options minus ones
+                        // already selected at OTHER ranks in this slot
+                        const usedIds = Object.entries(slotPreferences[slot.slot] ?? {})
+                          .filter(([r]) => Number(r) !== rank)
+                          .map(([, id]) => id)
+
+                        const availableOptions = slot.options!.filter(
+                          c => !usedIds.includes(c.id) || c.id === selectedId
+                        )
+
+                        return (
+                          <div key={rank} className={styles.preferenceRow}>
+                            <span className={styles.preferenceRank}>
+                              {rank === 1 ? '1st' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`}
+                            </span>
+                            <select
+                              className={styles.selectInput}
+                              value={selectedId}
+                              onChange={e => handlePreferenceSelect(slot.slot, rank, e.target.value)}
+                              disabled={dashState === 'submitting' || dashState === 'submitted'}
+                            >
+                              <option value="">— Preference {rank} —</option>
+                              {availableOptions.map(course => (
+                                <option key={course.id} value={course.id}>
+                                  {course.title} ({course.credits} cr)
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )
+                      })}
+                      <p className={styles.preferenceHint}>
+                        Rank all options — allocation uses your highest available preference
+                      </p>
+                    </div>
                   )}
+
+                  {slot.rule !== 'FIXED' && (!slot.options || slot.options.length === 0) && (
+                    <p className={styles.noCoursesMsg}>No courses available for this slot yet.</p>
+                  )}
+
                 </div>
               ))}
             </div>
 
-            {/* Error / Success */}
             {error && <div className={styles.errorBanner}>{error}</div>}
             {successMsg && <div className={styles.successBanner}>✓ {successMsg}</div>}
 
-            {/* Submit Button — only when window open */}
-            {(dashState === 'ready' || dashState === 'submitting') && blueprint.window_status === 'OPEN' && (
+            {(dashState === 'ready' || dashState === 'submitting') && (
               <button
                 className={styles.submitBtn}
                 onClick={handleSubmit}
-                disabled={dashState === 'submitting' || !isValidCredits}
+                disabled={dashState === 'submitting'}
               >
-                {dashState === 'submitting' ? (
-                  <><span className={styles.smallSpinner} /> Submitting...</>
-                ) : existingSubmission ? (
-                  'Update Registration →'
-                ) : (
-                  'Submit Registration →'
-                )}
+                {dashState === 'submitting'
+                  ? <><span className={styles.smallSpinner} /> Submitting...</>
+                  : existingSubmission ? 'Update Preferences →' : 'Submit Preferences →'
+                }
               </button>
             )}
           </>

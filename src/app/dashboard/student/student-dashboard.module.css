@@ -612,3 +612,58 @@
   .studentName { font-size: 1.1rem; }
   .registerBtn { padding: 0.6rem 1rem; font-size: 0.78rem; }
 }
+/* ── APPEND THESE TO student-dashboard.module.css ── */
+
+/* Fixed badge */
+.fixedBadge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 2rem;
+  background: #e8f0fe;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Preferences container inside elective slot */
+.preferencesContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Each rank row */
+.preferenceRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Rank label e.g. "1st" */
+.preferenceRank {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #002147;
+  min-width: 2.2rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Hint below preferences */
+.preferenceHint {
+  font-size: 0.65rem;
+  color: #9ba1ab;
+  margin: 0.25rem 0 0 2.8rem;
+  font-style: italic;
+}
+
+/* No courses message */
+.noCoursesMsg {
+  font-size: 0.78rem;
+  color: #9ba1ab;
+  text-align: center;
+  padding: 0.75rem 0;
+  margin: 0;
+}

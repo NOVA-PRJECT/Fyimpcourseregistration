@@ -184,7 +184,7 @@ export default function SuperadminDashboard() {
     setLoadingDepts(true)
     setDeptError('')
     const params = filterCampusId ? `?campus_id=${filterCampusId}` : ''
-    const res = await fetch(`/api/superadmin/department${params}`)
+    const res = await fetch(`/api/superadmin/departments${params}`)
     const data = await res.json()
     if (!res.ok) setDeptError(data.error ?? 'Failed to fetch departments')
     else setDepartments(data)
@@ -198,7 +198,7 @@ export default function SuperadminDashboard() {
     }
     setSavingDept(true)
     setDeptError('')
-    const res = await fetch('/api/superadmin/department', {
+    const res = await fetch('/api/superadmin/departments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -229,7 +229,7 @@ export default function SuperadminDashboard() {
     }
     setUpdatingDept(true)
     setDeptError('')
-    const res = await fetch('/api/superadmin/department', {
+    const res = await fetch('/api/superadmin/departments', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -253,7 +253,7 @@ export default function SuperadminDashboard() {
   async function handleDeleteDept() {
     if (!deleteDept) return
     setDeletingDept(true)
-    const res = await fetch('/api/superadmin/department', {
+    const res = await fetch('/api/superadmin/departments', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: deleteDept._id }),

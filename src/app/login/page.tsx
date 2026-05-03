@@ -22,10 +22,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [fieldErrors, setFieldErrors] = useState<{
-    email?: string
-    password?: string
-  }>({})
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
 
   function validate() {
     const errors: { email?: string; password?: string } = {}
@@ -38,7 +35,6 @@ export default function LoginPage() {
 
   async function handleLogin() {
     if (!validate()) return
-
     setLoading(true)
     setError('')
 
@@ -61,34 +57,23 @@ export default function LoginPage() {
 
   return (
     <div className={styles.pageWrapper}>
-
       <div className={styles.card}>
 
-        {/* Card Header */}
         <div className={styles.cardHeader}>
           <div className={styles.logoWrapper}>
-            <Image
-              src="/logo.png"
-              alt="Kannur University"
-              width={48}
-              height={48}
-              className={styles.logo}
-            />
+            <Image src="/logo.png" alt="Kannur University" width={48} height={48} className={styles.logo} />
           </div>
           <p className={styles.universityName}>Kannur University</p>
           <h1 className={styles.portalTitle}>FYIMP Registration Portal</h1>
           <div className={styles.goldLine} />
         </div>
 
-        {/* Card Body */}
         <div className={styles.cardBody}>
-
           <p className={styles.formTitle}>Sign In</p>
 
           {error && <div className={styles.errorBanner}>{error}</div>}
 
           <div className={styles.fieldGroup}>
-
             <div className={styles.field}>
               <label className={styles.label}>Email Address</label>
               <input
@@ -96,16 +81,11 @@ export default function LoginPage() {
                 className={`${styles.input} ${fieldErrors.email ? styles.inputError : ''}`}
                 placeholder="your@email.com"
                 value={email}
-                onChange={e => {
-                  setEmail(e.target.value)
-                  setFieldErrors(prev => ({ ...prev, email: undefined }))
-                }}
+                onChange={e => { setEmail(e.target.value); setFieldErrors(p => ({ ...p, email: undefined })) }}
                 autoComplete="email"
                 inputMode="email"
               />
-              {fieldErrors.email && (
-                <p className={styles.errorMsg}>{fieldErrors.email}</p>
-              )}
+              {fieldErrors.email && <p className={styles.errorMsg}>{fieldErrors.email}</p>}
             </div>
 
             <div className={styles.field}>
@@ -115,43 +95,24 @@ export default function LoginPage() {
                 className={`${styles.input} ${fieldErrors.password ? styles.inputError : ''}`}
                 placeholder="••••••••"
                 value={password}
-                onChange={e => {
-                  setPassword(e.target.value)
-                  setFieldErrors(prev => ({ ...prev, password: undefined }))
-                }}
+                onChange={e => { setPassword(e.target.value); setFieldErrors(p => ({ ...p, password: undefined })) }}
                 autoComplete="current-password"
               />
-              {fieldErrors.password && (
-                <p className={styles.errorMsg}>{fieldErrors.password}</p>
-              )}
+              {fieldErrors.password && <p className={styles.errorMsg}>{fieldErrors.password}</p>}
             </div>
-
           </div>
 
-          <button
-            className={styles.submitBtn}
-            onClick={handleLogin}
-            disabled={loading}
-            disabled={loading}
-          >
-            {loading ? (
-              <><span className={styles.spinner} /> Signing in...</>
-            ) : (
-              'Sign In →'
-            )}
+          <button className={styles.submitBtn} onClick={handleLogin} disabled={loading}>
+            {loading ? <><span className={styles.spinner} /> Signing in...</> : 'Sign In →'}
           </button>
 
           <p className={styles.forgotLink}>
             <Link href="/reset-password">Forgot password?</Link>
           </p>
-
         </div>
       </div>
 
-      <p className={styles.footer}>
-        © 2026 Kannur University • Internal Systems Division
-      </p>
-
+      <p className={styles.footer}>© 2026 Kannur University • Internal Systems Division</p>
     </div>
   )
 }
