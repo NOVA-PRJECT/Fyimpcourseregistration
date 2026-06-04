@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import styles from './hod-dashboard.module.css'
 
 const RULES = [
@@ -44,8 +44,26 @@ export default function BlueprintTab() {
   const [courseCredits, setCourseCredits] = useState(4)
   const [courseCategory, setCourseCategory] = useState('DSC')
   const [courseTag, setCourseTag] = useState('')
+  const [courseProgramId, setCourseProgramId] = useState('')
   const [savingCourse, setSavingCourse] = useState(false)
   const [deletingCourse, setDeletingCourse] = useState(false)
+
+  // Programs state
+  const [programs, setPrograms] = useState<any[]>([])
+
+  useEffect(() => {
+    fetchPrograms()
+  }, [])
+
+  async function fetchPrograms() {
+    try {
+      const res = await fetch('/api/hod/programs')
+      const data = await res.json()
+      if (res.ok) setPrograms(data)
+    } catch (e) {
+      console.error('Failed to fetch programs:', e)
+    }
+  }
 
   async function fetchBlueprint() {
     setLoading(true)
@@ -114,6 +132,7 @@ export default function BlueprintTab() {
 
   async function handleSaveCourse() {
     if (!courseCode || !courseTitle) { setError('Code and title are required'); return }
+    if (!courseProgramId) { setError('Program selection is required'); return }
     setSavingCourse(true)
     setError('')
 
@@ -122,8 +141,8 @@ export default function BlueprintTab() {
       method: isEdit ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(isEdit
-        ? { id: editCourse.id, title: courseTitle, credits: courseCredits, category: courseCategory, tag: courseTag }
-        : { course_code: courseCode, title: courseTitle, semester, credits: courseCredits, category: courseCategory, tag: courseTag }
+        ? { id: editCourse.id, title: courseTitle, credits: courseCredits, category: courseCategory, tag: courseTag, program_id: courseProgramId }
+        : { course_code: courseCode, title: courseTitle, semester, credits: courseCredits, category: courseCategory, tag: courseTag, program_id: courseProgramId }
       ),
     })
     const data = await res.json()
@@ -133,7 +152,7 @@ export default function BlueprintTab() {
       setSuccess(data.message)
       setShowAddCourse(false)
       setEditCourse(null)
-      setCourseCode(''); setCourseTitle(''); setCourseCredits(4); setCourseCategory('DSC'); setCourseTag('')
+      setCourseCode(''); setCourseTitle(''); setCourseCredits(4); setCourseCategory('DSC'); setCourseTag(''); setCourseProgramId('')
       fetchCourses()
     }
     setSavingCourse(false)
@@ -263,13 +282,14 @@ export default function BlueprintTab() {
             ) : (
               <table className={styles.table}>
                 <thead className={styles.tableHead}>
-                  <tr><th>Code</th><th>Title</th><th>Cr</th><th>Cat</th><th>Tag</th><th></th></tr>
+                  <tr><th>Code</th><th>Title</th><th>Program</th><th>Cr</th><th>Cat</th><th>Tag</th><th></th></tr>
                 </thead>
                 <tbody>
                   {courses.map(course => (
                     <tr key={course.id} className={styles.tableRow}>
                       <td style={{ fontSize: '0.68rem', fontFamily: 'monospace' }}>{course.course_code}</td>
                       <td style={{ fontSize: '0.78rem' }}>{course.title}</td>
+                      <td style={{ fontSize: '0.78rem' }}>{course.program_id ? `${course.program_id.name} (${course.program_id.code})` : '—'}</td>
                       <td>{course.credits}</td>
                       <td><span className={styles.codeBadge}>{course.category}</span></td>
                       <td style={{ fontSize: '0.68rem', color: '#9ba1ab' }}>{course.tag ?? '—'}</td>
@@ -282,6 +302,7 @@ export default function BlueprintTab() {
                             setCourseCredits(course.credits)
                             setCourseCategory(course.category)
                             setCourseTag(course.tag ?? '')
+                            setCourseProgramId(course.program_id?._id || '')
                             setError(''); setSuccess('')
                           }}>✏️</button>
                           <button className={styles.deleteBtn} onClick={() => {
@@ -317,6 +338,15 @@ export default function BlueprintTab() {
                   value={courseTitle} onChange={e => setCourseTitle(e.target.value)} />
               </div>
               <div className={styles.field}>
+                <label className={styles.label}>Program *</label>
+                <select className={styles.input} value={courseProgramId} onChange={e => setCourseProgramId(e.target.value)}>
+                  <option value="">— Select Program —</option>
+                  {programs.map(p => (
+                    <option key={p._id} value={p._id}>{p.name} ({p.code})</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
                 <label className={styles.label}>Credits</label>
                 <input type="number" className={styles.input} min={1} max={10}
                   value={courseCredits} onChange={e => setCourseCredits(Number(e.target.value))} />
@@ -337,7 +367,7 @@ export default function BlueprintTab() {
             </div>
             <div className={styles.modalActions}>
               <button className={styles.modalCancelBtn}
-                onClick={() => { setShowAddCourse(false); setEditCourse(null); setCourseCode(''); setCourseTitle(''); setCourseCredits(4); setCourseCategory('DSC'); setCourseTag('') }}
+                onClick={() => { setShowAddCourse(false); setEditCourse(null); setCourseCode(''); setCourseTitle(''); setCourseCredits(4); setCourseCategory('DSC'); setCourseTag(''); setCourseProgramId('') }}
                 disabled={savingCourse}>Cancel</button>
               <button className={styles.modalConfirmBtn} onClick={handleSaveCourse} disabled={savingCourse}>
                 {savingCourse ? 'Saving...' : editCourse ? 'Save Changes →' : 'Add Course →'}

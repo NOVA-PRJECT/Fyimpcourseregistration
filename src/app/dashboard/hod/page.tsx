@@ -1,12 +1,12 @@
 'use client'
 
 export const dynamic = 'force-dynamic'
+
 import BlueprintTab from './BlueprintTab'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
-import Papa from 'papaparse'
 import styles from './hod-dashboard.module.css'
 
 // ── Types ──
@@ -15,99 +15,115 @@ interface HodInfo {
   department_name: string
 }
 
-interface Student {
+interface Program {
+  _id: string
+  name: string
+  code: string
+  semesters: number
+  eligibility: string
+}
+
+interface Course {
   id: string
-  full_name: string
-  current_semester: number
-  cap_application_number: string | null
+  _id: string
+  course_code: string
+  title: string
+  semester: number
+  credits: number
+  category: string
+  tag?: string | null
+  program_id: {
+    _id: string
+    name: string
+    code: string
+  } | null
 }
 
-interface Defaulter {
-  id: string
-  full_name: string
-  roll_number: string
+type Tab = 'programs' | 'courses' | 'blueprint'
+
+const ROLE_DASHBOARD_MAP: Record<string, string> = {
+  superadmin: '/dashboard/superadmin',
+  campus_director: '/dashboard/director',
+  hod: '/dashboard/hod',
+  teaching_staff: '/dashboard/teacher',
+  student: '/dashboard/student',
 }
 
-interface DefaulterData {
-  total_students: number
-  submitted_count: number
-  defaulter_count: number
-  defaulters: Defaulter[]
-}
-
-interface UploadResult {
-  inserted_count: number
-  error_count: number
-  errors?: { row: number; issues: string[] }[]
-}
-
-type Tab = 'defaulters' | 'upload' | 'students' | 'blueprint'
+const CATEGORIES = ['DSS', 'DSC', 'DSE', 'VAC', 'SEC', 'MDC', 'MOOC', 'AEC', 'INT', 'FWD', 'RPH', 'CIP']
 
 export default function HodDashboard() {
   const router = useRouter()
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { data: session, status } = useSession()
 
-  const [activeTab, setActiveTab] = useState<Tab>('defaulters')
+  const [activeTab, setActiveTab] = useState<Tab>('programs')
   const [hodInfo, setHodInfo] = useState<HodInfo | null>(null)
   const [loadingHod, setLoadingHod] = useState(true)
 
-  const { data: session, status } = useSession()
-  const hodName = session?.user?.name ?? 'HOD'
-  const hodDeptId = (session?.user as any)?.department_id
+  // ── Programs State ──
+  const [programs, setPrograms] = useState<Program[]>([])
+  const [loadingPrograms, setLoadingPrograms] = useState(false)
+  const [programError, setProgramError] = useState('')
+  const [programSuccess, setProgramSuccess] = useState('')
 
-  // ── Upload Tab State ──
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
-  const [uploadError, setUploadError] = useState('')
-  const [uploadSuccess, setUploadSuccess] = useState('')
+  const [showAddProgram, setShowAddProgram] = useState(false)
+  const [editProgram, setEditProgram] = useState<Program | null>(null)
+  const [deleteProgram, setDeleteProgram] = useState<Program | null>(null)
+  const [savingProgram, setSavingProgram] = useState(false)
+  const [deletingProgram, setDeletingProgram] = useState(false)
 
-  // ── Students Tab State ──
-  const [studentSemester, setStudentSemester] = useState(1)
-  const [students, setStudents] = useState<Student[]>([])
-  const [loadingStudents, setLoadingStudents] = useState(false)
-  const [studentError, setStudentError] = useState('')
-  const [studentSuccess, setStudentSuccess] = useState('')
+  // Program form fields
+  const [progName, setProgName] = useState('')
+  const [progCode, setProgCode] = useState('')
+  const [progSemesters, setProgSemesters] = useState(8)
+  const [progEligibility, setProgEligibility] = useState('')
 
-  // Add student modal
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [addName, setAddName] = useState('')
-  const [addCap, setAddCap] = useState('')
-  const [addDob, setAddDob] = useState('')
-  const [addEmail, setAddEmail] = useState('')
-  const [adding, setAdding] = useState(false)
+  // ── Courses State ──
+  const [courses, setCourses] = useState<Course[]>([])
+  const [loadingCourses, setLoadingCourses] = useState(false)
+  const [courseError, setCourseError] = useState('')
+  const [courseSuccess, setCourseSuccess] = useState('')
 
-  // Edit student modal
-  const [editStudent, setEditStudent] = useState<Student | null>(null)
-  const [editName, setEditName] = useState('')
-  const [editSemester, setEditSemester] = useState(1)
-  const [updating, setUpdating] = useState(false)
+  // Course filters
+  const [filterProgramId, setFilterProgramId] = useState('')
+  const [filterSemester, setFilterSemester] = useState('')
 
-  // Delete confirmation
-  const [deleteStudent, setDeleteStudent] = useState<Student | null>(null)
-  const [deleting, setDeleting] = useState(false)
+  const [showAddCourse, setShowAddCourse] = useState(false)
+  const [editCourse, setEditCourse] = useState<Course | null>(null)
+  const [deleteCourse, setDeleteCourse] = useState<Course | null>(null)
+  const [savingCourse, setSavingCourse] = useState(false)
+  const [deletingCourse, setDeletingCourse] = useState(false)
 
-  // ── Defaulters Tab State ──
-  const [defaulterSemester, setDefaulterSemester] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [defaulterData, setDefaulterData] = useState<DefaulterData | null>(null)
-  const [defaulterError, setDefaulterError] = useState('')
-  const [copied, setCopied] = useState(false)
+  // Course form fields
+  const [crsCode, setCrsCode] = useState('')
+  const [crsTitle, setCrsTitle] = useState('')
+  const [crsSemester, setCrsSemester] = useState(1)
+  const [crsCredits, setCrsCredits] = useState(4)
+  const [crsCategory, setCrsCategory] = useState('DSC')
+  const [crsTag, setCrsTag] = useState('')
+  const [crsProgramId, setCrsProgramId] = useState('')
 
+  // ── Auth guard ──
   useEffect(() => {
-    async function loadHodInfo() {
-      if (status === 'unauthenticated') {
-        router.push('/login')
-        return
+    if (status === 'unauthenticated') {
+      router.push('/login')
+    } else if (status === 'authenticated') {
+      if (session?.user?.role !== 'hod') {
+        router.push(ROLE_DASHBOARD_MAP[session.user.role] ?? '/login')
       }
-      if (status === 'loading') return
+    }
+  }, [status, session, router])
 
+  // Load HOD Info
+  useEffect(() => {
+    if (status !== 'authenticated' || session?.user?.role !== 'hod') return
+
+    async function loadHodInfo() {
       try {
         const response = await fetch('/api/hod/info')
         if (response.ok) {
           const data = await response.json()
           setHodInfo({
-            full_name: hodName,
+            full_name: session?.user?.name ?? 'HOD',
             department_name: data.name,
           })
         }
@@ -118,194 +134,294 @@ export default function HodDashboard() {
       }
     }
     loadHodInfo()
-  }, [status, router, hodName])
+  }, [status, session])
 
-  // ── Upload Tab Functions ──
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!file.name.endsWith('.csv')) {
-      setUploadError('Please upload a CSV file only')
-      return
+  // Fetch when active tab changes
+  useEffect(() => {
+    if (status !== 'authenticated' || session?.user?.role !== 'hod') return
+
+    if (activeTab === 'programs') {
+      fetchPrograms()
+    } else if (activeTab === 'courses') {
+      fetchPrograms() // To populate course program selectors
+      fetchCourses()
     }
-    setSelectedFile(file)
-    setUploadError('')
-    setUploadResult(null)
-    setUploadSuccess('')
+  }, [activeTab, status, session])
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PROGRAM CRUD OPERATIONS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async function fetchPrograms() {
+    setLoadingPrograms(true)
+    setProgramError('')
+    try {
+      const res = await fetch('/api/hod/programs')
+      const data = await res.json()
+      if (!res.ok) setProgramError(data.error ?? 'Failed to fetch programs')
+      else setPrograms(data)
+    } catch {
+      setProgramError('Failed to fetch programs')
+    } finally {
+      setLoadingPrograms(false)
+    }
   }
 
-  async function handleUpload() {
-    if (!selectedFile) { setUploadError('Please select a CSV file first'); return }
-    setUploading(true)
-    setUploadError('')
-    setUploadSuccess('')
-    setUploadResult(null)
-
-    Papa.parse(selectedFile, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        const rows = results.data
-        if (!rows || rows.length === 0) {
-          setUploadError('CSV file is empty')
-          setUploading(false)
-          return
-        }
-        try {
-          const response = await fetch('/api/admin/bulk-admissions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(rows),
-          })
-          const result = await response.json()
-          if (!response.ok) {
-            setUploadError(result.error ?? 'Upload failed')
-            setUploading(false)
-            return
-          }
-          setUploadResult(result)
-          setUploadSuccess(`Upload complete — ${result.inserted_count} students added.`)
-          setSelectedFile(null)
-          if (fileInputRef.current) fileInputRef.current.value = ''
-        } catch {
-          setUploadError('Something went wrong. Please try again.')
-        }
-        setUploading(false)
-      },
-      error: () => {
-        setUploadError('Failed to parse CSV.')
-        setUploading(false)
+  async function handleAddProgram() {
+    if (!progName.trim() || !progCode.trim() || !progSemesters || !progEligibility.trim()) {
+      setProgramError('All fields are required')
+      return
+    }
+    setSavingProgram(true)
+    setProgramError('')
+    setProgramSuccess('')
+    try {
+      const res = await fetch('/api/hod/programs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: progName.trim(),
+          code: progCode.trim(),
+          semesters: progSemesters,
+          eligibility: progEligibility.trim()
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setProgramError(data.error ?? 'Failed to add program')
+      } else {
+        setProgramSuccess('Program added successfully')
+        setShowAddProgram(false)
+        setProgName('')
+        setProgCode('')
+        setProgSemesters(8)
+        setProgEligibility('')
+        fetchPrograms()
       }
-    })
-  }
-
-  // ── Students Tab Functions ──
-  async function fetchStudents() {
-    setLoadingStudents(true)
-    setStudentError('')
-    setStudentSuccess('')
-    const response = await fetch(`/api/hod/students?semester=${studentSemester}`)
-    const result = await response.json()
-    if (!response.ok) {
-      setStudentError(result.error ?? 'Failed to fetch students')
-    } else {
-      setStudents(result)
+    } catch {
+      setProgramError('Failed to add program')
+    } finally {
+      setSavingProgram(false)
     }
-    setLoadingStudents(false)
   }
 
-  async function handleAddStudent() {
-    if (!addName || !addCap || !addDob) {
-      setStudentError('Name, CAP number and date of birth are required')
+  async function handleUpdateProgram() {
+    if (!editProgram) return
+    if (!progName.trim() || !progSemesters || !progEligibility.trim()) {
+      setProgramError('All fields are required')
       return
     }
-    setAdding(true)
-    setStudentError('')
-    const response = await fetch('/api/hod/students/add', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        full_name: addName,
-        cap_application_number: addCap,
-        date_of_birth: addDob,
-        email: addEmail || undefined,
-      }),
-    })
-    const result = await response.json()
-    if (!response.ok) {
-      setStudentError(result.error ?? 'Failed to add student')
-    } else {
-      setStudentSuccess('Student added successfully')
-      setShowAddModal(false)
-      setAddName(''); setAddCap(''); setAddDob(''); setAddEmail('')
-      fetchStudents()
+    setSavingProgram(true)
+    setProgramError('')
+    setProgramSuccess('')
+    try {
+      const res = await fetch('/api/hod/programs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editProgram._id,
+          name: progName.trim(),
+          semesters: progSemesters,
+          eligibility: progEligibility.trim()
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setProgramError(data.error ?? 'Failed to update program')
+      } else {
+        setProgramSuccess('Program updated successfully')
+        setEditProgram(null)
+        setProgName('')
+        setProgCode('')
+        setProgSemesters(8)
+        setProgEligibility('')
+        fetchPrograms()
+      }
+    } catch {
+      setProgramError('Failed to update program')
+    } finally {
+      setSavingProgram(false)
     }
-    setAdding(false)
   }
 
-  async function handleUpdateStudent() {
-    if (!editStudent) return
-    setUpdating(true)
-    setStudentError('')
-    const response = await fetch('/api/hod/students/update', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        student_id: editStudent.id,
-        full_name: editName,
-        current_semester: editSemester,
-      }),
-    })
-    const result = await response.json()
-    if (!response.ok) {
-      setStudentError(result.error ?? 'Failed to update student')
-    } else {
-      setStudentSuccess('Student updated successfully')
-      setEditStudent(null)
-      fetchStudents()
+  async function handleDeleteProgram() {
+    if (!deleteProgram) return
+    setDeletingProgram(true)
+    setProgramError('')
+    setProgramSuccess('')
+    try {
+      const res = await fetch('/api/hod/programs', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deleteProgram._id })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setProgramError(data.error ?? 'Failed to delete program')
+      } else {
+        setProgramSuccess('Program deleted successfully')
+        setDeleteProgram(null)
+        fetchPrograms()
+      }
+    } catch {
+      setProgramError('Failed to delete program')
+    } finally {
+      setDeletingProgram(false)
     }
-    setUpdating(false)
   }
 
-  async function handleDeleteStudent() {
-    if (!deleteStudent) return
-    setDeleting(true)
-    const response = await fetch('/api/hod/students/remove', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ student_id: deleteStudent.id }),
-    })
-    const result = await response.json()
-    if (!response.ok) {
-      setStudentError(result.error ?? 'Failed to delete student')
-    } else {
-      setStudentSuccess('Student removed successfully')
-      setDeleteStudent(null)
-      fetchStudents()
+  // ══════════════════════════════════════════════════════════════════════════
+  // COURSE CRUD OPERATIONS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async function fetchCourses() {
+    setLoadingCourses(true)
+    setCourseError('')
+    try {
+      const params = new URLSearchParams()
+      if (filterProgramId) params.append('program_id', filterProgramId)
+      if (filterSemester) params.append('semester', filterSemester)
+
+      const res = await fetch(`/api/hod/courses?${params.toString()}`)
+      const data = await res.json()
+      if (!res.ok) setCourseError(data.error ?? 'Failed to fetch courses')
+      else setCourses(data)
+    } catch {
+      setCourseError('Failed to fetch courses')
+    } finally {
+      setLoadingCourses(false)
     }
-    setDeleting(false)
   }
 
-  // ── Defaulters Tab Functions ──
-  async function handleFetch() {
-    setLoading(true)
-    setDefaulterError('')
-    setDefaulterData(null)
-    setCopied(false)
-    const response = await fetch(`/api/hod/defaulters?semester=${defaulterSemester}`)
-    const result = await response.json()
-    if (!response.ok) {
-      setDefaulterError(result.error ?? 'Failed to fetch data.')
-    } else {
-      setDefaulterData(result)
+  async function handleAddCourse() {
+    if (!crsCode.trim() || !crsTitle.trim() || !crsSemester || !crsCredits || !crsCategory || !crsProgramId) {
+      setCourseError('All starred fields are required')
+      return
     }
-    setLoading(false)
+    setSavingCourse(true)
+    setCourseError('')
+    setCourseSuccess('')
+    try {
+      const res = await fetch('/api/hod/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          course_code: crsCode.trim(),
+          title: crsTitle.trim(),
+          semester: Number(crsSemester),
+          credits: Number(crsCredits),
+          category: crsCategory,
+          tag: crsTag.trim() || undefined,
+          program_id: crsProgramId,
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setCourseError(data.error ?? 'Failed to add course')
+      } else {
+        setCourseSuccess('Course added successfully')
+        setShowAddCourse(false)
+        setCrsCode('')
+        setCrsTitle('')
+        setCrsSemester(1)
+        setCrsCredits(4)
+        setCrsCategory('DSC')
+        setCrsTag('')
+        setCrsProgramId('')
+        fetchCourses()
+      }
+    } catch {
+      setCourseError('Failed to add course')
+    } finally {
+      setSavingCourse(false)
+    }
   }
 
-  function handleCopyWhatsApp() {
-    if (!defaulterData || defaulterData.defaulters.length === 0) return
-    const lines = [
-      `📋 *FYIMP Course Registration — Defaulters*`,
-      `📚 Semester: ${defaulterSemester}`,
-      `🏛️ Department: ${hodInfo?.department_name}`,
-      ``,
-      `The following students have *not yet submitted* their course registration:`,
-      ``,
-      ...defaulterData.defaulters.map((s, i) => `${i + 1}. ${s.full_name}`),
-      ``,
-      `Total defaulters: ${defaulterData.defaulter_count} / ${defaulterData.total_students}`,
-      ``,
-      `Please complete your registration immediately.`,
-    ]
-    navigator.clipboard.writeText(lines.join('\n')).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 3000)
-    })
+  async function handleUpdateCourse() {
+    if (!editCourse) return
+    if (!crsTitle.trim() || !crsSemester || !crsCredits || !crsCategory || !crsProgramId) {
+      setCourseError('All starred fields are required')
+      return
+    }
+    setSavingCourse(true)
+    setCourseError('')
+    setCourseSuccess('')
+    try {
+      const res = await fetch('/api/hod/courses', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editCourse.id,
+          title: crsTitle.trim(),
+          semester: Number(crsSemester),
+          credits: Number(crsCredits),
+          category: crsCategory,
+          tag: crsTag.trim() || undefined,
+          program_id: crsProgramId,
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setCourseError(data.error ?? 'Failed to update course')
+      } else {
+        setCourseSuccess('Course updated successfully')
+        setEditCourse(null)
+        setCrsCode('')
+        setCrsTitle('')
+        setCrsSemester(1)
+        setCrsCredits(4)
+        setCrsCategory('DSC')
+        setCrsTag('')
+        setCrsProgramId('')
+        fetchCourses()
+      }
+    } catch {
+      setCourseError('Failed to update course')
+    } finally {
+      setSavingCourse(false)
+    }
+  }
+
+  async function handleDeleteCourse() {
+    if (!deleteCourse) return
+    setDeletingCourse(true)
+    setCourseError('')
+    setCourseSuccess('')
+    try {
+      const res = await fetch('/api/hod/courses', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ course_id: deleteCourse.id })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setCourseError(data.error ?? 'Failed to delete course')
+      } else {
+        setCourseSuccess('Course deleted successfully')
+        setDeleteCourse(null)
+        fetchCourses()
+      }
+    } catch {
+      setCourseError('Failed to delete course')
+    } finally {
+      setDeletingCourse(false)
+    }
   }
 
   async function handleLogout() {
     await signOut({ redirect: false })
     router.push('/login')
+  }
+
+  if (status === 'loading' || (status === 'authenticated' && session?.user?.role !== 'hod')) {
+    return (
+      <div className={styles.pageWrapper}>
+        <div className={styles.loadingState}>
+          <div className={styles.spinner} />
+          <p className={styles.loadingText}>Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -340,208 +456,114 @@ export default function HodDashboard() {
 
       {/* Tab Bar */}
       <div className={styles.tabBar}>
-  <button
-    className={`${styles.tabBtn} ${activeTab === 'defaulters' ? styles.tabActive : ''}`}
-    onClick={() => setActiveTab('defaulters')}
-  >
-    📋 Defaulters
-  </button>
-  <button
-    className={`${styles.tabBtn} ${activeTab === 'upload' ? styles.tabActive : ''}`}
-    onClick={() => setActiveTab('upload')}
-  >
-    📂 Bulk Upload
-  </button>
-  <button
-    className={`${styles.tabBtn} ${activeTab === 'students' ? styles.tabActive : ''}`}
-    onClick={() => setActiveTab('students')}
-  >
-    👥 Students
-  </button>
-  <button
-  className={`${styles.tabBtn} ${activeTab === 'blueprint' ? styles.tabActive : ''}`}
-  onClick={() => setActiveTab('blueprint')}
->
-  📐 Blueprint
-</button>
-</div>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'programs' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('programs')}
+        >
+          🎓 Programs Offered
+        </button>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'courses' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('courses')}
+        >
+          📚 Courses list
+        </button>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'blueprint' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('blueprint')}
+        >
+          📐 Blueprint Editor
+        </button>
+      </div>
 
       {/* Main Content */}
       <div className={styles.mainContent}>
 
         {/* ══════════════════════════════════════
-            TAB 1 — BULK UPLOAD
+            TAB 1 — PROGRAMS OFFERED
         ══════════════════════════════════════ */}
-        {activeTab === 'upload' && (
+        {activeTab === 'programs' && (
           <>
-            <p className={styles.sectionTitle}>Upload Semester 1 Students</p>
+            {programError && <div className={styles.errorBanner}>{programError}</div>}
+            {programSuccess && <div className={styles.successBanner}>✓ {programSuccess}</div>}
 
-            {uploadError && <div className={styles.errorBanner}>{uploadError}</div>}
-            {uploadSuccess && <div className={styles.successBanner}>✓ {uploadSuccess}</div>}
-
-            <div className={styles.uploadCard}>
-              <p className={styles.uploadDescription}>
-                Upload your department's Semester 1 student list.
-                Students will use their CAP number and date of birth to sign up.
+            <div className={styles.sectionHeader}>
+              <p className={styles.sectionTitle}>
+                Programs offered by department ({programs.length})
               </p>
-
-              <div className={styles.formatHint}>
-                <p className={styles.formatHintTitle}>Required CSV Columns</p>
-                <p className={styles.formatHintCode}>
-                  cap_application_number, date_of_birth, full_name, email
-                </p>
-                <p className={styles.formatHintCode} style={{ marginTop: '0.35rem', color: '#9ba1ab' }}>
-                  Example: CAP2025001, 2005-08-14, Ahmed Ali, ahmed@email.com
-                </p>
-              </div>
-
-              <div className={`${styles.dropzone} ${selectedFile ? styles.hasFile : ''}`}>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  className={styles.dropzoneInput}
-                  onChange={handleFileChange}
-                />
-                {selectedFile ? (
-                  <>
-                    <div className={styles.dropzoneIcon}>✅</div>
-                    <p className={styles.dropzoneFileName}>{selectedFile.name}</p>
-                    <p className={styles.dropzoneSubtext}>
-                      {(selectedFile.size / 1024).toFixed(1)} KB — Ready to upload
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className={styles.dropzoneIcon}>📂</div>
-                    <p className={styles.dropzoneText}>Tap to select CSV file</p>
-                    <p className={styles.dropzoneSubtext}>Only .csv files accepted</p>
-                  </>
-                )}
-              </div>
-
-              <button
-                className={styles.uploadBtn}
-                onClick={handleUpload}
-                disabled={uploading || !selectedFile}
-              >
-                {uploading ? <><span className={styles.spinner} /> Uploading...</> : 'Upload Students →'}
-              </button>
-            </div>
-
-            {uploadResult && (
-              <>
-                <p className={styles.sectionTitle}>Upload Results</p>
-                <div className={styles.uploadCard}>
-                  <div className={styles.resultsGrid}>
-                    <div className={`${styles.resultStat} ${styles.success}`}>
-                      <p className={styles.resultValue}>{uploadResult.inserted_count}</p>
-                      <p className={styles.resultLabel}>Inserted</p>
-                    </div>
-                    <div className={`${styles.resultStat} ${uploadResult.error_count > 0 ? styles.danger : styles.success}`}>
-                      <p className={styles.resultValue}>{uploadResult.error_count}</p>
-                      <p className={styles.resultLabel}>Errors</p>
-                    </div>
-                  </div>
-                  {uploadResult.errors && uploadResult.errors.length > 0 && (
-                    <div className={styles.errorList}>
-                      <p className={styles.errorListTitle}>Row Errors</p>
-                      {uploadResult.errors.map((err, i) => (
-                        <div key={i} className={styles.errorItem}>
-                          Row {err.row}: {err.issues.join(', ')}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </>
-        )}
-
-        {/* ══════════════════════════════════════
-            TAB 2 — STUDENTS CRUD
-        ══════════════════════════════════════ */}
-        {activeTab === 'students' && (
-          <>
-            {studentError && <div className={styles.errorBanner}>{studentError}</div>}
-            {studentSuccess && <div className={styles.successBanner}>✓ {studentSuccess}</div>}
-
-            {/* Semester selector + Add button */}
-            <div className={styles.semesterRow}>
-              <span className={styles.semesterLabel}>Semester:</span>
-              <select
-                className={styles.semesterSelect}
-                value={studentSemester}
-                onChange={e => setStudentSemester(Number(e.target.value))}
-              >
-                {[1,2,3,4,5,6,7,8,9,10].map(s => (
-                  <option key={s} value={s}>Semester {s}</option>
-                ))}
-              </select>
-              <button className={styles.fetchBtn} onClick={fetchStudents} disabled={loadingStudents}>
-                {loadingStudents ? 'Loading...' : 'Load →'}
-              </button>
               <button
                 className={styles.addBtn}
-                onClick={() => { setShowAddModal(true); setStudentError(''); setStudentSuccess('') }}
+                onClick={() => {
+                  setShowAddProgram(true)
+                  setProgramError('')
+                  setProgramSuccess('')
+                  setProgName('')
+                  setProgCode('')
+                  setProgSemesters(8)
+                  setProgEligibility('')
+                }}
               >
-                + Add
+                + Add Program
               </button>
             </div>
 
-            {/* Students Table */}
             <div className={styles.tableWrapper}>
-              {loadingStudents ? (
+              {loadingPrograms ? (
                 <div className={styles.loadingState}>
                   <div className={styles.spinner} />
-                  <p className={styles.loadingText}>Loading students...</p>
+                  <p className={styles.loadingText}>Loading programs...</p>
                 </div>
-              ) : students.length === 0 ? (
+              ) : programs.length === 0 ? (
                 <div className={styles.emptyState}>
-                  <div className={styles.emptyIcon}>👥</div>
-                  <p className={styles.emptyTitle}>No students found</p>
+                  <div className={styles.emptyIcon}>🎓</div>
+                  <p className={styles.emptyTitle}>No programs offered yet</p>
                   <p className={styles.emptySubtitle}>
-                    No students in Semester {studentSemester}. Click Load to fetch or Add to create one.
+                    Add your department's first program to get started.
                   </p>
                 </div>
               ) : (
                 <table className={styles.table}>
                   <thead className={styles.tableHead}>
                     <tr>
-                      <th>#</th>
-                      <th>Name</th>
-                      <th>Sem</th>
+                      <th>Code</th>
+                      <th>Program Name</th>
+                      <th>Semesters</th>
+                      <th>Eligibility / Prerequisites</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {students.map((student, index) => (
-                      <tr key={student.id} className={styles.tableRow}>
-                        <td>{index + 1}</td>
-                        <td>{student.full_name}</td>
-                        <td>{student.current_semester}</td>
+                    {programs.map((program) => (
+                      <tr key={program._id} className={styles.tableRow}>
+                        <td style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{program.code}</td>
+                        <td className={styles.nameCell} style={{ fontWeight: '600' }}>{program.name}</td>
+                        <td>{program.semesters} sems</td>
+                        <td style={{ fontSize: '0.78rem', color: '#9ba1ab', maxWidth: '15rem' }}>{program.eligibility}</td>
                         <td>
                           <div className={styles.actionBtns}>
                             <button
                               className={styles.approveBtn}
                               onClick={() => {
-                                setEditStudent(student)
-                                setEditName(student.full_name)
-                                setEditSemester(student.current_semester)
-                                setStudentError('')
-                                setStudentSuccess('')
+                                setEditProgram(program)
+                                setProgName(program.name)
+                                setProgCode(program.code)
+                                setProgSemesters(program.semesters)
+                                setProgEligibility(program.eligibility)
+                                setProgramError('')
+                                setProgramSuccess('')
                               }}
+                              title="Edit"
                             >
                               ✏️
                             </button>
                             <button
                               className={styles.rejectBtn}
                               onClick={() => {
-                                setDeleteStudent(student)
-                                setStudentError('')
-                                setStudentSuccess('')
+                                setDeleteProgram(program)
+                                setProgramError('')
+                                setProgramSuccess('')
                               }}
+                              title="Delete"
                             >
                               🗑️
                             </button>
@@ -553,270 +575,594 @@ export default function HodDashboard() {
                 </table>
               )}
             </div>
-
-            {/* Add Student Modal */}
-            {showAddModal && (
-              <div className={styles.modalOverlay}>
-                <div className={styles.modal}>
-                  <h3 className={styles.modalTitle}>Add Student</h3>
-                  <p className={styles.modalSubtitle}>
-                    Student will be added to admissions master. They sign up using CAP + DOB.
-                  </p>
-
-                  <div className={styles.fieldGroup}>
-                    <div className={styles.field}>
-                      <label className={styles.label}>Full Name *</label>
-                      <input
-                        type="text"
-                        className={styles.input}
-                        placeholder="Student full name"
-                        value={addName}
-                        onChange={e => setAddName(e.target.value)}
-                      />
-                    </div>
-                    <div className={styles.field}>
-                      <label className={styles.label}>CAP Number *</label>
-                      <input
-                        type="text"
-                        className={styles.input}
-                        placeholder="e.g. CAP2025001"
-                        value={addCap}
-                        onChange={e => setAddCap(e.target.value)}
-                      />
-                    </div>
-                    <div className={styles.field}>
-                      <label className={styles.label}>Date of Birth *</label>
-                      <input
-                        type="date"
-                        className={styles.input}
-                        value={addDob}
-                        onChange={e => setAddDob(e.target.value)}
-                      />
-                    </div>
-                    <div className={styles.field}>
-                      <label className={styles.label}>Email (optional)</label>
-                      <input
-                        type="email"
-                        className={styles.input}
-                        placeholder="student@email.com"
-                        value={addEmail}
-                        onChange={e => setAddEmail(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className={styles.modalActions}>
-                    <button
-                      className={styles.modalCancelBtn}
-                      onClick={() => { setShowAddModal(false); setAddName(''); setAddCap(''); setAddDob(''); setAddEmail('') }}
-                      disabled={adding}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className={styles.modalConfirmBtn}
-                      onClick={handleAddStudent}
-                      disabled={adding}
-                    >
-                      {adding ? 'Adding...' : 'Add Student →'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Edit Student Modal */}
-            {editStudent && (
-              <div className={styles.modalOverlay}>
-                <div className={styles.modal}>
-                  <h3 className={styles.modalTitle}>Edit Student</h3>
-
-                  <div className={styles.fieldGroup}>
-                    <div className={styles.field}>
-                      <label className={styles.label}>Full Name</label>
-                      <input
-                        type="text"
-                        className={styles.input}
-                        value={editName}
-                        onChange={e => setEditName(e.target.value)}
-                      />
-                    </div>
-                    <div className={styles.field}>
-                      <label className={styles.label}>CAP Number</label>
-                      <input
-                        type="text"
-                        className={styles.input}
-                        value={editStudent.cap_application_number ?? '—'}
-                        disabled
-                        style={{ opacity: 0.5 }}
-                      />
-                    </div>
-                    <div className={styles.field}>
-                      <label className={styles.label}>Current Semester</label>
-                      <select
-                        className={styles.input}
-                        value={editSemester}
-                        onChange={e => setEditSemester(Number(e.target.value))}
-                      >
-                        {[1,2,3,4,5,6,7,8,9,10].map(s => (
-                          <option key={s} value={s}>Semester {s}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className={styles.modalActions}>
-                    <button
-                      className={styles.modalCancelBtn}
-                      onClick={() => setEditStudent(null)}
-                      disabled={updating}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className={styles.modalConfirmBtn}
-                      onClick={handleUpdateStudent}
-                      disabled={updating}
-                    >
-                      {updating ? 'Saving...' : 'Save Changes →'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Delete Confirmation Modal */}
-            {deleteStudent && (
-              <div className={styles.modalOverlay}>
-                <div className={styles.modal}>
-                  <h3 className={styles.modalTitle}>Remove Student</h3>
-                  <p className={styles.modalSubtitle}>
-                    Are you sure you want to permanently remove{' '}
-                    <strong>{deleteStudent.full_name}</strong>?
-                    This will delete their account and all registration history.
-                    This cannot be undone.
-                  </p>
-
-                  <div className={styles.modalActions}>
-                    <button
-                      className={styles.modalCancelBtn}
-                      onClick={() => setDeleteStudent(null)}
-                      disabled={deleting}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className={styles.modalDeleteBtn}
-                      onClick={handleDeleteStudent}
-                      disabled={deleting}
-                    >
-                      {deleting ? 'Removing...' : 'Yes, Remove'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         )}
-        
-        
-        {activeTab === 'blueprint' && <BlueprintTab />}
-        
-        
 
         {/* ══════════════════════════════════════
-            TAB 3 — DEFAULTERS
+            TAB 2 — COURSES MANAGEMENT
         ══════════════════════════════════════ */}
-        {activeTab === 'defaulters' && (
+        {activeTab === 'courses' && (
           <>
-            {defaulterError && <div className={styles.errorBanner}>{defaulterError}</div>}
+            {courseError && <div className={styles.errorBanner}>{courseError}</div>}
+            {courseSuccess && <div className={styles.successBanner}>✓ {courseSuccess}</div>}
 
+            {/* Filters Row */}
             <div className={styles.semesterRow}>
-              <span className={styles.semesterLabel}>Semester:</span>
+              <span className={styles.semesterLabel}>Filter Program:</span>
               <select
                 className={styles.semesterSelect}
-                value={defaulterSemester}
-                onChange={e => setDefaulterSemester(Number(e.target.value))}
+                value={filterProgramId}
+                onChange={e => setFilterProgramId(e.target.value)}
               >
+                <option value="">All Programs</option>
+                {programs.map(p => (
+                  <option key={p._id} value={p._id}>{p.name} ({p.code})</option>
+                ))}
+              </select>
+
+              <span className={styles.semesterLabel} style={{ marginLeft: '0.5rem' }}>Semester:</span>
+              <select
+                className={styles.semesterSelect}
+                value={filterSemester}
+                onChange={e => setFilterSemester(e.target.value)}
+              >
+                <option value="">All Semesters</option>
                 {[1,2,3,4,5,6,7,8,9,10].map(s => (
                   <option key={s} value={s}>Semester {s}</option>
                 ))}
               </select>
-              <button className={styles.fetchBtn} onClick={handleFetch} disabled={loading}>
-                {loading ? 'Loading...' : 'Check →'}
+
+              <button className={styles.fetchBtn} onClick={fetchCourses} disabled={loadingCourses}>
+                Filter
+              </button>
+
+              <button
+                className={styles.addBtn}
+                style={{ marginLeft: 'auto' }}
+                onClick={() => {
+                  setShowAddCourse(true)
+                  setCourseError('')
+                  setCourseSuccess('')
+                  setCrsCode('')
+                  setCrsTitle('')
+                  setCrsSemester(1)
+                  setCrsCredits(4)
+                  setCrsCategory('DSC')
+                  setCrsTag('')
+                  setCrsProgramId(programs[0]?._id ?? '')
+                }}
+              >
+                + Add Course
               </button>
             </div>
 
-            {loading && (
-              <div className={styles.loadingState}>
-                <div className={styles.spinner} />
-                <p className={styles.loadingText}>Fetching student data...</p>
-              </div>
-            )}
-
-            {!loading && defaulterData && (
-              <>
-                <div className={styles.statsRow}>
-                  <div className={styles.statCard}>
-                    <p className={styles.statValue}>{defaulterData.total_students}</p>
-                    <p className={styles.statLabel}>Total</p>
-                  </div>
-                  <div className={styles.statCard}>
-                    <p className={`${styles.statValue} ${styles.success}`}>{defaulterData.submitted_count}</p>
-                    <p className={styles.statLabel}>Submitted</p>
-                  </div>
-                  <div className={styles.statCard}>
-                    <p className={`${styles.statValue} ${defaulterData.defaulter_count > 0 ? styles.danger : styles.success}`}>
-                      {defaulterData.defaulter_count}
-                    </p>
-                    <p className={styles.statLabel}>Pending</p>
-                  </div>
+            <div className={styles.tableWrapper}>
+              {loadingCourses ? (
+                <div className={styles.loadingState}>
+                  <div className={styles.spinner} />
+                  <p className={styles.loadingText}>Loading courses...</p>
                 </div>
-
-                <div className={styles.sectionHeader}>
-                  <p className={styles.sectionTitle}>
-                    Pending Students ({defaulterData.defaulter_count})
+              ) : courses.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>📚</div>
+                  <p className={styles.emptyTitle}>No courses found</p>
+                  <p className={styles.emptySubtitle}>
+                    Add your first course or adjust filters to view courses.
                   </p>
-                  {defaulterData.defaulter_count > 0 && (
-                    copied
-                      ? <span className={styles.copiedMsg}>✓ Copied!</span>
-                      : <button className={styles.whatsappBtn} onClick={handleCopyWhatsApp}>
-                          📋 Copy for WhatsApp
-                        </button>
-                  )}
                 </div>
-
-                <div className={styles.tableWrapper}>
-                  {defaulterData.defaulter_count === 0 ? (
-                    <div className={styles.emptyState}>
-                      <div className={styles.emptyIcon}>🎉</div>
-                      <p className={styles.emptyTitle}>All students submitted!</p>
-                      <p className={styles.emptySubtitle}>
-                        All {defaulterData.total_students} students completed registration for Semester {defaulterSemester}.
-                      </p>
-                    </div>
-                  ) : (
-                    <table className={styles.table}>
-                      <thead className={styles.tableHead}>
-                        <tr><th>#</th><th>Name</th></tr>
-                      </thead>
-                      <tbody>
-                        {defaulterData.defaulters.map((student, index) => (
-                          <tr key={student.id} className={styles.tableRow}>
-                            <td>{index + 1}</td>
-                            <td>{student.full_name}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </>
-            )}
+              ) : (
+                <table className={styles.table}>
+                  <thead className={styles.tableHead}>
+                    <tr>
+                      <th>Code</th>
+                      <th>Title</th>
+                      <th>Program</th>
+                      <th>Sem</th>
+                      <th>Cr</th>
+                      <th>Category</th>
+                      <th>Tag</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {courses.map((course) => (
+                      <tr key={course.id} className={styles.tableRow}>
+                        <td style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 'bold' }}>{course.course_code}</td>
+                        <td style={{ fontWeight: '500' }}>{course.title}</td>
+                        <td style={{ fontSize: '0.75rem', color: '#9ba1ab' }}>
+                          {course.program_id ? `${course.program_id.name} (${course.program_id.code})` : '—'}
+                        </td>
+                        <td>S{course.semester}</td>
+                        <td>{course.credits} cr</td>
+                        <td>
+                          <span className={styles.codeBadge}>{course.category}</span>
+                        </td>
+                        <td style={{ fontSize: '0.68rem', color: '#9ba1ab' }}>{course.tag ?? '—'}</td>
+                        <td>
+                          <div className={styles.actionBtns}>
+                            <button
+                              className={styles.approveBtn}
+                              onClick={() => {
+                                setEditCourse(course)
+                                setCrsCode(course.course_code)
+                                setCrsTitle(course.title)
+                                setCrsSemester(course.semester)
+                                setCrsCredits(course.credits)
+                                setCrsCategory(course.category)
+                                setCrsTag(course.tag ?? '')
+                                setCrsProgramId(course.program_id?._id ?? '')
+                                setCourseError('')
+                                setCourseSuccess('')
+                              }}
+                              title="Edit"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className={styles.rejectBtn}
+                              onClick={() => {
+                                setDeleteCourse(course)
+                                setCourseError('')
+                                setCourseSuccess('')
+                              }}
+                              title="Delete"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </>
         )}
 
+        {/* ══════════════════════════════════════
+            TAB 3 — BLUEPRINT EDITOR
+        ══════════════════════════════════════ */}
+        {activeTab === 'blueprint' && <BlueprintTab />}
+
       </div>
+
+      {/* ════════════════════════════════════════════════════════════════════
+          MODALS — PROGRAMS
+      ════════════════════════════════════════════════════════════════════ */}
+
+      {/* Add Program Modal */}
+      {showAddProgram && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal} style={{ maxWidth: '25rem' }}>
+            <h3 className={styles.modalTitle}>Add Program</h3>
+            <p className={styles.modalSubtitle}>Create a new program in your department.</p>
+
+            {programError && <div className={styles.errorBanner}>{programError}</div>}
+
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Program Name *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. B.Sc. Computer Science"
+                  value={progName}
+                  onChange={e => setProgName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Program Code *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. BSCCS"
+                  value={progCode}
+                  onChange={e => setProgCode(e.target.value.toUpperCase())}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Number of Semesters *</label>
+                <select
+                  className={styles.input}
+                  value={progSemesters}
+                  onChange={e => setProgSemesters(Number(e.target.value))}
+                >
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(s => (
+                    <option key={s} value={s}>{s} Semesters</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Prerequisite / Eligibility Criteria *</label>
+                <textarea
+                  className={styles.input}
+                  placeholder="e.g. +2 Science with Mathematics as one of the subjects"
+                  value={progEligibility}
+                  onChange={e => setProgEligibility(e.target.value)}
+                  style={{ minHeight: '4.5rem', fontFamily: 'inherit', resize: 'vertical', padding: '0.45rem 0.65rem' }}
+                />
+              </div>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setShowAddProgram(false)}
+                disabled={savingProgram}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleAddProgram}
+                disabled={savingProgram}
+              >
+                {savingProgram ? 'Saving...' : 'Add Program →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Program Modal */}
+      {editProgram && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal} style={{ maxWidth: '25rem' }}>
+            <h3 className={styles.modalTitle}>Edit Program</h3>
+            <p className={styles.modalSubtitle}>Edit details for {editProgram.code}.</p>
+
+            {programError && <div className={styles.errorBanner}>{programError}</div>}
+
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Program Name *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={progName}
+                  onChange={e => setProgName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Program Code</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={progCode}
+                  disabled
+                  style={{ opacity: 0.5 }}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Number of Semesters *</label>
+                <select
+                  className={styles.input}
+                  value={progSemesters}
+                  onChange={e => setProgSemesters(Number(e.target.value))}
+                >
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(s => (
+                    <option key={s} value={s}>{s} Semesters</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Prerequisite / Eligibility Criteria *</label>
+                <textarea
+                  className={styles.input}
+                  value={progEligibility}
+                  onChange={e => setProgEligibility(e.target.value)}
+                  style={{ minHeight: '4.5rem', fontFamily: 'inherit', resize: 'vertical', padding: '0.45rem 0.65rem' }}
+                />
+              </div>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setEditProgram(null)}
+                disabled={savingProgram}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleUpdateProgram}
+                disabled={savingProgram}
+              >
+                {savingProgram ? 'Saving...' : 'Save Changes →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Program Modal */}
+      {deleteProgram && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Delete Program</h3>
+            <p className={styles.modalSubtitle}>
+              Are you sure you want to permanently delete program <strong>{deleteProgram.name} ({deleteProgram.code})</strong>?
+              This will fail if any courses are currently linked to this program. This cannot be undone.
+            </p>
+
+            {programError && <div className={styles.errorBanner}>{programError}</div>}
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setDeleteProgram(null)}
+                disabled={deletingProgram}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalDeleteBtn}
+                onClick={handleDeleteProgram}
+                disabled={deletingProgram}
+              >
+                {deletingProgram ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════
+          MODALS — COURSES
+      ════════════════════════════════════════════════════════════════════ */}
+
+      {/* Add Course Modal */}
+      {showAddCourse && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal} style={{ maxWidth: '25rem' }}>
+            <h3 className={styles.modalTitle}>Add Course</h3>
+            <p className={styles.modalSubtitle}>Add a new course to your department.</p>
+
+            {courseError && <div className={styles.errorBanner}>{courseError}</div>}
+
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Course Code *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. KU01DSCMAT101"
+                  value={crsCode}
+                  onChange={e => setCrsCode(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Title *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. Differential Calculus"
+                  value={crsTitle}
+                  onChange={e => setCrsTitle(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Program *</label>
+                <select
+                  className={styles.input}
+                  value={crsProgramId}
+                  onChange={e => setCrsProgramId(e.target.value)}
+                >
+                  <option value="">— Select Program —</option>
+                  {programs.map(p => (
+                    <option key={p._id} value={p._id}>{p.name} ({p.code})</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Semester *</label>
+                <select
+                  className={styles.input}
+                  value={crsSemester}
+                  onChange={e => setCrsSemester(Number(e.target.value))}
+                >
+                  {[1,2,3,4,5,6,7,8,9,10].map(s => (
+                    <option key={s} value={s}>Semester {s}</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Credits *</label>
+                <input
+                  type="number"
+                  className={styles.input}
+                  min={1}
+                  max={10}
+                  value={crsCredits}
+                  onChange={e => setCrsCredits(Number(e.target.value))}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Category *</label>
+                <select
+                  className={styles.input}
+                  value={crsCategory}
+                  onChange={e => setCrsCategory(e.target.value)}
+                >
+                  {CATEGORIES.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Tag (optional)</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. POOL-A"
+                  value={crsTag}
+                  onChange={e => setCrsTag(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setShowAddCourse(false)}
+                disabled={savingCourse}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleAddCourse}
+                disabled={savingCourse}
+              >
+                {savingCourse ? 'Saving...' : 'Add Course →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Course Modal */}
+      {editCourse && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal} style={{ maxWidth: '25rem' }}>
+            <h3 className={styles.modalTitle}>Edit Course</h3>
+            <p className={styles.modalSubtitle}>Edit details for course {editCourse.course_code}.</p>
+
+            {courseError && <div className={styles.errorBanner}>{courseError}</div>}
+
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Course Code</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={editCourse.course_code}
+                  disabled
+                  style={{ opacity: 0.5 }}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Title *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={crsTitle}
+                  onChange={e => setCrsTitle(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Program *</label>
+                <select
+                  className={styles.input}
+                  value={crsProgramId}
+                  onChange={e => setCrsProgramId(e.target.value)}
+                >
+                  <option value="">— Select Program —</option>
+                  {programs.map(p => (
+                    <option key={p._id} value={p._id}>{p.name} ({p.code})</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Semester *</label>
+                <select
+                  className={styles.input}
+                  value={crsSemester}
+                  onChange={e => setCrsSemester(Number(e.target.value))}
+                >
+                  {[1,2,3,4,5,6,7,8,9,10].map(s => (
+                    <option key={s} value={s}>Semester {s}</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Credits *</label>
+                <input
+                  type="number"
+                  className={styles.input}
+                  min={1}
+                  max={10}
+                  value={crsCredits}
+                  onChange={e => setCrsCredits(Number(e.target.value))}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Category *</label>
+                <select
+                  className={styles.input}
+                  value={crsCategory}
+                  onChange={e => setCrsCategory(e.target.value)}
+                >
+                  {CATEGORIES.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Tag (optional)</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={crsTag}
+                  onChange={e => setCrsTag(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setEditCourse(null)}
+                disabled={savingCourse}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleUpdateCourse}
+                disabled={savingCourse}
+              >
+                {savingCourse ? 'Saving...' : 'Save Changes →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Course Modal */}
+      {deleteCourse && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Delete Course</h3>
+            <p className={styles.modalSubtitle}>
+              Are you sure you want to permanently delete course <strong>{deleteCourse.title} ({deleteCourse.course_code})</strong>?
+              This action cannot be undone.
+            </p>
+
+            {courseError && <div className={styles.errorBanner}>{courseError}</div>}
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setDeleteCourse(null)}
+                disabled={deletingCourse}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalDeleteBtn}
+                onClick={handleDeleteCourse}
+                disabled={deletingCourse}
+              >
+                {deletingCourse ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

@@ -27,6 +27,14 @@ interface RosterData {
   students: Student[]
 }
 
+const ROLE_DASHBOARD_MAP: Record<string, string> = {
+  superadmin: '/dashboard/superadmin',
+  campus_director: '/dashboard/director',
+  hod: '/dashboard/hod',
+  teaching_staff: '/dashboard/teacher',
+  student: '/dashboard/student',
+}
+
 export default function TeacherDashboard() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
@@ -49,6 +57,11 @@ export default function TeacherDashboard() {
       }
       if (status === 'loading') return
 
+      if (session?.user?.role !== 'teaching_staff') {
+        router.push(ROLE_DASHBOARD_MAP[session?.user?.role] ?? '/login')
+        return
+      }
+
       try {
         // Get all courses assigned to teacher
         const response = await fetch('/api/teacher/courses')
@@ -63,7 +76,7 @@ export default function TeacherDashboard() {
       }
     }
     loadData()
-  }, [status, router])
+  }, [status, session, router])
 
   // Fetch class roster
   async function handleFetch() {
@@ -110,6 +123,17 @@ export default function TeacherDashboard() {
   async function handleLogout() {
     await signOut({ redirect: false })
     router.push('/login')
+  }
+
+  if (status === 'loading' || (status === 'authenticated' && session?.user?.role !== 'teaching_staff')) {
+    return (
+      <div className={styles.pageWrapper}>
+        <div className={styles.loadingState}>
+          <div className={styles.spinner} />
+          <p className={styles.loadingText}>Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (

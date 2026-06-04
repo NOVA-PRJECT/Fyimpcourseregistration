@@ -20,6 +20,7 @@ export interface ICourse {
   course_code: string
   title: string
   department_id: mongoose.Types.ObjectId
+  program_id?: mongoose.Types.ObjectId | string
   semester: number
   credits: number
   category: 'INT' | 'FWD' | 'RPH' | 'CIP' | 'DSS' | 'DSC' | 'DSE' | 'VAC' | 'SEC' | 'MDC' | 'MOOC' | 'AEC'
@@ -50,6 +51,7 @@ const CourseSchema = new mongoose.Schema<ICourse>(
     course_code: { type: String, required: true, unique: true, trim: true, uppercase: true },
     title: { type: String, required: true, trim: true },
     department_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
+    program_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Program', default: null },
     semester: { type: Number, required: true, min: 1, max: 10 },
     credits: { type: Number, required: true, min: 1 },
     category: {

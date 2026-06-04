@@ -14,6 +14,7 @@ const CourseSchema = z.object({
   credits: z.number().int().min(1),
   category: z.enum(['INT','FWD','RPH','CIP','DSS','DSC','DSE','VAC','SEC','MDC','MOOC','AEC']),
   tag: z.string().optional().or(z.literal('')),
+  program_id: z.string().min(1, 'Program is required'),
 })
 
 export async function GET(request: NextRequest) {
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const semester = searchParams.get('semester')
+  const program_id = searchParams.get('program_id')
 
   await connectDB()
 
@@ -29,9 +31,39 @@ export async function GET(request: NextRequest) {
   if (semester) {
     query.semester = Number(semester)
   }
+  if (program_id) {
+    query.program_id = new mongoose.Types.ObjectId(program_id)
+  }
 
-  const courses = await Course.find(query).sort({ semester: 1, category: 1, title: 1 })
-  return NextResponse.json(courses)
+  try {
+    const courses = await Course.find(query)
+      .populate('program_id', 'name code')
+      .sort({ semester: 1, category: 1, title: 1 })
+      .lean()
+
+    // Map `_id` to `id` for consistency if required by frontend
+    const formattedCourses = courses.map((c: any) => ({
+      id: c._id.toString(),
+      _id: c._id.toString(),
+      course_code: c.course_code,
+      title: c.title,
+      semester: c.semester,
+      credits: c.credits,
+      category: c.category,
+      tag: c.tag,
+      department_id: c.department_id.toString(),
+      program_id: c.program_id ? {
+        _id: c.program_id._id.toString(),
+        name: c.program_id.name,
+        code: c.program_id.code,
+      } : null
+    }))
+
+    return NextResponse.json(formattedCourses)
+  } catch (err: any) {
+    console.error('hod/courses GET failed:', err)
+    return NextResponse.json({ error: 'Failed to fetch courses' }, { status: 500 })
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -50,7 +82,8 @@ export async function POST(request: NextRequest) {
     const course = await Course.create({
       course_code: parsed.data.course_code,
       title: parsed.data.title,
-      department_id: user.department_id,
+      department_id: new mongoose.Types.ObjectId(user.department_id!),
+      program_id: new mongoose.Types.ObjectId(parsed.data.program_id),
       semester: parsed.data.semester,
       credits: parsed.data.credits,
       category: parsed.data.category,
@@ -71,7 +104,7 @@ export async function PUT(request: NextRequest) {
   if (error) return error
 
   const body = await request.json()
-  const { id, ...rest } = body
+  const { id, title, credits, category, tag, program_id, semester } = body
 
   if (!id) {
     return NextResponse.json({ error: 'Course ID required' }, { status: 400 })
@@ -79,16 +112,19 @@ export async function PUT(request: NextRequest) {
 
   await connectDB()
 
-  const course = await Course.findById(id)
-  if (!course || course.department_id.toString() !== user.department_id) {
-    return NextResponse.json({ error: 'Course not found' }, { status: 404 })
-  }
-
   try {
-    course.title = rest.title
-    course.credits = rest.credits
-    course.category = rest.category
-    course.tag = rest.tag || null
+    const course = await Course.findById(id)
+    if (!course || course.department_id.toString() !== user.department_id) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 })
+    }
+
+    if (title !== undefined) course.title = title
+    if (credits !== undefined) course.credits = credits
+    if (category !== undefined) course.category = category
+    if (tag !== undefined) course.tag = tag || null
+    if (program_id !== undefined) course.program_id = new mongoose.Types.ObjectId(program_id)
+    if (semester !== undefined) course.semester = semester
+
     await course.save()
     return NextResponse.json({ success: true, message: 'Course updated successfully' })
   } catch (err) {
@@ -108,12 +144,12 @@ export async function DELETE(request: NextRequest) {
 
   await connectDB()
 
-  const course = await Course.findById(course_id)
-  if (!course || course.department_id.toString() !== user.department_id) {
-    return NextResponse.json({ error: 'Course not found' }, { status: 404 })
-  }
-
   try {
+    const course = await Course.findById(course_id)
+    if (!course || course.department_id.toString() !== user.department_id) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 })
+    }
+
     await Course.findByIdAndDelete(course_id)
     return NextResponse.json({ success: true, message: 'Course deleted successfully' })
   } catch (err) {

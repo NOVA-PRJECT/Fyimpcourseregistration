@@ -26,7 +26,36 @@ interface Department {
   createdAt: string
 }
 
-type Tab = 'campus' | 'departments'
+interface Faculty {
+  _id: string
+  full_name: string
+  email: string
+  role: string
+  department_id: string | null
+  department_name: string
+}
+
+interface DepartmentWithHod {
+  _id: string
+  name: string
+  code: string
+  campus_id: string
+  hod: {
+    _id: string
+    full_name: string
+    email: string
+  } | null
+}
+
+type Tab = 'campus' | 'departments' | 'hods'
+
+const ROLE_DASHBOARD_MAP: Record<string, string> = {
+  superadmin: '/dashboard/superadmin',
+  campus_director: '/dashboard/director',
+  hod: '/dashboard/hod',
+  teaching_staff: '/dashboard/teacher',
+  student: '/dashboard/student',
+}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -76,10 +105,31 @@ export default function SuperadminDashboard() {
   const [deleteDept, setDeleteDept] = useState<Department | null>(null)
   const [deletingDept, setDeletingDept] = useState(false)
 
+  // ── HOD Assignment state ──
+  const [departmentsWithHods, setDepartmentsWithHods] = useState<DepartmentWithHod[]>([])
+  const [facultyList, setFacultyList] = useState<Faculty[]>([])
+  const [loadingHods, setLoadingHods] = useState(false)
+  const [hodError, setHodError] = useState('')
+  const [hodSuccess, setHodSuccess] = useState('')
+
+  const [selectedDeptForHod, setSelectedDeptForHod] = useState<DepartmentWithHod | null>(null)
+  const [hodAssignType, setHodAssignType] = useState<'existing' | 'new'>('existing')
+  const [selectedFacultyId, setSelectedFacultyId] = useState('')
+  const [newHodName, setNewHodName] = useState('')
+  const [newHodEmail, setNewHodEmail] = useState('')
+  const [newHodPassword, setNewHodPassword] = useState('')
+  const [savingHod, setSavingHod] = useState(false)
+
   // ── Auth guard ──
   useEffect(() => {
-    if (status === 'unauthenticated') router.push('/login')
-  }, [status, router])
+    if (status === 'unauthenticated') {
+      router.push('/login')
+    } else if (status === 'authenticated') {
+      if (session?.user?.role !== 'superadmin') {
+        router.push(ROLE_DASHBOARD_MAP[session.user.role] ?? '/login')
+      }
+    }
+  }, [status, session, router])
 
   // ── Fetch on mount ──
   useEffect(() => {
@@ -88,6 +138,7 @@ export default function SuperadminDashboard() {
 
   useEffect(() => {
     if (activeTab === 'departments') fetchDepartments()
+    if (activeTab === 'hods') fetchHodsData()
   }, [activeTab])
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -269,12 +320,80 @@ export default function SuperadminDashboard() {
     setDeletingDept(false)
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // HOD FUNCTIONS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async function fetchHodsData() {
+    setLoadingHods(true)
+    setHodError('')
+    const res = await fetch('/api/superadmin/hod')
+    const data = await res.json()
+    if (!res.ok) {
+      setHodError(data.error ?? 'Failed to fetch HOD info')
+    } else {
+      setDepartmentsWithHods(data.departments)
+      setFacultyList(data.faculty)
+    }
+    setLoadingHods(false)
+  }
+
+  async function handleAssignHod() {
+    if (!selectedDeptForHod) return
+
+    if (hodAssignType === 'existing' && !selectedFacultyId) {
+      setHodError('Please select a faculty member')
+      return
+    }
+
+    if (hodAssignType === 'new' && (!newHodName.trim() || !newHodEmail.trim() || !newHodPassword.trim())) {
+      setHodError('All fields are required for creating a new faculty')
+      return
+    }
+
+    setSavingHod(true)
+    setHodError('')
+    setHodSuccess('')
+
+    const payload: any = {
+      department_id: selectedDeptForHod._id,
+      assignment_type: hodAssignType
+    }
+
+    if (hodAssignType === 'existing') {
+      payload.user_id = selectedFacultyId
+    } else {
+      payload.full_name = newHodName
+      payload.email = newHodEmail
+      payload.password = newHodPassword
+    }
+
+    const res = await fetch('/api/superadmin/hod', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setHodError(data.error ?? 'Failed to assign HOD')
+    } else {
+      setHodSuccess('HOD assigned successfully')
+      setSelectedDeptForHod(null)
+      setSelectedFacultyId('')
+      setNewHodName('')
+      setNewHodEmail('')
+      setNewHodPassword('')
+      fetchHodsData()
+    }
+    setSavingHod(false)
+  }
+
   async function handleLogout() {
     await signOut({ redirect: false })
     router.push('/login')
   }
 
-  if (status === 'loading') {
+  if (status === 'loading' || (status === 'authenticated' && session?.user?.role !== 'superadmin')) {
     return (
       <div className={styles.pageWrapper}>
         <div className={styles.loadingState}>
@@ -336,6 +455,12 @@ export default function SuperadminDashboard() {
           onClick={() => setActiveTab('departments')}
         >
           🏫 Departments
+        </button>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'hods' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('hods')}
+        >
+          🎓 HOD Assignment
         </button>
       </div>
 
@@ -562,6 +687,89 @@ export default function SuperadminDashboard() {
                               🗑️
                             </button>
                           </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ════════════════════════════════════
+            TAB — HOD ASSIGNMENT
+        ════════════════════════════════════ */}
+        {activeTab === 'hods' && (
+          <>
+            {hodError && <div className={styles.errorBanner}>{hodError}</div>}
+            {hodSuccess && (
+              <div className={styles.successBanner}>✓ {hodSuccess}</div>
+            )}
+
+            <div className={styles.sectionHeader}>
+              <p className={styles.sectionTitle}>
+                HOD Assignment ({departmentsWithHods.length} Departments)
+              </p>
+            </div>
+
+            <div className={styles.tableWrapper}>
+              {loadingHods ? (
+                <div className={styles.loadingState}>
+                  <div className={styles.spinner} />
+                  <p className={styles.loadingText}>Loading departments & HODs...</p>
+                </div>
+              ) : departmentsWithHods.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>🎓</div>
+                  <p className={styles.emptyTitle}>No departments found</p>
+                  <p className={styles.emptySubtitle}>
+                    Add departments first before assigning HODs.
+                  </p>
+                </div>
+              ) : (
+                <table className={styles.table}>
+                  <thead className={styles.tableHead}>
+                    <tr>
+                      <th>#</th>
+                      <th>Department</th>
+                      <th>Code</th>
+                      <th>Current HOD</th>
+                      <th>HOD Email</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {departmentsWithHods.map((dept, i) => (
+                      <tr key={dept._id} className={styles.tableRow}>
+                        <td>{i + 1}</td>
+                        <td className={styles.nameCell}>{dept.name}</td>
+                        <td>
+                          <span className={styles.codeBadge}>{dept.code}</span>
+                        </td>
+                        <td className={styles.nameCell} style={{ fontWeight: dept.hod ? '600' : 'normal', color: dept.hod ? '#fff' : '#888' }}>
+                          {dept.hod ? dept.hod.full_name : '⚠️ Not Assigned'}
+                        </td>
+                        <td style={{ color: dept.hod ? '#9ba1ab' : '#555' }}>
+                          {dept.hod ? dept.hod.email : '—'}
+                        </td>
+                        <td>
+                          <button
+                            className={styles.addBtn}
+                            onClick={() => {
+                              setSelectedDeptForHod(dept)
+                              setHodAssignType('existing')
+                              setSelectedFacultyId('')
+                              setNewHodName('')
+                              setNewHodEmail('')
+                              setNewHodPassword('')
+                              setHodError('')
+                              setHodSuccess('')
+                            }}
+                            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                          >
+                            Assign HOD
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -861,6 +1069,112 @@ export default function SuperadminDashboard() {
                 disabled={deletingDept}
               >
                 {deletingDept ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════
+          MODALS — HOD ASSIGNMENT
+      ════════════════════════════════════════════════════════════════════ */}
+
+      {selectedDeptForHod && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Assign HOD</h3>
+            <p className={styles.modalSubtitle}>
+              Assign a HOD for <strong>{selectedDeptForHod.name}</strong> ({selectedDeptForHod.code}).
+            </p>
+
+            {/* Error in modal */}
+            {hodError && <div className={styles.errorBanner} style={{ margin: '0.5rem 0' }}>{hodError}</div>}
+
+            {/* Tabs for choosing assignment type */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
+              <button
+                className={`${styles.tabBtn} ${hodAssignType === 'existing' ? styles.tabActive : ''}`}
+                onClick={() => { setHodAssignType('existing'); setHodError('') }}
+                style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}
+              >
+                Existing Faculty
+              </button>
+              <button
+                className={`${styles.tabBtn} ${hodAssignType === 'new' ? styles.tabActive : ''}`}
+                onClick={() => { setHodAssignType('new'); setHodError('') }}
+                style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}
+              >
+                New HOD/Faculty
+              </button>
+            </div>
+
+            <div className={styles.fieldGroup}>
+              {hodAssignType === 'existing' ? (
+                <div className={styles.field}>
+                  <label className={styles.label}>Select Faculty Member *</label>
+                  <select
+                    className={styles.input}
+                    value={selectedFacultyId}
+                    onChange={e => setSelectedFacultyId(e.target.value)}
+                  >
+                    <option value="">— Select Member —</option>
+                    {facultyList.map(f => (
+                      <option key={f._id} value={f._id}>
+                        {f.full_name} ({f.email}) — Current Role: {f.role === 'hod' ? `HOD of ${f.department_name}` : 'Teaching Staff'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Full Name *</label>
+                    <input
+                      type="text"
+                      className={styles.input}
+                      placeholder="e.g. Dr. Jane Doe"
+                      value={newHodName}
+                      onChange={e => setNewHodName(e.target.value)}
+                    />
+                  </div>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Email Address *</label>
+                    <input
+                      type="email"
+                      className={styles.input}
+                      placeholder="e.g. hod.maths@kannuruniversity.ac.in"
+                      value={newHodEmail}
+                      onChange={e => setNewHodEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Password *</label>
+                    <input
+                      type="password"
+                      className={styles.input}
+                      placeholder="••••••••"
+                      value={newHodPassword}
+                      onChange={e => setNewHodPassword(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setSelectedDeptForHod(null)}
+                disabled={savingHod}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleAssignHod}
+                disabled={savingHod}
+              >
+                {savingHod ? 'Saving...' : 'Assign HOD →'}
               </button>
             </div>
           </div>

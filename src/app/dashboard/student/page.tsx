@@ -34,6 +34,14 @@ type SlotPreferences = Record<number, Record<number, string>>
 
 type DashboardState = 'idle' | 'loading_blueprint' | 'ready' | 'submitting' | 'submitted'
 
+const ROLE_DASHBOARD_MAP: Record<string, string> = {
+  superadmin: '/dashboard/superadmin',
+  campus_director: '/dashboard/director',
+  hod: '/dashboard/hod',
+  teaching_staff: '/dashboard/teacher',
+  student: '/dashboard/student',
+}
+
 export default function StudentDashboard() {
   const router = useRouter()
   const { data: session, status } = useSession()
@@ -48,8 +56,14 @@ export default function StudentDashboard() {
   const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
-    if (status === 'unauthenticated') router.push('/login')
-  }, [status, router])
+    if (status === 'unauthenticated') {
+      router.push('/login')
+    } else if (status === 'authenticated') {
+      if (session?.user?.role !== 'student') {
+        router.push(ROLE_DASHBOARD_MAP[session.user.role] ?? '/login')
+      }
+    }
+  }, [status, session, router])
 
   const studentName = session?.user?.name ?? 'Student'
   const studentRole = (session?.user as any)?.role
@@ -200,7 +214,7 @@ export default function StudentDashboard() {
     ? totalCredits >= blueprint.min_credits && totalCredits <= blueprint.max_credits
     : false
 
-  if (status === 'loading') {
+  if (status === 'loading' || (status === 'authenticated' && session?.user?.role !== 'student')) {
     return (
       <div className={styles.pageWrapper}>
         <div className={styles.loadingState}>

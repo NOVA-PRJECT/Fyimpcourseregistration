@@ -13,3 +13,14 @@ Role: student          | Email: student@kannuruniversity.ac.in
 
 
 
+what need more after hod overhaul
+
+
+prerequisite is not a description but each a point ,
+in HOD and Superadmin and all other dashboards while selecting filtering it shoulf filter on the spot automatically after selecting a filter ,
+clicking logout button in any dashboard should give a responxe for better UX
+in student data ,should specify which department,which program ,which semester etc
+
+every hod will be a teacher too 
+
+therefore in assigning hod ,just make it like adding new details such as email,name ,temporary password etc
