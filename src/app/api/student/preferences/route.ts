@@ -5,6 +5,7 @@ import { User } from '@/core/database/models/User'
 import { Course } from '@/core/database/models/Course'
 import { Blueprint } from '@/core/database/models/Blueprint'
 import { verifyRole } from '@/core/security/auth'
+import { submitLimiter } from '@/core/security/rateLimiter'
 import mongoose from 'mongoose'
 import { z } from 'zod'
 
@@ -27,6 +28,14 @@ const PreferenceSubmitSchema = z.object({
 export async function POST(request: NextRequest) {
   const { user, error } = await verifyRole(['student'])
   if (error) return error
+
+  const limitResult = await submitLimiter.limit(user.id)
+  if (!limitResult.success) {
+    return NextResponse.json(
+      { error: 'Too many submissions. Please try again later.' },
+      { status: 429 }
+    )
+  }
 
   const body = await request.json()
   const parsed = PreferenceSubmitSchema.safeParse(body)

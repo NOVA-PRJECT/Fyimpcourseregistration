@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseServerClient } from '@/core/database/supabaseClient'
-import { verifyHod } from '@/core/auth/verifyRole'
+import { connectDB } from '@/core/database/mongoose'
+import { Course } from '@/core/database/models/Course'
+import { verifyRole } from '@/core/security/auth'
+import mongoose from 'mongoose'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -14,41 +16,27 @@ const CourseSchema = z.object({
   tag: z.string().optional().or(z.literal('')),
 })
 
-// GET — fetch courses for dept + semester
 export async function GET(request: NextRequest) {
-  const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { user, error } = await verifyRole(['hod'])
+  if (error) return error
 
   const { searchParams } = new URL(request.url)
   const semester = searchParams.get('semester')
-  if (!semester) {
-    return NextResponse.json({ error: 'Semester required' }, { status: 400 })
+
+  await connectDB()
+
+  const query: any = { department_id: new mongoose.Types.ObjectId(user.department_id!) }
+  if (semester) {
+    query.semester = Number(semester)
   }
 
-  const supabase = await getSupabaseServerClient()
-  const { data, error } = await supabase
-    .from('courses')
-    .select('*')
-    .eq('department_id', auth.department_id)
-    .eq('semester', Number(semester))
-    .order('category')
-
-  if (error) {
-    console.error('hod/courses GET failed:', error)
-    return NextResponse.json({ error: 'Failed to fetch courses' }, { status: 500 })
-  }
-
-  return NextResponse.json(data ?? [])
+  const courses = await Course.find(query).sort({ semester: 1, category: 1, title: 1 })
+  return NextResponse.json(courses)
 }
 
-// POST — add new course
 export async function POST(request: NextRequest) {
-  const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { user, error } = await verifyRole(['hod'])
+  if (error) return error
 
   const body = await request.json()
   const parsed = CourseSchema.safeParse(body)
@@ -56,36 +44,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
   }
 
-  const supabase = await getSupabaseServerClient()
-  const { error } = await supabase
-    .from('courses')
-    .insert({
+  await connectDB()
+
+  try {
+    const course = await Course.create({
       course_code: parsed.data.course_code,
       title: parsed.data.title,
-      department_id: auth.department_id,
+      department_id: user.department_id,
       semester: parsed.data.semester,
       credits: parsed.data.credits,
       category: parsed.data.category,
       tag: parsed.data.tag || null,
     })
-
-  if (error) {
-    if (error.code === '23505') {
+    return NextResponse.json({ success: true, message: 'Course added successfully', course })
+  } catch (err: any) {
+    if (err.code === 11000) {
       return NextResponse.json({ error: 'Course code already exists' }, { status: 409 })
     }
-    console.error('hod/courses POST failed:', error)
+    console.error('hod/courses POST failed:', err)
     return NextResponse.json({ error: 'Failed to add course' }, { status: 500 })
   }
-
-  return NextResponse.json({ success: true, message: 'Course added successfully' })
 }
 
-// PUT — edit course
 export async function PUT(request: NextRequest) {
-  const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { user, error } = await verifyRole(['hod'])
+  if (error) return error
 
   const body = await request.json()
   const { id, ...rest } = body
@@ -94,71 +77,47 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Course ID required' }, { status: 400 })
   }
 
-  const supabase = await getSupabaseServerClient()
+  await connectDB()
 
-  // Verify course belongs to HOD's department
-  const { data: course } = await supabase
-    .from('courses')
-    .select('department_id')
-    .eq('id', id)
-    .single()
-
-  if (!course || course.department_id !== auth.department_id) {
+  const course = await Course.findById(id)
+  if (!course || course.department_id.toString() !== user.department_id) {
     return NextResponse.json({ error: 'Course not found' }, { status: 404 })
   }
 
-  const { error } = await supabase
-    .from('courses')
-    .update({
-      title: rest.title,
-      credits: rest.credits,
-      category: rest.category,
-      tag: rest.tag || null,
-    })
-    .eq('id', id)
-
-  if (error) {
-    console.error('hod/courses PUT failed:', error)
+  try {
+    course.title = rest.title
+    course.credits = rest.credits
+    course.category = rest.category
+    course.tag = rest.tag || null
+    await course.save()
+    return NextResponse.json({ success: true, message: 'Course updated successfully' })
+  } catch (err) {
+    console.error('hod/courses PUT failed:', err)
     return NextResponse.json({ error: 'Failed to update course' }, { status: 500 })
   }
-
-  return NextResponse.json({ success: true, message: 'Course updated successfully' })
 }
 
-// DELETE — delete course
 export async function DELETE(request: NextRequest) {
-  const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  const { user, error } = await verifyRole(['hod'])
+  if (error) return error
 
   const { course_id } = await request.json()
   if (!course_id) {
     return NextResponse.json({ error: 'Course ID required' }, { status: 400 })
   }
 
-  const supabase = await getSupabaseServerClient()
+  await connectDB()
 
-  // Verify course belongs to HOD's department
-  const { data: course } = await supabase
-    .from('courses')
-    .select('department_id')
-    .eq('id', course_id)
-    .single()
-
-  if (!course || course.department_id !== auth.department_id) {
+  const course = await Course.findById(course_id)
+  if (!course || course.department_id.toString() !== user.department_id) {
     return NextResponse.json({ error: 'Course not found' }, { status: 404 })
   }
 
-  const { error } = await supabase
-    .from('courses')
-    .delete()
-    .eq('id', course_id)
-
-  if (error) {
-    console.error('hod/courses DELETE failed:', error)
+  try {
+    await Course.findByIdAndDelete(course_id)
+    return NextResponse.json({ success: true, message: 'Course deleted successfully' })
+  } catch (err) {
+    console.error('hod/courses DELETE failed:', err)
     return NextResponse.json({ error: 'Failed to delete course' }, { status: 500 })
   }
-
-  return NextResponse.json({ success: true, message: 'Course deleted successfully' })
 }

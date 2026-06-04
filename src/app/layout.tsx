@@ -1,6 +1,6 @@
 import './globals.css'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/core/security/authOptions'
 import SessionProvider from '@/component/SessionProvider'
 
 export const metadata = {

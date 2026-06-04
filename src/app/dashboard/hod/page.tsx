@@ -5,7 +5,7 @@ import BlueprintTab from './BlueprintTab'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { useSession, signOut } from 'next-auth/react'
 import Papa from 'papaparse'
 import styles from './hod-dashboard.module.css'
 
@@ -51,10 +51,9 @@ export default function HodDashboard() {
   const [hodInfo, setHodInfo] = useState<HodInfo | null>(null)
   const [loadingHod, setLoadingHod] = useState(true)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const { data: session, status } = useSession()
+  const hodName = session?.user?.name ?? 'HOD'
+  const hodDeptId = (session?.user as any)?.department_id
 
   // ── Upload Tab State ──
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -97,25 +96,29 @@ export default function HodDashboard() {
 
   useEffect(() => {
     async function loadHodInfo() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-
-      const { data: faculty } = await supabase
-        .from('faculty')
-        .select('full_name, departments (name)')
-        .eq('id', user.id)
-        .single()
-
-      if (faculty) {
-        setHodInfo({
-          full_name: faculty.full_name,
-          department_name: (faculty.departments as any)?.name ?? 'Unknown',
-        })
+      if (status === 'unauthenticated') {
+        router.push('/login')
+        return
       }
-      setLoadingHod(false)
+      if (status === 'loading') return
+
+      try {
+        const response = await fetch('/api/hod/info')
+        if (response.ok) {
+          const data = await response.json()
+          setHodInfo({
+            full_name: hodName,
+            department_name: data.name,
+          })
+        }
+      } catch (err) {
+        console.error('Failed to load HOD info', err)
+      } finally {
+        setLoadingHod(false)
+      }
     }
     loadHodInfo()
-  }, [])
+  }, [status, router, hodName])
 
   // ── Upload Tab Functions ──
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -269,7 +272,7 @@ export default function HodDashboard() {
     setDefaulterError('')
     setDefaulterData(null)
     setCopied(false)
-    const response = await fetch(`/api/faculty/defaulters?semester=${defaulterSemester}`)
+    const response = await fetch(`/api/hod/defaulters?semester=${defaulterSemester}`)
     const result = await response.json()
     if (!response.ok) {
       setDefaulterError(result.error ?? 'Failed to fetch data.')
@@ -301,7 +304,7 @@ export default function HodDashboard() {
   }
 
   async function handleLogout() {
-    await supabase.auth.signOut()
+    await signOut({ redirect: false })
     router.push('/login')
   }
 

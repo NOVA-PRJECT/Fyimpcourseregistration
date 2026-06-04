@@ -46,13 +46,15 @@ export async function GET(request: NextRequest) {
     s => s.status === 'UNALLOCATED'
   )
 
+  const fullyAllocated = unallocated.length === 0
+
   return NextResponse.json({
-    status: allocation.fully_allocated ? 'COMPLETE' : 'PARTIAL',
+    status: fullyAllocated ? 'COMPLETE' : 'PARTIAL',
     semester: allocation.semester,
     academic_year: allocation.academic_year,
     total_credits: allocation.total_credits,
-    fully_allocated: allocation.fully_allocated,
+    fully_allocated: fullyAllocated,
     unallocated_count: unallocated.length,
     slots: allocation.slots,
   })
-.
+}

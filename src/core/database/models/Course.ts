@@ -22,7 +22,7 @@ export interface ICourse {
   department_id: mongoose.Types.ObjectId
   semester: number
   credits: number
-  category: 'DSC' | 'MDC' | 'DSE' | 'SEC' | 'VAC' | 'MOOC'
+  category: 'INT' | 'FWD' | 'RPH' | 'CIP' | 'DSS' | 'DSC' | 'DSE' | 'VAC' | 'SEC' | 'MDC' | 'MOOC' | 'AEC'
   tag?: string
   seat_limit: number
   prerequisites: IPrerequisite[]
@@ -55,7 +55,7 @@ const CourseSchema = new mongoose.Schema<ICourse>(
     category: {
       type: String,
       required: true,
-      enum: ['DSC', 'MDC', 'DSE', 'SEC', 'VAC', 'MOOC'],
+      enum: ['INT', 'FWD', 'RPH', 'CIP', 'DSS', 'DSC', 'DSE', 'VAC', 'SEC', 'MDC', 'MOOC', 'AEC'],
     },
     tag: { type: String, default: null },
     seat_limit: { type: Number, default: 0 },

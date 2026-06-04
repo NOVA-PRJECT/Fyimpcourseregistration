@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { useSession, signOut } from 'next-auth/react'
 import styles from './teacher-dashboard.module.css'
 
 interface Course {
@@ -30,7 +30,6 @@ interface RosterData {
 export default function TeacherDashboard() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
-  const [teacherName, setTeacherName] = useState('')
   const [loadingTeacher, setLoadingTeacher] = useState(true)
   const [courses, setCourses] = useState<Course[]>([])
   const [selectedCourseId, setSelectedCourseId] = useState('')
@@ -38,37 +37,33 @@ export default function TeacherDashboard() {
   const [rosterData, setRosterData] = useState<RosterData | null>(null)
   const [error, setError] = useState('')
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const { data: session, status } = useSession()
+  const teacherName = session?.user?.name ?? 'Teaching Staff'
 
   // Load teacher info and course list on mount
   useEffect(() => {
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      if (status === 'unauthenticated') {
+        router.push('/login')
+        return
+      }
+      if (status === 'loading') return
 
-      // Get teacher info
-      const { data: faculty } = await supabase
-        .from('faculty')
-        .select('full_name')
-        .eq('id', user.id)
-        .single()
-
-      if (faculty) setTeacherName(faculty.full_name)
-
-      // Get all courses
-      const { data: courseList } = await supabase
-        .from('courses')
-        .select('id, course_code, title')
-        .order('title')
-
-      if (courseList) setCourses(courseList)
-      setLoadingTeacher(false)
+      try {
+        // Get all courses assigned to teacher
+        const response = await fetch('/api/teacher/courses')
+        if (response.ok) {
+          const courseList = await response.json()
+          setCourses(courseList)
+        }
+      } catch (err) {
+        console.error('Failed to load courses', err)
+      } finally {
+        setLoadingTeacher(false)
+      }
     }
     loadData()
-  }, [])
+  }, [status, router])
 
   // Fetch class roster
   async function handleFetch() {
@@ -81,7 +76,7 @@ export default function TeacherDashboard() {
     setError('')
     setRosterData(null)
 
-    const response = await fetch(`/api/faculty/attendance?course_id=${selectedCourseId}`)
+    const response = await fetch(`/api/teacher/students?course_id=${selectedCourseId}`)
     const result = await response.json()
 
     if (!response.ok) {
@@ -113,7 +108,7 @@ export default function TeacherDashboard() {
 
   // Logout
   async function handleLogout() {
-    await supabase.auth.signOut()
+    await signOut({ redirect: false })
     router.push('/login')
   }
 

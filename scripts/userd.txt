@@ -1,0 +1,15 @@
+✅ Database seeded with test users!
+--------------------------------------------------
+All test accounts use the same password: password123
+--------------------------------------------------
+Role: superadmin       | Email: admin@kannuruniversity.ac.in
+Role: campus_director  | Email: director@kannuruniversity.ac.in
+Role: hod              | Email: hod.cs@kannuruniversity.ac.in
+Role: teaching_staff   | Email: teacher@kannuruniversity.ac.in
+Role: student          | Email: student@kannuruniversity.ac.in
+--------------------------------------------------
+
+
+
+
+

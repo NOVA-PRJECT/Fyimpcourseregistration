@@ -15,7 +15,7 @@ const DepartmentSchema = new mongoose.Schema<IDepartment>(
     code: { type: String, required: true, unique: true, uppercase: true, trim: true },
     campus_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Campus', required: true },
   },
-  { timestamps: true }
+  { timestamps: true, collection: 'departments' }
 )
 
 export const Department =

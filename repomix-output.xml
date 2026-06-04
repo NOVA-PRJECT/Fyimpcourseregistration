@@ -1,155 +1,158 @@
-This file is a merged representation of the entire codebase, combined into a single document by Repomix.
 
-<file_summary>
-This section contains a summary of this file.
-
-<purpose>
-This file contains a packed representation of the entire repository's contents.
-It is designed to be easily consumable by AI systems for analysis, code review,
-or other automated processes.
-</purpose>
-
-<file_format>
-The content is organized as follows:
-1. This summary section
-2. Repository information
-3. Directory structure
-4. Repository files (if enabled)
-5. Multiple file entries, each consisting of:
-  - File path as an attribute
-  - Full contents of the file
-</file_format>
-
-<usage_guidelines>
-- This file should be treated as read-only. Any changes should be made to the
-  original repository files, not this packed version.
-- When processing this file, use the file path to distinguish
-  between different files in the repository.
-- Be aware that this file may contain sensitive information. Handle it with
-  the same level of security as you would the original repository.
-</usage_guidelines>
-
-<notes>
-- Some files may have been excluded based on .gitignore rules and Repomix's configuration
-- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Files matching patterns in .gitignore are excluded
-- Files matching default ignore patterns are excluded
-- Files are sorted by Git change count (files with more changes are at the bottom)
-</notes>
-
-</file_summary>
 
 <directory_structure>
-public/
-  logo.png
-src/
-  app/
-    api/
-      auth/
-        [...nextauth]/
-          route.ts
-      hod/
-        allocation-results/
-          route.ts
-        blueprint/
-          route.ts
-        courses/
-          prerequisites/
-            route.ts
-          route.ts
-        manual-assign/
-          route.ts
-      student/
-        blueprint/
-          route.ts
-        preferences/
-          route.ts
-        results/
-          route.ts
-      superadmin/
-        campus/
-          route.ts
-        departments/
-          route.ts
-      teacher/
-        courses/
-          route.ts
-        marks/
-          route.ts
-        students/
-          route.ts
-    dashboard/
-      hod/
-        BlueprintTab.tsx
-        hod-dashboard.module.css
-        layout.tsx
-        page.tsx
-      student/
-        layout.tsx
-        page.tsx
-        student-dashboard.module.css
-      superadmin/
-        page.tsx
-        superadmin-dashboard.module.css
-      teacher/
-        layout.tsx
-        page.tsx
-        teacher-dashboard.module.css
-    login/
-      login.module.css
-      page.tsx
-    reset-password/
-      confirm/
-        confirm.module.css
-        page.tsx
-      page.tsx
-      reset-password.module.css
-    favicon.ico
-    globals.css
-    home.module.css
-    layout.tsx
-    page.tsx
-  component/
-    resource-banner.module.css
-    ResourceBanner.tsx
-    SessionProvider.tsx
-    StudentPlaceholderSlots.tsx
-  core/
-    constants/
-      courseCategories.ts
-      roles.ts
-      semesters.ts
-    database/
-      models/
-        Allocation.ts
-        Blueprint.ts
-        Campus.ts
-        Course.ts
-        CourseAssignment.ts
-        Department.ts
-        InternalMark.ts
-        Marks.ts
-        Preference.ts
-        User.ts
-      mongoose.ts
-    security/
-      auth.ts
-      rateLimiter.ts
-      routeConfig.ts
-    utils/
-      exportPdf.ts
 .gitignore
 eslint.config.mjs
 middleware.ts
 next.config.ts
 package.json
 postcss.config.mjs
+public/logo.png
 README.md
+src/app/api/auth/[...nextauth]/route.ts
+src/app/api/hod/allocation-results/route.ts
+src/app/api/hod/blueprint/route.ts
+src/app/api/hod/courses/prerequisites/route.ts
+src/app/api/hod/courses/route.ts
+src/app/api/hod/manual-assign/route.ts
+src/app/api/student/blueprint/route.ts
+src/app/api/student/preferences/route.ts
+src/app/api/student/results/route.ts
+src/app/api/superadmin/allocate/route.ts
+src/app/api/superadmin/campus/route.ts
+src/app/api/superadmin/departments/route.ts
+src/app/api/teacher/courses/route.ts
+src/app/api/teacher/marks/route.ts
+src/app/api/teacher/students/route.ts
+src/app/dashboard/hod/BlueprintTab.tsx
+src/app/dashboard/hod/hod-dashboard.module.css
+src/app/dashboard/hod/page.tsx
+src/app/dashboard/student/page.tsx
+src/app/dashboard/student/student-dashboard.module.css
+src/app/dashboard/superadmin/page.tsx
+src/app/dashboard/superadmin/superadmin-dashboard.module.css
+src/app/dashboard/teacher/page.tsx
+src/app/dashboard/teacher/teacher-dashboard.module.css
+src/app/favicon.ico
+src/app/globals.css
+src/app/home.module.css
+src/app/layout.tsx
+src/app/login/login.module.css
+src/app/login/page.tsx
+src/app/page.tsx
+src/app/reset-password/confirm/confirm.module.css
+src/app/reset-password/confirm/page.tsx
+src/app/reset-password/page.tsx
+src/app/reset-password/reset-password.module.css
+src/component/resource-banner.module.css
+src/component/ResourceBanner.tsx
+src/component/SessionProvider.tsx
+src/component/StudentPlaceholderSlots.tsx
+src/core/auth/verifyRole.ts
+src/core/constants/courseCategories.ts
+src/core/constants/roles.ts
+src/core/constants/semesters.ts
+src/core/database/models/Allocation.ts
+src/core/database/models/Blueprint.ts
+src/core/database/models/Campus.ts
+src/core/database/models/Course.ts
+src/core/database/models/CourseAssignment.ts
+src/core/database/models/Department.ts
+src/core/database/models/InternalMark.ts
+src/core/database/models/Marks.ts
+src/core/database/models/Preference.ts
+src/core/database/models/User.ts
+src/core/database/mongoose.ts
+src/core/security/auth.ts
+src/core/security/rateLimiter.ts
+src/core/security/routeConfig.ts
+src/core/utils/allocationEngine.ts
+src/core/utils/exportPdf.ts
 tsconfig.json
 </directory_structure>
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="eslint.config.mjs">
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
+
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  // Override default ignores of eslint-config-next.
+  globalIgnores([
+    // Default ignores of eslint-config-next:
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+  ]),
+]);
+
+export default eslintConfig;
+</file>
+
+<file path="next.config.ts">
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* config options here */
+};
+
+export default nextConfig;
+</file>
+
+<file path="postcss.config.mjs">
+const config = {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
+
+export default config;
+</file>
+
+<file path="README.md">
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+## Getting Started
+
+First, run the development server:
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+</file>
 
 <file path="src/app/api/auth/[...nextauth]/route.ts">
 import NextAuth, { NextAuthOptions } from 'next-auth'
@@ -242,16 +245,93 @@ export { handler as GET, handler as POST }
 
 </file>
 
-<file path="src/app/api/student/blueprint/route.ts">
+<file path="src/app/api/superadmin/allocate/route.ts">
+import { NextRequest, NextResponse } from 'next/server'
+import { connectDB } from '@/core/database/mongoose'
+import { Allocation } from '@/core/database/models/Allocation'
+import { verifyRole } from '@/core/security/auth'
+import { runAllocation, SemesterType } from '@/core/utils/allocationEngine'
+import mongoose from 'mongoose'
 
-</file>
+export const dynamic = 'force-dynamic'
 
-<file path="src/app/api/student/preferences/route.ts">
+// POST — trigger university-wide allocation
+export async function POST(request: NextRequest) {
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
 
-</file>
+  const { academic_year, semester_type } = await request.json()
 
-<file path="src/app/api/student/results/route.ts">
+  if (!academic_year || !semester_type) {
+    return NextResponse.json(
+      { error: 'academic_year and semester_type (ODD or EVEN) are required' },
+      { status: 400 }
+    )
+  }
 
+  if (!['ODD', 'EVEN'].includes(semester_type)) {
+    return NextResponse.json(
+      { error: 'semester_type must be ODD or EVEN' },
+      { status: 400 }
+    )
+  }
+
+  await connectDB()
+
+  // Guard — only one run per academic_year + semester_type
+  const existing = await Allocation.findOne({ academic_year, semester_type }).lean()
+  if (existing) {
+    return NextResponse.json(
+      { error: `Allocation already ran for ${academic_year} ${semester_type} semester. Cannot re-run.` },
+      { status: 409 }
+    )
+  }
+
+  const allocation_run_id = new mongoose.Types.ObjectId()
+
+  try {
+    const summary = await runAllocation({
+      academic_year,
+      semester_type: semester_type as SemesterType,
+      allocation_run_id,
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: `Allocation for ${academic_year} ${semester_type} semester completed`,
+      ...summary,
+    })
+  } catch (err: any) {
+    console.error('Allocation failed:', err)
+    return NextResponse.json({ error: err.message ?? 'Allocation failed' }, { status: 500 })
+  }
+}
+
+// GET — check allocation status
+export async function GET(request: NextRequest) {
+  const { error } = await verifyRole(['superadmin'])
+  if (error) return error
+
+  const { searchParams } = new URL(request.url)
+  const academic_year = searchParams.get('academic_year')
+  const semester_type = searchParams.get('semester_type')
+
+  if (!academic_year || !semester_type) {
+    return NextResponse.json(
+      { error: 'academic_year and semester_type are required' },
+      { status: 400 }
+    )
+  }
+
+  await connectDB()
+
+  const existing = await Allocation.findOne({ academic_year, semester_type }).lean()
+
+  return NextResponse.json({
+    has_run: !!existing,
+    run_at: existing?.createdAt ?? null,
+  })
+}
 </file>
 
 <file path="src/app/api/superadmin/campus/route.ts">
@@ -565,36 +645,257 @@ export async function DELETE(request: NextRequest) {
 
 </file>
 
-<file path="src/app/dashboard/hod/layout.tsx">
-import { verifyHod } from '@/core/auth/verifyRole'
-import { redirect } from 'next/navigation'
+<file path="src/app/home.module.css">
+/* =========================================
+   HOME PAGE — CSS MODULE
+   ========================================= */
 
-export default async function HodLayout({ children }: { children: React.ReactNode }) {
-  const auth = await verifyHod()
-  if (!auth.success) redirect('/login')
-  return <>{children}</>
+
+
+.pageWrapper {
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100dvh;
+  width: 100%;
+  background-color: #002147;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  position: relative;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
-</file>
 
-<file path="src/app/dashboard/student/layout.tsx">
-import { verifyStudent } from '@/core/auth/verifyRole'
-import { redirect } from 'next/navigation'
-
-export default async function StudentLayout({ children }: { children: React.ReactNode }) {
-  const auth = await verifyStudent()
-  if (!auth.success) redirect('/login')
-  return <>{children}</>
+/* Background grid pattern */
+.pageWrapper::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(201,162,39,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201,162,39,0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
 }
-</file>
 
-<file path="src/app/dashboard/teacher/layout.tsx">
-import { verifyTeacher } from '@/core/auth/verifyRole'
-import { redirect } from 'next/navigation'
+/* Glow effects */
+.glowTop {
+  position: fixed;
+  top: -8rem;
+  right: -8rem;
+  width: 20rem;
+  height: 20rem;
+  background: rgba(201,162,39,0.06);
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
 
-export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
-  const auth = await verifyTeacher()
-  if (!auth.success) redirect('/login')
-  return <>{children}</>
+.glowBottom {
+  position: fixed;
+  bottom: -8rem;
+  left: -8rem;
+  width: 18rem;
+  height: 18rem;
+  background: rgba(26,95,168,0.12);
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* University header */
+.universityHeader {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 0.85rem;
+}
+
+.logoWrapper {
+  width: 3.75rem;
+  height: 3.75rem;
+  background: rgba(255,255,255,0.08);
+  border-radius: 50%;
+  border: 1px solid rgba(201,162,39,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem;
+  margin-bottom: 0.6rem;
+  box-shadow: 0 0 24px rgba(201,162,39,0.1);
+}
+
+.universityName {
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.3rem 0;
+  text-align: center;
+}
+
+.goldLine {
+  width: 2rem;
+  height: 2px;
+  background: #c9a227;
+  border-radius: 2px;
+}
+
+/* Main card */
+.card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 22rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+  backdrop-filter: blur(8px);
+  animation: cardReveal 0.4s ease both;
+  box-sizing: border-box;
+}
+
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Portal title */
+.portalTitle {
+  color: #ffffff;
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0 0 0.25rem 0;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.portalSubtitle {
+  color: rgba(255,255,255,0.4);
+  font-size: 0.72rem;
+  text-align: center;
+  margin: 0 0 1rem 0;
+}
+
+/* Divider */
+.divider {
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  margin-bottom: 1rem;
+}
+
+/* Info list */
+.infoList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.infoItem {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.infoDot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #c9a227;
+  flex-shrink: 0;
+}
+
+.infoText {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.6);
+  margin: 0;
+}
+
+/* Login button */
+.loginBtn {
+  display: block;
+  width: 100%;
+  padding: 0.8rem;
+  background: #c9a227;
+  color: #002147;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+  border-radius: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: background 0.15s ease, transform 0.1s ease;
+  box-sizing: border-box;
+}
+
+.loginBtn:hover {
+  background: #b8911f;
+}
+
+.loginBtn:active {
+  transform: scale(0.98);
+}
+
+/* Note */
+.note {
+  color: rgba(255,255,255,0.2);
+  font-size: 0.65rem;
+  text-align: center;
+  margin: 0.75rem 0 0 0;
+}
+
+/* Footer */
+.footer {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.85rem;
+  color: rgba(255,255,255,0.18);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+/* Tablet and up */
+@media (min-width: 640px) {
+  .logoWrapper {
+    width: 5rem;
+    height: 5rem;
+  }
+
+  .universityName {
+    font-size: 1.2rem;
+  }
+
+  .universityHeader {
+    margin-bottom: 1.25rem;
+  }
+
+  .card {
+    padding: 1.75rem;
+    max-width: 24rem;
+  }
+
+  .portalTitle {
+    font-size: 1.35rem;
+  }
+
+  .infoText {
+    font-size: 0.82rem;
+  }
+
+  .footer {
+    margin-top: 1.25rem;
+  }
 }
 </file>
 
@@ -1308,260 +1609,6 @@ export default function ResetPasswordPage() {
 }
 </file>
 
-<file path="src/app/home.module.css">
-/* =========================================
-   HOME PAGE — CSS MODULE
-   ========================================= */
-
-
-
-.pageWrapper {
-  font-family: system-ui, -apple-system, sans-serif;
-  min-height: 100dvh;
-  width: 100%;
-  background-color: #002147;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  position: relative;
-  overflow-y: auto;
-  box-sizing: border-box;
-}
-
-/* Background grid pattern */
-.pageWrapper::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(201,162,39,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(201,162,39,0.04) 1px, transparent 1px);
-  background-size: 48px 48px;
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* Glow effects */
-.glowTop {
-  position: fixed;
-  top: -8rem;
-  right: -8rem;
-  width: 20rem;
-  height: 20rem;
-  background: rgba(201,162,39,0.06);
-  border-radius: 50%;
-  filter: blur(60px);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.glowBottom {
-  position: fixed;
-  bottom: -8rem;
-  left: -8rem;
-  width: 18rem;
-  height: 18rem;
-  background: rgba(26,95,168,0.12);
-  border-radius: 50%;
-  filter: blur(60px);
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* University header */
-.universityHeader {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 0.85rem;
-}
-
-.logoWrapper {
-  width: 3.75rem;
-  height: 3.75rem;
-  background: rgba(255,255,255,0.08);
-  border-radius: 50%;
-  border: 1px solid rgba(201,162,39,0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.45rem;
-  margin-bottom: 0.6rem;
-  box-shadow: 0 0 24px rgba(201,162,39,0.1);
-}
-
-.universityName {
-  color: #ffffff;
-  font-size: 1rem;
-  font-weight: 700;
-  margin: 0 0 0.3rem 0;
-  text-align: center;
-}
-
-.goldLine {
-  width: 2rem;
-  height: 2px;
-  background: #c9a227;
-  border-radius: 2px;
-}
-
-/* Main card */
-.card {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 22rem;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 1.25rem;
-  padding: 1.25rem;
-  backdrop-filter: blur(8px);
-  animation: cardReveal 0.4s ease both;
-  box-sizing: border-box;
-}
-
-@keyframes cardReveal {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Portal title */
-.portalTitle {
-  color: #ffffff;
-  font-size: 1.15rem;
-  font-weight: 800;
-  margin: 0 0 0.25rem 0;
-  text-align: center;
-  line-height: 1.2;
-}
-
-.portalSubtitle {
-  color: rgba(255,255,255,0.4);
-  font-size: 0.72rem;
-  text-align: center;
-  margin: 0 0 1rem 0;
-}
-
-/* Divider */
-.divider {
-  height: 1px;
-  background: rgba(255,255,255,0.08);
-  margin-bottom: 1rem;
-}
-
-/* Info list */
-.infoList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
-}
-
-.infoItem {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-}
-
-.infoDot {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: #c9a227;
-  flex-shrink: 0;
-}
-
-.infoText {
-  font-size: 0.78rem;
-  color: rgba(255,255,255,0.6);
-  margin: 0;
-}
-
-/* Login button */
-.loginBtn {
-  display: block;
-  width: 100%;
-  padding: 0.8rem;
-  background: #c9a227;
-  color: #002147;
-  font-family: inherit;
-  font-size: 0.85rem;
-  font-weight: 800;
-  text-align: center;
-  text-decoration: none;
-  border-radius: 0.65rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  transition: background 0.15s ease, transform 0.1s ease;
-  box-sizing: border-box;
-}
-
-.loginBtn:hover {
-  background: #b8911f;
-}
-
-.loginBtn:active {
-  transform: scale(0.98);
-}
-
-/* Note */
-.note {
-  color: rgba(255,255,255,0.2);
-  font-size: 0.65rem;
-  text-align: center;
-  margin: 0.75rem 0 0 0;
-}
-
-/* Footer */
-.footer {
-  position: relative;
-  z-index: 1;
-  margin-top: 0.85rem;
-  color: rgba(255,255,255,0.18);
-  font-size: 0.6rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  text-align: center;
-}
-
-/* Tablet and up */
-@media (min-width: 640px) {
-  .logoWrapper {
-    width: 5rem;
-    height: 5rem;
-  }
-
-  .universityName {
-    font-size: 1.2rem;
-  }
-
-  .universityHeader {
-    margin-bottom: 1.25rem;
-  }
-
-  .card {
-    padding: 1.75rem;
-    max-width: 24rem;
-  }
-
-  .portalTitle {
-    font-size: 1.35rem;
-  }
-
-  .infoText {
-    font-size: 0.82rem;
-  }
-
-  .footer {
-    margin-top: 1.25rem;
-  }
-}
-</file>
-
 <file path="src/component/resource-banner.module.css">
 .banner {
   display: flex;
@@ -1691,77 +1738,6 @@ export const ODD_SEMESTERS = [1, 3, 5, 7, 9] as const
 export const EVEN_SEMESTERS = [2, 4, 6, 8, 10] as const
 
 export const TOTAL_SLOTS = 6
-</file>
-
-<file path="src/core/database/models/Allocation.ts">
-import mongoose from 'mongoose'
-
-export type AllocationStatus = 'ALLOCATED' | 'UNALLOCATED' | 'MANUALLY_ALLOCATED'
-export type AllocatedBy = 'SYSTEM' | 'ALGORITHM' | 'HOD'
-
-export interface IAllocationSlot {
-  slot: number
-  type: 'FIXED' | 'ELECTIVE'
-  status: AllocationStatus
-  course_id?: mongoose.Types.ObjectId
-  preference_rank_given?: number
-  score?: number
-  allocated_by?: AllocatedBy
-  hod_note?: string
-}
-
-export interface IAllocation {
-  _id: mongoose.Types.ObjectId
-  student_id: mongoose.Types.ObjectId
-  department_id: mongoose.Types.ObjectId
-  campus_id: mongoose.Types.ObjectId
-  semester: number
-  academic_year: string
-  allocation_run_id: mongoose.Types.ObjectId
-  total_credits: number
-  slots: IAllocationSlot[]
-  createdAt: Date
-  updatedAt: Date
-}
-
-const AllocationSlotSchema = new mongoose.Schema<IAllocationSlot>(
-  {
-    slot: { type: Number, required: true },
-    type: { type: String, required: true, enum: ['FIXED', 'ELECTIVE'] },
-    status: {
-      type: String,
-      required: true,
-      enum: ['ALLOCATED', 'UNALLOCATED', 'MANUALLY_ALLOCATED'],
-    },
-    course_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
-    preference_rank_given: { type: Number },
-    score: { type: Number },
-    allocated_by: { type: String, enum: ['SYSTEM', 'ALGORITHM', 'HOD'] },
-    hod_note: { type: String },
-  },
-  { _id: false }
-)
-
-const AllocationSchema = new mongoose.Schema<IAllocation>(
-  {
-    student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    department_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
-    campus_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Campus', required: true },
-    semester: { type: Number, required: true },
-    academic_year: { type: String, required: true },
-    allocation_run_id: { type: mongoose.Schema.Types.ObjectId, ref: 'AllocationRun', required: true },
-    total_credits: { type: Number, default: 0 },
-    slots: { type: [AllocationSlotSchema], default: [] },
-  },
-  { timestamps: true }
-)
-
-AllocationSchema.index({ student_id: 1, semester: 1, academic_year: 1 }, { unique: true })
-AllocationSchema.index({ department_id: 1, semester: 1, academic_year: 1 })
-
-export const Allocation =
-  (mongoose.models.Allocation as mongoose.Model<IAllocation>) ||
-  mongoose.model<IAllocation>('Allocation', AllocationSchema)
 </file>
 
 <file path="src/core/database/models/Blueprint.ts">
@@ -2209,84 +2185,334 @@ export const DASHBOARD_ROLE_MAP: Record<string, Role> = {
 }
 </file>
 
-<file path="eslint.config.mjs">
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+<file path="src/core/utils/allocationEngine.ts">
+import mongoose from 'mongoose'
+import { Preference } from '@/core/database/models/Preference'
+import { Allocation } from '@/core/database/models/Allocation'
+import { Course } from '@/core/database/models/Course'
+import { Marks } from '@/core/database/models/Marks'
+import { User } from '@/core/database/models/User'
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-  ]),
-]);
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-export default eslintConfig;
-</file>
+interface StudentMarks {
+  [course_code: string]: number
+}
 
-<file path="next.config.ts">
-import type { NextConfig } from "next";
+interface CourseInfo {
+  _id: string
+  course_code: string
+  title: string
+  credits: number
+  seat_limit: number
+  prerequisites: {
+    type: string
+    course_code?: string
+    min_score?: number
+    department_code?: string
+  }[]
+}
 
-const nextConfig: NextConfig = {
-  /* config options here */
-};
+interface SlotResult {
+  slot: number
+  type: 'FIXED' | 'ELECTIVE'
+  status: 'ALLOCATED' | 'UNALLOCATED'
+  course_id?: string
+  preference_rank_given?: number
+  score?: number
+  allocated_by: 'SYSTEM' | 'ALGORITHM'
+}
 
-export default nextConfig;
-</file>
+export type SemesterType = 'ODD' | 'EVEN'
 
-<file path="postcss.config.mjs">
-const config = {
-  plugins: {
-    "@tailwindcss/postcss": {},
-  },
-};
+const ODD_SEMESTERS = [1, 3, 5, 7, 9]
+const EVEN_SEMESTERS = [2, 4, 6, 8, 10]
 
-export default config;
-</file>
+// ── Prerequisite Scorer ───────────────────────────────────────────────────────
 
-<file path="README.md">
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+function scoreStudent(
+  departmentId: string,
+  marks: StudentMarks,
+  prerequisites: CourseInfo['prerequisites']
+): number {
+  if (!prerequisites || prerequisites.length === 0) return 0
 
-## Getting Started
+  let score = 0
+  for (const prereq of prerequisites) {
+    if (prereq.type === 'PAPER_REQUIRED') {
+      if (prereq.course_code && (marks[prereq.course_code] ?? 0) > 0) score++
+    } else if (prereq.type === 'PAPER_MIN_SCORE') {
+      if (prereq.course_code && prereq.min_score !== undefined) {
+        if ((marks[prereq.course_code] ?? 0) >= prereq.min_score) score++
+      }
+    } else if (prereq.type === 'DEPT_REQUIRED') {
+      if (prereq.department_code && departmentId === prereq.department_code) score++
+    } else if (prereq.type === 'DEPT_EXCLUDED') {
+      if (prereq.department_code && departmentId !== prereq.department_code) score++
+    }
+  }
+  return score
+}
 
-First, run the development server:
+// ── Main Engine ───────────────────────────────────────────────────────────────
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+export async function runAllocation({
+  academic_year,
+  semester_type,
+  allocation_run_id,
+}: {
+  academic_year: string
+  semester_type: SemesterType
+  allocation_run_id: mongoose.Types.ObjectId
+}) {
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+  const validSemesters = semester_type === 'ODD' ? ODD_SEMESTERS : EVEN_SEMESTERS
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+  // 1. Fetch ALL preferences for this academic year + semester cycle
+  const preferences = await Preference.find({
+    academic_year,
+    semester: { $in: validSemesters },
+  }).lean()
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+  if (preferences.length === 0) {
+    throw new Error(`No preferences submitted for ${academic_year} ${semester_type} semester`)
+  }
 
-## Learn More
+  const studentIds = preferences.map(p => p.student_id)
 
-To learn more about Next.js, take a look at the following resources:
+  // 2. Fetch all students + all marks in parallel
+  const [students, allMarks] = await Promise.all([
+    User.find({ _id: { $in: studentIds } }).lean(),
+    Marks.find({ student_id: { $in: studentIds } }).lean(),
+  ])
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+  const studentMap = new Map(students.map(s => [s._id.toString(), s]))
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+  const marksMap = new Map<string, StudentMarks>()
+  for (const mark of allMarks) {
+    const sid = mark.student_id.toString()
+    if (!marksMap.has(sid)) marksMap.set(sid, {})
+    marksMap.get(sid)![mark.course_code] = mark.score
+  }
 
-## Deploy on Vercel
+  // 3. Collect all unique course IDs across all preferences
+  const allCourseIds = new Set<string>()
+  for (const pref of preferences) {
+    for (const slot of pref.slots) {
+      if (slot.type === 'FIXED' && slot.course_id) {
+        allCourseIds.add(slot.course_id.toString())
+      } else if (slot.type === 'ELECTIVE' && slot.preferences) {
+        for (const p of slot.preferences) {
+          allCourseIds.add(p.course_id.toString())
+        }
+      }
+    }
+  }
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+  // 4. Fetch all courses in one query
+  const courses = await Course.find({
+    _id: { $in: Array.from(allCourseIds).map(id => new mongoose.Types.ObjectId(id)) },
+  }).lean()
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+  const courseMap = new Map<string, CourseInfo>(
+    courses.map(c => [c._id.toString(), {
+      _id: c._id.toString(),
+      course_code: c.course_code,
+      title: c.title,
+      credits: c.credits,
+      seat_limit: c.seat_limit,
+      prerequisites: c.prerequisites ?? [],
+    }])
+  )
+
+  // 5. Initialise result slots for every student
+  // student_id → slot_number → SlotResult
+  const results = new Map<string, Map<number, SlotResult>>()
+
+  for (const pref of preferences) {
+    const sid = pref.student_id.toString()
+    const slotMap = new Map<number, SlotResult>()
+    for (const slot of pref.slots) {
+      slotMap.set(slot.slot, {
+        slot: slot.slot,
+        type: slot.type,
+        status: 'UNALLOCATED',
+        allocated_by: 'ALGORITHM',
+      })
+    }
+    results.set(sid, slotMap)
+  }
+
+  // 6. ── PHASE 1: Fixed slots ────────────────────────────────────────────────
+  // Every student gets their fixed course — seats consumed globally
+  const seatsFilled = new Map<string, number>()
+
+  for (const pref of preferences) {
+    const sid = pref.student_id.toString()
+    const slotMap = results.get(sid)!
+
+    for (const slot of pref.slots) {
+      if (slot.type !== 'FIXED' || !slot.course_id) continue
+
+      const courseId = slot.course_id.toString()
+      seatsFilled.set(courseId, (seatsFilled.get(courseId) ?? 0) + 1)
+
+      const slotResult = slotMap.get(slot.slot)!
+      slotResult.status = 'ALLOCATED'
+      slotResult.course_id = courseId
+      slotResult.allocated_by = 'SYSTEM'
+    }
+  }
+
+  // 7. ── PHASE 2: Elective slots — university-wide, course-centric ──────────
+  // Find max rank depth across entire university
+  let maxRank = 0
+  for (const pref of preferences) {
+    for (const slot of pref.slots) {
+      if (slot.type === 'ELECTIVE' && slot.preferences) {
+        for (const p of slot.preferences) {
+          if (p.rank > maxRank) maxRank = p.rank
+        }
+      }
+    }
+  }
+
+  // Process rank by rank — rank 1 first, then 2, then 3...
+  for (let rank = 1; rank <= maxRank; rank++) {
+
+    // Build global course pool for this rank:
+    // courseId → [ { student_id, slot_number, submitted_at } ]
+    const coursePool = new Map<string, {
+      student_id: string
+      slot: number
+      submitted_at: Date
+    }[]>()
+
+    for (const pref of preferences) {
+      const sid = pref.student_id.toString()
+
+      for (const slot of pref.slots) {
+        if (slot.type !== 'ELECTIVE' || !slot.preferences) continue
+
+        // Skip if student already allocated in this slot
+        if (results.get(sid)?.get(slot.slot)?.status === 'ALLOCATED') continue
+
+        const prefAtRank = slot.preferences.find(p => p.rank === rank)
+        if (!prefAtRank) continue
+
+        const courseId = prefAtRank.course_id.toString()
+        if (!coursePool.has(courseId)) coursePool.set(courseId, [])
+        coursePool.get(courseId)!.push({
+          student_id: sid,
+          slot: slot.slot,
+          submitted_at: pref.submitted_at,
+        })
+      }
+    }
+
+    // For each course — score, sort, allocate
+    for (const [courseId, candidates] of coursePool) {
+      const course = courseMap.get(courseId)
+      if (!course || course.seat_limit === 0) continue
+
+      const filled = seatsFilled.get(courseId) ?? 0
+      const remainingSeats = course.seat_limit - filled
+      if (remainingSeats <= 0) continue
+
+      // Score each candidate
+      const scored = candidates.map(candidate => {
+        const student = studentMap.get(candidate.student_id)
+        const marks = marksMap.get(candidate.student_id) ?? {}
+        const score = scoreStudent(
+          student?.department_id?.toString() ?? '',
+          marks,
+          course.prerequisites
+        )
+        return { ...candidate, score }
+      })
+
+      // Descending score, tie-break earliest submission
+      scored.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score
+        return a.submitted_at.getTime() - b.submitted_at.getTime()
+      })
+
+      // Allocate top N — guard against slot already filled
+      let allocated = 0
+      for (const winner of scored) {
+        if (allocated >= remainingSeats) break
+
+        const slotResult = results.get(winner.student_id)?.get(winner.slot)
+        if (!slotResult || slotResult.status === 'ALLOCATED') continue
+
+        slotResult.status = 'ALLOCATED'
+        slotResult.course_id = courseId
+        slotResult.preference_rank_given = rank
+        slotResult.score = winner.score
+        slotResult.allocated_by = 'ALGORITHM'
+        allocated++
+      }
+
+      seatsFilled.set(courseId, filled + allocated)
+    }
+  }
+
+  // 8. ── Save to DB ──────────────────────────────────────────────────────────
+  const allocationDocs = []
+
+  for (const pref of preferences) {
+    const sid = pref.student_id.toString()
+    const student = studentMap.get(sid)
+    if (!student) continue
+
+    const slots = Array.from(results.get(sid)!.values())
+
+    const totalCredits = slots.reduce((sum, slot) => {
+      if (slot.status === 'ALLOCATED' && slot.course_id) {
+        return sum + (courseMap.get(slot.course_id)?.credits ?? 0)
+      }
+      return sum
+    }, 0)
+
+    allocationDocs.push({
+      student_id: new mongoose.Types.ObjectId(sid),
+      department_id: pref.department_id,
+      campus_id: pref.campus_id,
+      semester: pref.semester,
+      semester_type,
+      academic_year,
+      allocation_run_id,
+      total_credits: totalCredits,
+      slots: slots.map(slot => ({
+        slot: slot.slot,
+        type: slot.type,
+        status: slot.status,
+        course_id: slot.course_id ? new mongoose.Types.ObjectId(slot.course_id) : undefined,
+        preference_rank_given: slot.preference_rank_given,
+        score: slot.score,
+        allocated_by: slot.allocated_by,
+      })),
+    })
+  }
+
+  await Allocation.insertMany(allocationDocs)
+
+  // 9. Summary
+  const totalStudents = allocationDocs.length
+  const fullyAllocated = allocationDocs.filter(d =>
+    d.slots.every(s => s.type === 'FIXED' || s.status === 'ALLOCATED')
+  ).length
+  const unallocatedCount = allocationDocs.filter(d =>
+    d.slots.some(s => s.type === 'ELECTIVE' && s.status === 'UNALLOCATED')
+  ).length
+
+  return {
+    total_students: totalStudents,
+    fully_allocated: fullyAllocated,
+    unallocated_count: unallocatedCount,
+    allocation_run_id: allocation_run_id.toString(),
+  }
+}
 </file>
 
 <file path="tsconfig.json">
@@ -2324,6 +2550,452 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
   ],
   "exclude": ["node_modules"]
 }
+</file>
+
+<file path=".gitignore">
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+.env.local*
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+</file>
+
+<file path="src/app/api/student/blueprint/route.ts">
+import { NextResponse } from 'next/server'
+import { connectDB } from '@/core/database/mongoose'
+import { Blueprint } from '@/core/database/models/Blueprint'
+import { Course } from '@/core/database/models/Course'
+import { Preference } from '@/core/database/models/Preference'
+import { User } from '@/core/database/models/User'
+import { Department } from '@/core/database/models/Department'
+import { verifyRole } from '@/core/security/auth'
+import { SLOT_RULES } from '@/core/constants/courseCategories'
+import mongoose from 'mongoose'
+
+export const dynamic = 'force-dynamic'
+
+export async function GET() {
+  const { user, error } = await verifyRole(['student'])
+  if (error) return error
+
+  await connectDB()
+
+  // 1. Get student details
+  const student = await User.findById(user.id).lean()
+  if (!student) {
+    return NextResponse.json({ error: 'Student not found' }, { status: 404 })
+  }
+
+  const semester = student.current_semester ?? 1
+  const department_id = student.department_id
+
+  if (!department_id) {
+    return NextResponse.json({ error: 'Student has no department assigned' }, { status: 400 })
+  }
+
+  // 2. Parallel fetch: Blueprint + all Departments
+  const [blueprint, allDepartments] = await Promise.all([
+    Blueprint.findOne({
+      department_id: new mongoose.Types.ObjectId(department_id),
+      semester,
+    }).lean(),
+    Department.find().lean(),
+  ])
+
+  if (!blueprint) {
+    return NextResponse.json({ error: 'No blueprint configured for your semester yet' }, { status: 404 })
+  }
+
+  // 3. Build department code → _id map for O(1) lookup
+  const deptMap = new Map(allDepartments.map(d => [d.code, d._id.toString()]))
+
+  // 4. Parse slots — filter out unconfigured ones
+  const slotsInfo = blueprint.slots
+    .map(s => ({
+      slot: s.slot,
+      rule: s.rule,
+      target: s.target,
+      name: s.name ?? `Paper ${s.slot}`,
+    }))
+    .filter(s => s.rule && s.target)
+
+  if (slotsInfo.length === 0) {
+    return NextResponse.json(
+      { error: 'Blueprint has no configured slots for this semester' },
+      { status: 400 }
+    )
+  }
+
+  // 5. Batch-fetch all FIXED courses first
+  const fixedTargets = slotsInfo
+    .filter(s => s.rule === SLOT_RULES.FIXED)
+    .map(s => s.target)
+
+  let fixedCourseIds: mongoose.Types.ObjectId[] = []
+  const fixedCoursesMap: Record<string, any> = {}
+
+  if (fixedTargets.length > 0) {
+    const fixedCourses = await Course.find({
+      course_code: { $in: fixedTargets },
+    }).lean()
+
+    fixedCourseIds = fixedCourses.map(c => c._id)
+    for (const c of fixedCourses) {
+      fixedCoursesMap[c.course_code] = c
+    }
+  }
+
+  // 6. Helper — shape a course for the response
+  function shapeCourse(c: any) {
+    return {
+      id: c._id.toString(),
+      course_code: c.course_code,
+      title: c.title,
+      credits: c.credits,
+    }
+  }
+
+  // 7. Base exclusion filter for elective queries
+  const baseExclude = fixedCourseIds.length > 0
+    ? { _id: { $nin: fixedCourseIds } }
+    : {}
+
+  // 8. Resolve all slots + existing preference in parallel
+  const [existingPreference, ...resolvedSlots] = await Promise.all([
+
+    Preference.findOne({
+      student_id: new mongoose.Types.ObjectId(user.id),
+      semester,
+    }).lean(),
+
+    ...slotsInfo.map(async ({ slot, rule, target, name }) => {
+
+      // FIXED — already resolved from batch fetch
+      if (rule === SLOT_RULES.FIXED) {
+        const course = fixedCoursesMap[target] ?? null
+        return {
+          slot,
+          rule,
+          name,
+          course: course ? shapeCourse(course) : null,
+        }
+      }
+
+      // DEPT_RESTRICTED — specific dept, DSC/DSE only
+      if (rule === SLOT_RULES.DEPT_RESTRICTED) {
+        const deptId = deptMap.get(target)
+        if (!deptId) return { slot, rule, name, options: [] }
+        const options = await Course.find({
+          ...baseExclude,
+          department_id: new mongoose.Types.ObjectId(deptId),
+          semester,
+          category: { $in: ['DSC', 'DSE'] },
+        }).lean()
+        return { slot, rule, name, options: options.map(shapeCourse) }
+      }
+
+      // EXCLUDE_DEPT — NOT from specific dept, DSC/DSE only
+      if (rule === SLOT_RULES.EXCLUDE_DEPT) {
+        const deptId = deptMap.get(target)
+        if (!deptId) return { slot, rule, name, options: [] }
+        const options = await Course.find({
+          ...baseExclude,
+          department_id: { $ne: new mongoose.Types.ObjectId(deptId) },
+          semester,
+          category: { $in: ['DSC', 'DSE'] },
+        }).lean()
+        return { slot, rule, name, options: options.map(shapeCourse) }
+      }
+
+      // POOL_RESTRICTED — own dept, filtered by tag
+      if (rule === SLOT_RULES.POOL_RESTRICTED) {
+        const options = await Course.find({
+          ...baseExclude,
+          department_id: new mongoose.Types.ObjectId(department_id),
+          tag: target,
+        }).lean()
+        return { slot, rule, name, options: options.map(shapeCourse) }
+      }
+
+      // GLOBAL_BASKET — other depts by tag (exclude own dept only if MDC tag)
+      if (rule === SLOT_RULES.GLOBAL_BASKET) {
+        const filter: any = { ...baseExclude, tag: target }
+        if (target.includes('MDC')) {
+          filter.department_id = { $ne: new mongoose.Types.ObjectId(department_id) }
+        }
+        const options = await Course.find(filter).lean()
+        return { slot, rule, name, options: options.map(shapeCourse) }
+      }
+
+      return { slot, rule, name, options: [] }
+    }),
+  ])
+
+  return NextResponse.json({
+    data: {
+      min_credits: blueprint.min_credits,
+      max_credits: blueprint.max_credits,
+      slots: resolvedSlots,
+    },
+    existing: existingPreference ?? null,
+  })
+}
+</file>
+
+<file path="src/app/api/student/preferences/route.ts">
+import { NextRequest, NextResponse } from 'next/server'
+import { connectDB } from '@/core/database/mongoose'
+import { Preference } from '@/core/database/models/Preference'
+import { User } from '@/core/database/models/User'
+import { Course } from '@/core/database/models/Course'
+import { Blueprint } from '@/core/database/models/Blueprint'
+import { verifyRole } from '@/core/security/auth'
+import mongoose from 'mongoose'
+import { z } from 'zod'
+
+export const dynamic = 'force-dynamic'
+
+const ChoiceSchema = z.object({
+  rank: z.number().int().min(1),
+  course_id: z.string().min(1),
+})
+
+const SlotSchema = z.object({
+  slot: z.number().int().min(1).max(6),
+  choices: z.array(ChoiceSchema).min(1, 'At least one choice required per slot'),
+})
+
+const PreferenceSubmitSchema = z.object({
+  slots: z.array(SlotSchema).min(1, 'At least one slot required'),
+})
+
+export async function POST(request: NextRequest) {
+  const { user, error } = await verifyRole(['student'])
+  if (error) return error
+
+  const body = await request.json()
+  const parsed = PreferenceSubmitSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0].message },
+      { status: 400 }
+    )
+  }
+
+  await connectDB()
+
+  // Get student details
+  const student = await User.findById(user.id).select(
+    'department_id campus_id current_semester'
+  )
+  if (!student) {
+    return NextResponse.json({ error: 'Student not found' }, { status: 404 })
+  }
+
+  // Get blueprint to verify slots are elective
+  const blueprint = await Blueprint.findOne({
+    department_id: student.department_id,
+    semester: student.current_semester,
+  })
+  if (!blueprint) {
+    return NextResponse.json(
+      { error: 'No blueprint found for your semester' },
+      { status: 404 }
+    )
+  }
+
+  // Verify only elective slots are submitted
+  const electiveSlotNumbers = blueprint.slots
+    .filter(s => s.rule !== 'FIXED')
+    .map(s => s.slot)
+
+  for (const slot of parsed.data.slots) {
+    if (!electiveSlotNumbers.includes(slot.slot)) {
+      return NextResponse.json(
+        { error: `Slot ${slot.slot} is a fixed slot and cannot have preferences` },
+        { status: 400 }
+      )
+    }
+  }
+
+  // Verify all submitted course IDs exist
+  const allCourseIds = parsed.data.slots.flatMap(s =>
+    s.choices.map(c => c.course_id)
+  )
+  const uniqueCourseIds = [...new Set(allCourseIds)]
+
+  const courses = await Course.find({
+    _id: { $in: uniqueCourseIds.map(id => new mongoose.Types.ObjectId(id)) },
+  }).select('_id')
+
+  if (courses.length !== uniqueCourseIds.length) {
+    return NextResponse.json(
+      { error: 'One or more course IDs are invalid' },
+      { status: 400 }
+    )
+  }
+
+  // Get current academic year
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
+  const academic_year =
+    month >= 6
+      ? `${year}-${String(year + 1).slice(2)}`
+      : `${year - 1}-${String(year).slice(2)}`
+
+  // Upsert preference — student can update until window closes
+  await Preference.findOneAndUpdate(
+    {
+      student_id: new mongoose.Types.ObjectId(user.id),
+      semester: student.current_semester,
+      academic_year,
+    },
+    {
+      student_id: user.id,
+      department_id: student.department_id,
+      campus_id: student.campus_id,
+      semester: student.current_semester,
+      academic_year,
+      submitted_at: new Date(),
+      slots: parsed.data.slots,
+    },
+    { upsert: true, new: true }
+  )
+
+  return NextResponse.json({
+    success: true,
+    message: 'Preferences submitted successfully',
+  })
+}
+
+// GET — student views their submitted preferences
+export async function GET(request: NextRequest) {
+  const { user, error } = await verifyRole(['student'])
+  if (error) return error
+
+  await connectDB()
+
+  const student = await User.findById(user.id).select(
+    'current_semester'
+  )
+  if (!student) {
+    return NextResponse.json({ error: 'Student not found' }, { status: 404 })
+  }
+
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
+  const academic_year =
+    month >= 6
+      ? `${year}-${String(year + 1).slice(2)}`
+      : `${year - 1}-${String(year).slice(2)}`
+
+  const preference = await Preference.findOne({
+    student_id: new mongoose.Types.ObjectId(user.id),
+    semester: student.current_semester,
+    academic_year,
+  }).populate('slots.choices.course_id', 'title course_code credits')
+
+  return NextResponse.json(preference ?? null)
+}
+</file>
+
+<file path="src/app/api/student/results/route.ts">
+import { NextRequest, NextResponse } from 'next/server'
+import { connectDB } from '@/core/database/mongoose'
+import { Allocation } from '@/core/database/models/Allocation'
+import { User } from '@/core/database/models/User'
+import { verifyRole } from '@/core/security/auth'
+import mongoose from 'mongoose'
+
+export const dynamic = 'force-dynamic'
+
+export async function GET(request: NextRequest) {
+  const { user, error } = await verifyRole(['student'])
+  if (error) return error
+
+  await connectDB()
+
+  const student = await User.findById(user.id).select(
+    'current_semester'
+  )
+  if (!student) {
+    return NextResponse.json({ error: 'Student not found' }, { status: 404 })
+  }
+
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
+  const academic_year =
+    month >= 6
+      ? `${year}-${String(year + 1).slice(2)}`
+      : `${year - 1}-${String(year).slice(2)}`
+
+  const allocation = await Allocation.findOne({
+    student_id: new mongoose.Types.ObjectId(user.id),
+    semester: student.current_semester,
+    academic_year,
+  }).populate('slots.course_id', 'title course_code credits category')
+
+  if (!allocation) {
+    return NextResponse.json({
+      status: 'PENDING',
+      message: 'Allocation has not run yet for your semester',
+      allocation: null,
+    })
+  }
+
+  const unallocated = allocation.slots.filter(
+    s => s.status === 'UNALLOCATED'
+  )
+
+  return NextResponse.json({
+    status: allocation.fully_allocated ? 'COMPLETE' : 'PARTIAL',
+    semester: allocation.semester,
+    academic_year: allocation.academic_year,
+    total_credits: allocation.total_credits,
+    fully_allocated: allocation.fully_allocated,
+    unallocated_count: unallocated.length,
+    slots: allocation.slots,
+  })
+.
 </file>
 
 <file path="src/app/dashboard/teacher/teacher-dashboard.module.css">
@@ -2930,48 +3602,79 @@ export const SLOT_RULES = {
 export type SlotRule = typeof SLOT_RULES[keyof typeof SLOT_RULES]
 </file>
 
-<file path=".gitignore">
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+<file path="src/core/database/models/Allocation.ts">
+import mongoose from 'mongoose'
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+export type AllocationStatus = 'ALLOCATED' | 'UNALLOCATED' | 'MANUALLY_ALLOCATED'
+export type AllocatedBy = 'SYSTEM' | 'ALGORITHM' | 'HOD'
+export type SemesterType = 'ODD' | 'EVEN'
 
-# testing
-/coverage
+export interface IAllocationSlot {
+  slot: number
+  type: 'FIXED' | 'ELECTIVE'
+  status: AllocationStatus
+  course_id?: mongoose.Types.ObjectId
+  preference_rank_given?: number
+  score?: number
+  allocated_by?: AllocatedBy
+  hod_note?: string
+}
 
-# next.js
-/.next/
-/out/
+export interface IAllocation {
+  _id: mongoose.Types.ObjectId
+  student_id: mongoose.Types.ObjectId
+  department_id: mongoose.Types.ObjectId
+  campus_id: mongoose.Types.ObjectId
+  semester: number
+  semester_type: SemesterType
+  academic_year: string
+  allocation_run_id: mongoose.Types.ObjectId
+  total_credits: number
+  slots: IAllocationSlot[]
+  createdAt: Date
+  updatedAt: Date
+}
 
-# production
-/build
+const AllocationSlotSchema = new mongoose.Schema<IAllocationSlot>(
+  {
+    slot: { type: Number, required: true },
+    type: { type: String, required: true, enum: ['FIXED', 'ELECTIVE'] },
+    status: {
+      type: String,
+      required: true,
+      enum: ['ALLOCATED', 'UNALLOCATED', 'MANUALLY_ALLOCATED'],
+    },
+    course_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
+    preference_rank_given: { type: Number },
+    score: { type: Number },
+    allocated_by: { type: String, enum: ['SYSTEM', 'ALGORITHM', 'HOD'] },
+    hod_note: { type: String },
+  },
+  { _id: false }
+)
 
-# misc
-.DS_Store
-*.pem
+const AllocationSchema = new mongoose.Schema<IAllocation>(
+  {
+    student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    department_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
+    campus_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Campus', required: true },
+    semester: { type: Number, required: true },
+    semester_type: { type: String, required: true, enum: ['ODD', 'EVEN'] },
+    academic_year: { type: String, required: true },
+    allocation_run_id: { type: mongoose.Schema.Types.ObjectId, required: true },
+    total_credits: { type: Number, default: 0 },
+    slots: { type: [AllocationSlotSchema], default: [] },
+  },
+  { timestamps: true }
+)
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+AllocationSchema.index({ student_id: 1, semester: 1, academic_year: 1 }, { unique: true })
+AllocationSchema.index({ department_id: 1, semester: 1, academic_year: 1 })
+AllocationSchema.index({ academic_year: 1, semester_type: 1 })
 
-# env files (can opt-in for committing if needed)
-.env*
-.env.local*
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+export const Allocation =
+  (mongoose.models.Allocation as mongoose.Model<IAllocation>) ||
+  mongoose.model<IAllocation>('Allocation', AllocationSchema)
 </file>
 
 <file path="src/app/login/login.module.css">
@@ -4776,6 +5479,158 @@ export default async function RootLayout({
 }
 </file>
 
+<file path="src/core/auth/verifyRole.ts">
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+
+async function getRole() {
+  const session = await getServerSession(authOptions)
+  return (session?.user as any)?.role ?? null
+}
+
+export async function verifyHod() {
+  const role = await getRole()
+  if (role === 'hod') return { success: true, role }
+  return { success: false, error: 'Forbidden', status: 403 }
+}
+
+export async function verifyStudent() {
+  const role = await getRole()
+  if (role === 'student') return { success: true, role }
+  return { success: false, error: 'Forbidden', status: 403 }
+}
+
+export async function verifyTeacher() {
+  const role = await getRole()
+  if (role === 'teaching_staff') return { success: true, role }
+  return { success: false, error: 'Forbidden', status: 403 }
+}
+
+export async function verifySuperadmin() {
+  const role = await getRole()
+  if (role === 'superadmin') return { success: true, role }
+  return { success: false, error: 'Forbidden', status: 403 }
+}
+</file>
+
+<file path="middleware.ts">
+import { getToken } from 'next-auth/jwt'
+import { NextRequest, NextResponse } from 'next/server'
+
+const ROLE_DASHBOARD_MAP: Record<string, string> = {
+  superadmin: '/dashboard/superadmin',
+  campus_director: '/dashboard/director',
+  hod: '/dashboard/hod',
+  teaching_staff: '/dashboard/teacher',
+  student: '/dashboard/student',
+}
+
+const DASHBOARD_ROLE_MAP: Record<string, string> = {
+  '/dashboard/superadmin': 'superadmin',
+  '/dashboard/director': 'campus_director',
+  '/dashboard/hod': 'hod',
+  '/dashboard/teacher': 'teaching_staff',
+  '/dashboard/student': 'student',
+}
+
+export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  // These routes never need auth
+  if (pathname.startsWith('/api')) return NextResponse.next()
+  if (pathname.startsWith('/reset-password')) return NextResponse.next()
+
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+  })
+
+  const isDashboard = pathname.startsWith('/dashboard')
+  const isLogin = pathname === '/login'
+
+  // Not logged in trying to access dashboard
+  if (!token && isDashboard) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Logged in trying to access login page
+  if (token && isLogin) {
+    const role = token.role as string
+    const redirectTo = ROLE_DASHBOARD_MAP[role] ?? '/login'
+    return NextResponse.redirect(new URL(redirectTo, request.url))
+  }
+
+  // Logged in accessing a dashboard — verify correct role
+  if (token && isDashboard) {
+    const role = token.role as string
+
+    const matchedRoute = Object.keys(DASHBOARD_ROLE_MAP).find(route =>
+      pathname.startsWith(route)
+    )
+
+    if (!matchedRoute) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    const requiredRole = DASHBOARD_ROLE_MAP[matchedRoute]
+
+    if (role !== requiredRole) {
+      return NextResponse.redirect(
+        new URL(ROLE_DASHBOARD_MAP[role] ?? '/login', request.url)
+      )
+    }
+  }
+
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "courseregis-fyimp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.9.0",
+    "@supabase/supabase-js": "^2.100.1",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.37.0",
+    "bcryptjs": "^3.0.3",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^1.7.0",
+    "mongoose": "^9.4.1",
+    "next": "^16.2.3",
+    "next-auth": "^4.24.14",
+    "papaparse": "^5.5.3",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
+</file>
+
 <file path="src/app/api/hod/courses/route.ts">
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/core/database/supabaseClient'
@@ -4940,1050 +5795,6 @@ export async function DELETE(request: NextRequest) {
   }
 
   return NextResponse.json({ success: true, message: 'Course deleted successfully' })
-}
-</file>
-
-<file path="src/app/dashboard/student/page.tsx">
-'use client'
-
-import { useState, useEffect } from 'react'
-import Image from 'next/image'
-import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
-import styles from './student-dashboard.module.css'
-import StudentPlaceholderSlots from '@/component/StudentPlaceholderSlots'
-import ResourceBanner from '@/component/ResourceBanner'
-
-interface Course {
-  id: string
-  course_code: string
-  title: string
-  credits: number
-}
-
-interface BlueprintSlot {
-  slot: number
-  rule: string
-  name: string
-  course?: Course
-  options?: Course[]
-}
-
-interface BlueprintData {
-  window_status: 'OPEN' | 'CLOSED'
-  deadline: string
-  min_credits: number
-  max_credits: number
-  slots: BlueprintSlot[]
-}
-
-interface StudentInfo {
-  full_name: string
-  roll_number: string
-  current_semester: number
-  department_name: string
-}
-
-type DashboardState = 'idle' | 'loading_blueprint' | 'closed' | 'ready' | 'submitting' | 'submitted'
-
-export default function StudentDashboard() {
-  const router = useRouter()
-
-  const [dashState, setDashState] = useState<DashboardState>('idle')
-  const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null)
-  const [blueprint, setBlueprint] = useState<BlueprintData | null>(null)
-  const [selectedCourses, setSelectedCourses] = useState<Record<number, string>>({})
-  const [existingSubmission, setExistingSubmission] = useState<Record<string, string> | null>(null)
-  const [error, setError] = useState('')
-  const [successMsg, setSuccessMsg] = useState('')
-  const [loadingStudent, setLoadingStudent] = useState(true)
-  const [loggingOut, setLoggingOut] = useState(false)
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
-  // Load student info on mount
-  useEffect(() => {
-    async function loadStudentInfo() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-
-      const { data: student } = await supabase
-        .from('students')
-        .select(`
-          full_name,
-          roll_number,
-          current_semester,
-          departments (name)
-        `)
-        .eq('id', user.id)
-        .single()
-
-      if (student) {
-        setStudentInfo({
-          full_name: student.full_name,
-          roll_number: student.roll_number,
-          current_semester: student.current_semester,
-          department_name: (student.departments as any)?.name ?? 'Unknown',
-        })
-      }
-      setLoadingStudent(false)
-    }
-    loadStudentInfo()
-  }, [])
-
-  // Fetch blueprint when Register button clicked
-  async function handleRegisterClick() {
-    setDashState('loading_blueprint')
-    setError('')
-    setSuccessMsg('')
-
-    const response = await fetch('/api/registrations/blueprint')
-    const data = await response.json()
-
-    if (!response.ok) {
-      setError(data.error ?? 'Failed to load courses. Please try again.')
-      setDashState('idle')
-      return
-    }
-
-    setBlueprint(data.data)
-
-    // Window is closed — show closed state immediately
-    if (data.data.window_status === 'CLOSED') {
-      setDashState('closed')
-      return
-    }
-
-    // If existing submission — pre-fill selections
-    if (data.existing) {
-      const existing = data.existing
-      const prefilled: Record<number, string> = {}
-      for (let i = 1; i <= 6; i++) {
-        const courseId = existing[`slot_${i}_course_id`]
-        if (courseId) prefilled[i] = courseId
-      }
-      setSelectedCourses(prefilled)
-      setExistingSubmission(existing)
-    }
-
-    setDashState('ready')
-  }
-
-  // Calculate total credits dynamically
-  function calculateCredits(): number {
-    if (!blueprint) return 0
-    let total = 0
-    blueprint.slots.forEach(slot => {
-      if (slot.rule === 'FIXED' && slot.course) {
-        total += slot.course.credits
-      } else {
-        const selectedId = selectedCourses[slot.slot]
-        if (selectedId && slot.options) {
-          const course = slot.options.find(c => c.id === selectedId)
-          if (course) total += course.credits
-        }
-      }
-    })
-    return total
-  }
-
-  // Handle dropdown change
-  function handleCourseSelect(slotNumber: number, courseId: string) {
-    setSelectedCourses(prev => ({ ...prev, [slotNumber]: courseId }))
-    setError('')
-  }
-
-  // Submit courses
-  async function handleSubmit() {
-    if (!blueprint) return
-
-    const courses: string[] = []
-    for (const slot of blueprint.slots) {
-      if (slot.rule === 'FIXED' && slot.course) {
-        courses.push(slot.course.id)
-      } else {
-        const selected = selectedCourses[slot.slot]
-        if (!selected) {
-          setError(`Please select a course for "${slot.name}"`)
-          return
-        }
-        courses.push(selected)
-      }
-    }
-
-    setDashState('submitting')
-    setError('')
-
-    const response = await fetch('/api/registrations/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        semester: Number(studentInfo?.current_semester),
-        courses,
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      setError(data.error ?? 'Submission failed. Please try again.')
-      setDashState('ready')
-      return
-    }
-
-    setSuccessMsg(`Courses submitted! Total credits: ${data.total_credits}`)
-    setExistingSubmission({})
-    setDashState('submitted')
-  }
-
-  // Logout
-  async function handleLogout() {
-    setLoggingOut(true)
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
-
-  const totalCredits = calculateCredits()
-  const isValidCredits = blueprint
-    ? totalCredits >= blueprint.min_credits && totalCredits <= blueprint.max_credits
-    : false
-
-  return (
-    <div className={styles.pageWrapper}>
-
-      {/* Top Bar */}
-      <div className={styles.topBar}>
-        <div className={styles.topBarLeft}>
-          <div className={styles.logoSmall}>
-            <Image src="/logo.png" alt="KU" width={28} height={28} />
-          </div>
-          <div>
-            <p className={styles.topBarTitle}>FYIMP Portal</p>
-            <p className={styles.topBarSubtitle}>Student Dashboard</p>
-          </div>
-        </div>
-        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
-          {loggingOut ? 'Logging out...' : 'Logout'}
-        </button>
-      </div>
-
-      {/* Student Info Card */}
-      <div className={styles.infoCard}>
-        {loadingStudent ? (
-          <div className={styles.studentMeta}>
-            <div className={styles.greyedBar} style={{ width: '10rem' }} />
-          </div>
-        ) : (
-          <div className={styles.studentMeta}>
-            <p className={styles.studentName}>
-              {studentInfo?.full_name ?? 'Student'}
-            </p>
-            <div className={styles.studentDetails}>
-              <span className={`${styles.detailBadge} ${styles.semBadge}`}>
-                Semester {studentInfo?.current_semester}
-              </span>
-              <span className={styles.detailBadge}>
-                {studentInfo?.department_name}
-              </span>
-              {studentInfo?.roll_number && (
-                <span className={styles.detailBadge}>
-                  {studentInfo.roll_number}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {(dashState === 'idle' || dashState === 'submitted' || dashState === 'closed') && (
-          <button
-            className={styles.registerBtn}
-            onClick={handleRegisterClick}
-            disabled={loadingStudent}
-          >
-            {existingSubmission ? 'Update →' : 'Register →'}
-          </button>
-        )}
-      </div>
-
-      {/* Main Content */}
-      <div className={styles.mainContent}>
-
-        {/* Resource Hub Banner */}
-        <ResourceBanner />
-
-        {/* Global error — shown in idle state when API fails */}
-        {dashState === 'idle' && error && (
-          <div className={styles.errorBanner}>{error}</div>
-        )}
-
-        {/* ── IDLE STATE ── */}
-        {dashState === 'idle' && <StudentPlaceholderSlots />}
-
-        {/* ── LOADING STATE ── */}
-        {dashState === 'loading_blueprint' && (
-          <div className={styles.loadingState}>
-            <div className={styles.spinner} />
-            <p className={styles.loadingText}>Loading your courses...</p>
-          </div>
-        )}
-
-        {/* ── CLOSED STATE ── */}
-        {dashState === 'closed' && (
-          <div className={styles.closedState}>
-            <div className={styles.closedIcon}>🔒</div>
-            <p className={styles.closedTitle}>Registration Window is Closed</p>
-            <p className={styles.closedSubtitle}>
-              The registration window for this semester is currently closed.
-              Please check back when your Campus Director opens it.
-            </p>
-            {blueprint?.deadline && (
-              <div className={styles.closedDeadline}>
-                Last deadline was{' '}
-                {new Date(blueprint.deadline).toLocaleDateString('en-IN', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </div>
-            )}
-            <button
-              className={styles.closedBackBtn}
-              onClick={() => {
-                setDashState('idle')
-                setBlueprint(null)
-                setError('')
-              }}
-            >
-              ← Go Back
-            </button>
-          </div>
-        )}
-
-        {/* ── READY / SUBMITTING / SUBMITTED ── */}
-        {(dashState === 'ready' || dashState === 'submitting' || dashState === 'submitted') && blueprint && (
-          <>
-            {/* Window Status Banner */}
-            <div className={`${styles.windowBanner} ${blueprint.window_status === 'OPEN' ? styles.open : styles.closed}`}>
-              <div className={styles.windowDot} />
-              {blueprint.window_status === 'OPEN'
-                ? `Registration open — closes ${new Date(blueprint.deadline).toLocaleDateString('en-IN', {
-                    day: 'numeric', month: 'short', year: 'numeric',
-                  })}`
-                : 'Registration window is closed'}
-            </div>
-
-            {/* Submitted read-only banner */}
-            {dashState === 'submitted' && (
-              <div className={styles.readOnlyBanner}>
-                ✓ Submitted — click Update to make changes
-              </div>
-            )}
-
-            {/* Credit Counter */}
-            <div className={styles.creditCounter}>
-              <span className={styles.creditLabel}>Total Credits</span>
-              <span className={`${styles.creditValue} ${
-                totalCredits === 0 ? '' : isValidCredits ? styles.valid : styles.invalid
-              }`}>
-                {totalCredits}
-                <span className={styles.creditRange}>
-                  &nbsp;(min {blueprint.min_credits} — max {blueprint.max_credits})
-                </span>
-              </span>
-            </div>
-
-            <p className={styles.sectionTitle}>Select Your Papers</p>
-
-            {/* Slot Cards */}
-            <div className={styles.slotsContainer}>
-              {blueprint.slots.map(slot => (
-                <div
-                  key={slot.slot}
-                  className={`${styles.slotCard} ${dashState === 'ready' ? styles.active : ''}`}
-                >
-                  <div className={styles.slotHeader}>
-                    <span className={styles.slotLabel}>{slot.name}</span>
-                  </div>
-
-                  {/* Fixed course */}
-                  {slot.rule === 'FIXED' && slot.course && (
-                    <div className={styles.fixedCourse}>
-                      <div>
-                        <p className={styles.fixedCourseTitle}>{slot.course.title}</p>
-                        <p className={styles.fixedCourseCode}>{slot.course.course_code}</p>
-                      </div>
-                      <span className={styles.creditPill}>{slot.course.credits} cr</span>
-                    </div>
-                  )}
-
-                  {/* Elective dropdown */}
-                  {slot.rule !== 'FIXED' && slot.options && (
-                    <select
-                      className={styles.selectInput}
-                      value={selectedCourses[slot.slot] ?? ''}
-                      onChange={e => handleCourseSelect(slot.slot, e.target.value)}
-                      disabled={dashState === 'submitting' || dashState === 'submitted'}
-                    >
-                      <option value="">— Select a paper —</option>
-                      {slot.options.map(course => (
-                        <option key={course.id} value={course.id}>
-                          {course.title} ({course.credits} cr)
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Error / Success */}
-            {error && <div className={styles.errorBanner}>{error}</div>}
-            {successMsg && <div className={styles.successBanner}>✓ {successMsg}</div>}
-
-            {/* Submit Button — only when window open */}
-            {(dashState === 'ready' || dashState === 'submitting') && blueprint.window_status === 'OPEN' && (
-              <button
-                className={styles.submitBtn}
-                onClick={handleSubmit}
-                disabled={dashState === 'submitting' || !isValidCredits}
-              >
-                {dashState === 'submitting' ? (
-                  <><span className={styles.smallSpinner} /> Submitting...</>
-                ) : existingSubmission ? (
-                  'Update Registration →'
-                ) : (
-                  'Submit Registration →'
-                )}
-              </button>
-            )}
-          </>
-        )}
-
-      </div>
-    </div>
-  )
-}
-</file>
-
-<file path="src/app/dashboard/student/student-dashboard.module.css">
-/* =========================================
-   STUDENT DASHBOARD — CSS MODULE
-   ========================================= */
-
-.pageWrapper {
-  font-family: system-ui, -apple-system, sans-serif;
-  min-height: 100dvh;
-  width: 100%;
-  max-width: 100vw;
-  background-color: #f0f2f5;
-  display: flex;
-  flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-/* ── TOP BAR ── */
-.topBar {
-  background-color: #002147;
-  padding: 0.85rem 1.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  box-shadow: 0 2px 8px rgba(0, 33, 71, 0.3);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.topBarLeft {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-  flex: 1;
-}
-
-.logoSmall {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(201,162,39,0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.topBarTitle {
-  color: #ffffff;
-  font-size: 0.8rem;
-  font-weight: 700;
-  margin: 0;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.topBarSubtitle {
-  color: rgba(255,255,255,0.45);
-  font-size: 0.65rem;
-  margin: 0;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.logoutBtn {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 0.4rem;
-  color: rgba(255,255,255,0.7);
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.35rem 0.75rem;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  font-family: inherit;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.logoutBtn:hover {
-  background: rgba(255,255,255,0.15);
-  color: #ffffff;
-}
-
-/* ── STUDENT INFO CARD ── */
-.infoCard {
-  background: #ffffff;
-  border-bottom: 1px solid #e2e5ea;
-  padding: 0.85rem 1.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.studentMeta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
-  flex: 1;
-}
-
-.studentName {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #002147;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.studentDetails {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-.detailBadge {
-  font-size: 0.65rem;
-  font-weight: 600;
-  padding: 0.18rem 0.5rem;
-  border-radius: 2rem;
-  background: #f0f4f8;
-  color: #44474e;
-  border: 1px solid #dde1e7;
-  white-space: nowrap;
-}
-
-.detailBadge.semBadge {
-  background: #002147;
-  color: #ffffff;
-  border-color: #002147;
-}
-
-.registerBtn {
-  flex-shrink: 0;
-  background: #c9a227;
-  color: #002147;
-  border: none;
-  border-radius: 0.5rem;
-  padding: 0.55rem 0.85rem;
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: background 0.15s ease, transform 0.1s ease;
-  font-family: inherit;
-  white-space: nowrap;
-  text-transform: uppercase;
-}
-
-.registerBtn:hover:not(:disabled) {
-  background: #b8911f;
-}
-
-.registerBtn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.registerBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ── MAIN CONTENT ── */
-.mainContent {
-  flex: 1;
-  padding: 1rem 1.25rem;
-  width: 100%;
-  max-width: 48rem;
-  margin: 0 auto;
-  box-sizing: border-box;
-}
-
-/* ── CLOSED STATE ── */
-.closedState {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 2.5rem 1.25rem;
-  background: #ffffff;
-  border: 1px solid #e2e5ea;
-  border-radius: 0.75rem;
-}
-
-.closedIcon {
-  font-size: 2.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.closedTitle {
-  font-size: 1rem;
-  font-weight: 800;
-  color: #002147;
-  margin: 0 0 0.5rem 0;
-}
-
-.closedSubtitle {
-  font-size: 0.78rem;
-  color: #44474e;
-  line-height: 1.5;
-  margin: 0 0 1rem 0;
-}
-
-.closedDeadline {
-  font-size: 0.72rem;
-  color: #9ba1ab;
-  background: #f0f2f5;
-  border-radius: 0.4rem;
-  padding: 0.5rem 0.85rem;
-  margin-bottom: 1.25rem;
-}
-
-.closedBackBtn {
-  font-family: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #002147;
-  background: transparent;
-  border: 1.5px solid #002147;
-  border-radius: 0.5rem;
-  padding: 0.55rem 1rem;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.closedBackBtn:hover {
-  background: #002147;
-  color: #ffffff;
-}
-
-/* Window status banner */
-.windowBanner {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.65rem 0.9rem;
-  border-radius: 0.6rem;
-  margin-bottom: 1rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.windowBanner.open {
-  background: #f0faf4;
-  border: 1px solid #a8d5b5;
-  color: #1a6b3c;
-}
-
-.windowBanner.closed {
-  background: #fff8f0;
-  border: 1px solid #f5c6a0;
-  color: #8b4513;
-}
-
-.windowDot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.windowBanner.open .windowDot {
-  background: #2ecc71;
-  animation: pulse 1.5s infinite;
-}
-
-.windowBanner.closed .windowDot {
-  background: #e67e22;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-/* Section title */
-.sectionTitle {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #9ba1ab;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin: 0 0 0.75rem 0;
-}
-
-/* Credit counter */
-.creditCounter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #ffffff;
-  border: 1px solid #e2e5ea;
-  border-radius: 0.6rem;
-  padding: 0.65rem 1rem;
-  margin-bottom: 1rem;
-}
-
-.creditLabel {
-  font-size: 0.75rem;
-  color: #44474e;
-  font-weight: 500;
-}
-
-.creditValue {
-  font-size: 0.88rem;
-  font-weight: 800;
-  color: #002147;
-}
-
-.creditValue.valid {
-  color: #1a6b3c;
-}
-
-.creditValue.invalid {
-  color: #c0392b;
-}
-
-.creditRange {
-  font-size: 0.65rem;
-  color: #9ba1ab;
-  margin-left: 0.35rem;
-  font-weight: 400;
-}
-
-/* Slots container */
-.slotsContainer {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  margin-bottom: 1.25rem;
-}
-
-/* Slot card */
-.slotCard {
-  background: #ffffff;
-  border: 1px solid #e2e5ea;
-  border-radius: 0.75rem;
-  padding: 0.85rem 1rem;
-  transition: border-color 0.15s ease;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.slotCard.active {
-  border-color: #002147;
-}
-
-.slotCard.greyed {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.slotHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-
-.slotLabel {
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: #9ba1ab;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-/* Fixed course display */
-.fixedCourse {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #f8f9fa;
-  border: 1.5px solid #dde1e7;
-  border-radius: 0.5rem;
-  padding: 0.6rem 0.85rem;
-  gap: 0.5rem;
-}
-
-.fixedCourseTitle {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #002147;
-  margin: 0;
-}
-
-.fixedCourseCode {
-  font-size: 0.65rem;
-  color: #9ba1ab;
-  margin: 0.1rem 0 0 0;
-}
-
-.creditPill {
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: #002147;
-  background: #e8f0fe;
-  border-radius: 2rem;
-  padding: 0.18rem 0.5rem;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-/* Dropdown select */
-.selectInput {
-  width: 100%;
-  padding: 0.65rem 2.5rem 0.65rem 0.85rem;
-  font-family: inherit;
-  font-size: 0.82rem;
-  color: #191c1d;
-  background: #f8f9fa;
-  border: 1.5px solid #dde1e7;
-  border-radius: 0.5rem;
-  outline: none;
-  cursor: pointer;
-  transition: border-color 0.15s ease;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2344474e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.85rem center;
-  box-sizing: border-box;
-}
-
-.selectInput:focus {
-  border-color: #002147;
-  background-color: #ffffff;
-}
-
-.selectInput:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Submit button */
-.submitBtn {
-  width: 100%;
-  padding: 0.85rem;
-  font-family: inherit;
-  font-size: 0.85rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #ffffff;
-  background-color: #002147;
-  border: none;
-  border-radius: 0.6rem;
-  cursor: pointer;
-  transition: background-color 0.15s ease, transform 0.1s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  box-sizing: border-box;
-}
-
-.submitBtn:hover:not(:disabled) {
-  background-color: #001633;
-}
-
-.submitBtn:active:not(:disabled) {
-  transform: scale(0.98);
-}
-
-.submitBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Success banner */
-.successBanner {
-  background: #f0faf4;
-  border: 1px solid #a8d5b5;
-  border-radius: 0.6rem;
-  padding: 0.75rem 1rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #1a6b3c;
-  text-align: center;
-  margin-bottom: 1rem;
-}
-
-/* Error banner */
-.errorBanner {
-  background: #fdf2f2;
-  border: 1px solid #f5c6c6;
-  border-radius: 0.6rem;
-  padding: 0.75rem 1rem;
-  font-size: 0.82rem;
-  color: #c0392b;
-  margin-bottom: 1rem;
-}
-
-/* Loading state */
-.loadingState {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 1rem;
-  gap: 1rem;
-}
-
-.spinner {
-  width: 2rem;
-  height: 2rem;
-  border: 3px solid #e2e5ea;
-  border-top-color: #002147;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-.smallSpinner {
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #ffffff;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.loadingText {
-  font-size: 0.82rem;
-  color: #9ba1ab;
-}
-
-/* Greyed placeholder slots */
-.greyedSlot {
-  background: #f8f9fa;
-  border: 1.5px dashed #dde1e7;
-  border-radius: 0.5rem;
-  padding: 0.75rem 0.85rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.greyedBar {
-  height: 0.75rem;
-  border-radius: 2rem;
-  background: #e2e5ea;
-}
-
-/* Read only mode */
-.readOnlyBanner {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: #f0f4ff;
-  border: 1px solid #c5d0f5;
-  border-radius: 0.6rem;
-  padding: 0.65rem 0.9rem;
-  font-size: 0.78rem;
-  color: #2d4db5;
-  font-weight: 600;
-  margin-bottom: 1rem;
-}
-/* Placeholder banner */
-.placeholderBanner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  background: #fff8e6;
-  border: 1px solid #f5d78c;
-  border-radius: 0.6rem;
-  padding: 0.65rem 0.9rem;
-  margin-bottom: 1rem;
-}
-
-.placeholderBannerIcon {
-  font-size: 1rem;
-  flex-shrink: 0;
-  justify-self: end;
-}
-
-.placeholderBannerText {
-  font-size: 0.78rem;
-  color: #8b6914;
-  margin: 0;
-  font-weight: 500;
-}
-
-.placeholderBannerText strong {
-  color: #c9a227;
-  font-weight: 800;
-}
-
-/* Tablet and up */
-@media (min-width: 640px) {
-  .topBar { padding: 1rem 1.5rem; }
-  .infoCard { padding: 1.25rem 1.5rem; }
-  .mainContent { padding: 1.5rem; }
-  .studentName { font-size: 1.1rem; }
-  .registerBtn { padding: 0.6rem 1rem; font-size: 0.78rem; }
 }
 </file>
 
@@ -6351,124 +6162,6 @@ export const capNumberLimiter = new Ratelimit({
   limiter: Ratelimit.slidingWindow(10, '1 d'),
   prefix: 'fyimp:cap',
 })
-</file>
-
-<file path="middleware.ts">
-import { getToken } from 'next-auth/jwt'
-import { NextRequest, NextResponse } from 'next/server'
-
-const ROLE_DASHBOARD_MAP: Record<string, string> = {
-  superadmin: '/dashboard/superadmin',
-  campus_director: '/dashboard/director',
-  hod: '/dashboard/hod',
-  teaching_staff: '/dashboard/teacher',
-  student: '/dashboard/student',
-}
-
-const DASHBOARD_ROLE_MAP: Record<string, string> = {
-  '/dashboard/superadmin': 'superadmin',
-  '/dashboard/director': 'campus_director',
-  '/dashboard/hod': 'hod',
-  '/dashboard/teacher': 'teaching_staff',
-  '/dashboard/student': 'student',
-}
-
-export async function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname
-
-  // These routes never need auth
-  if (pathname.startsWith('/api')) return NextResponse.next()
-  if (pathname.startsWith('/reset-password')) return NextResponse.next()
-
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET,
-  })
-
-  const isDashboard = pathname.startsWith('/dashboard')
-  const isLogin = pathname === '/login'
-
-  // Not logged in trying to access dashboard
-  if (!token && isDashboard) {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
-
-  // Logged in trying to access login page
-  if (token && isLogin) {
-    const role = token.role as string
-    const redirectTo = ROLE_DASHBOARD_MAP[role] ?? '/login'
-    return NextResponse.redirect(new URL(redirectTo, request.url))
-  }
-
-  // Logged in accessing a dashboard — verify correct role
-  if (token && isDashboard) {
-    const role = token.role as string
-
-    const matchedRoute = Object.keys(DASHBOARD_ROLE_MAP).find(route =>
-      pathname.startsWith(route)
-    )
-
-    if (!matchedRoute) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
-
-    const requiredRole = DASHBOARD_ROLE_MAP[matchedRoute]
-
-    if (role !== requiredRole) {
-      return NextResponse.redirect(
-        new URL(ROLE_DASHBOARD_MAP[role] ?? '/login', request.url)
-      )
-    }
-  }
-
-  return NextResponse.next()
-}
-
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
-}
-</file>
-
-<file path="package.json">
-{
-  "name": "courseregis-fyimp",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev --webpack",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "@supabase/ssr": "^0.9.0",
-    "@supabase/supabase-js": "^2.100.1",
-    "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.37.0",
-    "bcryptjs": "^3.0.3",
-    "jspdf": "^4.2.1",
-    "lucide-react": "^1.7.0",
-    "mongoose": "^9.4.1",
-    "next": "^16.2.3",
-    "next-auth": "^4.24.14",
-    "papaparse": "^5.5.3",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "zod": "^4.3.6"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^20",
-    "@types/papaparse": "^5.5.2",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.1",
-    "tailwindcss": "^4",
-    "typescript": "^5"
-  }
-}
 </file>
 
 <file path="src/app/dashboard/hod/hod-dashboard.module.css">
@@ -8225,6 +7918,1068 @@ export default function HodDashboard() {
 }
 </file>
 
+<file path="src/app/dashboard/student/page.tsx">
+'use client'
+
+import { useState, useEffect } from 'react'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { useSession, signOut } from 'next-auth/react'
+import styles from './student-dashboard.module.css'
+import StudentPlaceholderSlots from '@/component/StudentPlaceholderSlots'
+import ResourceBanner from '@/component/ResourceBanner'
+
+interface Course {
+  id: string
+  course_code: string
+  title: string
+  credits: number
+}
+
+interface BlueprintSlot {
+  slot: number
+  rule: string
+  name: string
+  course?: Course       // FIXED slots
+  options?: Course[]    // elective slots
+}
+
+interface BlueprintData {
+  min_credits: number
+  max_credits: number
+  slots: BlueprintSlot[]
+}
+
+// preferences[slotNumber][rank] = courseId
+type SlotPreferences = Record<number, Record<number, string>>
+
+type DashboardState = 'idle' | 'loading_blueprint' | 'ready' | 'submitting' | 'submitted'
+
+export default function StudentDashboard() {
+  const router = useRouter()
+  const { data: session, status } = useSession()
+
+  const [dashState, setDashState] = useState<DashboardState>('idle')
+  const [blueprint, setBlueprint] = useState<BlueprintData | null>(null)
+  // slotPreferences[slotNum][rank 1..N] = courseId
+  const [slotPreferences, setSlotPreferences] = useState<SlotPreferences>({})
+  const [existingSubmission, setExistingSubmission] = useState(false)
+  const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  useEffect(() => {
+    if (status === 'unauthenticated') router.push('/login')
+  }, [status, router])
+
+  const studentName = session?.user?.name ?? 'Student'
+  const studentRole = (session?.user as any)?.role
+
+  async function handleRegisterClick() {
+    setDashState('loading_blueprint')
+    setError('')
+    setSuccessMsg('')
+
+    const res = await fetch('/api/student/blueprint')
+    const data = await res.json()
+
+    if (!res.ok) {
+      setError(data.error ?? 'Failed to load courses.')
+      setDashState('idle')
+      return
+    }
+
+    setBlueprint(data.data)
+
+    // Pre-fill from existing submission if any
+    if (data.existing) {
+      setExistingSubmission(true)
+      const prefilled: SlotPreferences = {}
+      const existingSlots: any[] = data.existing.slots ?? []
+      for (const s of existingSlots) {
+        if (s.type === 'ELECTIVE' && s.preferences?.length) {
+          prefilled[s.slot] = {}
+          for (const p of s.preferences) {
+            prefilled[s.slot][p.rank] = p.course_id.toString()
+          }
+        }
+      }
+      setSlotPreferences(prefilled)
+    } else {
+      setSlotPreferences({})
+      setExistingSubmission(false)
+    }
+
+    setDashState('ready')
+  }
+
+  // Set a preference rank for a slot
+  function handlePreferenceSelect(slotNum: number, rank: number, courseId: string) {
+    setSlotPreferences(prev => {
+      const slotPrefs = { ...(prev[slotNum] ?? {}) }
+
+      // If this courseId is already selected at another rank in this slot, clear it
+      for (const r of Object.keys(slotPrefs)) {
+        if (slotPrefs[Number(r)] === courseId && Number(r) !== rank) {
+          delete slotPrefs[Number(r)]
+        }
+      }
+
+      if (courseId === '') {
+        delete slotPrefs[rank]
+      } else {
+        slotPrefs[rank] = courseId
+      }
+
+      return { ...prev, [slotNum]: slotPrefs }
+    })
+    setError('')
+  }
+
+  // Calculate total credits — use preference rank 1 for electives
+  function calculateCredits(): number {
+    if (!blueprint) return 0
+    let total = 0
+    for (const slot of blueprint.slots) {
+      if (slot.rule === 'FIXED' && slot.course) {
+        total += slot.course.credits
+      } else if (slot.options) {
+        const firstChoice = slotPreferences[slot.slot]?.[1]
+        if (firstChoice) {
+          const course = slot.options.find(c => c.id === firstChoice)
+          if (course) total += course.credits
+        }
+      }
+    }
+    return total
+  }
+
+  async function handleSubmit() {
+    if (!blueprint) return
+
+    // Validate all elective slots have at least rank 1 selected
+    for (const slot of blueprint.slots) {
+      if (slot.rule !== 'FIXED' && slot.options && slot.options.length > 0) {
+        if (!slotPreferences[slot.slot]?.[1]) {
+          setError(`Please select at least your first preference for "${slot.name}"`)
+          return
+        }
+      }
+    }
+
+    setDashState('submitting')
+    setError('')
+
+    // Build slots payload matching Preference model
+    const slotsPayload = blueprint.slots.map(slot => {
+      if (slot.rule === 'FIXED' && slot.course) {
+        return {
+          slot: slot.slot,
+          type: 'FIXED',
+          course_id: slot.course.id,
+        }
+      }
+      const prefs = slotPreferences[slot.slot] ?? {}
+      const preferences = Object.entries(prefs)
+        .map(([rank, courseId]) => ({ rank: Number(rank), course_id: courseId }))
+        .sort((a, b) => a.rank - b.rank)
+
+      return {
+        slot: slot.slot,
+        type: 'ELECTIVE',
+        preferences,
+      }
+    })
+
+    const res = await fetch('/api/student/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slots: slotsPayload }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      setError(data.error ?? 'Submission failed.')
+      setDashState('ready')
+      return
+    }
+
+    setSuccessMsg('Preferences submitted successfully!')
+    setExistingSubmission(true)
+    setDashState('submitted')
+  }
+
+  async function handleLogout() {
+    setLoggingOut(true)
+    await signOut({ redirect: false })
+    router.push('/login')
+  }
+
+  const totalCredits = calculateCredits()
+  const isValidCredits = blueprint
+    ? totalCredits >= blueprint.min_credits && totalCredits <= blueprint.max_credits
+    : false
+
+  if (status === 'loading') {
+    return (
+      <div className={styles.pageWrapper}>
+        <div className={styles.loadingState}>
+          <div className={styles.spinner} />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={styles.pageWrapper}>
+
+      {/* Top Bar */}
+      <div className={styles.topBar}>
+        <div className={styles.topBarLeft}>
+          <div className={styles.logoSmall}>
+            <Image src="/logo.png" alt="KU" width={28} height={28} />
+          </div>
+          <div>
+            <p className={styles.topBarTitle}>FYIMP Portal</p>
+            <p className={styles.topBarSubtitle}>Student Dashboard</p>
+          </div>
+        </div>
+        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Logging out...' : 'Logout'}
+        </button>
+      </div>
+
+      {/* Student Info Card */}
+      <div className={styles.infoCard}>
+        <div className={styles.studentMeta}>
+          <p className={styles.studentName}>{studentName}</p>
+          <div className={styles.studentDetails}>
+            <span className={`${styles.detailBadge} ${styles.semBadge}`}>
+              {studentRole ?? 'Student'}
+            </span>
+          </div>
+        </div>
+
+        {(dashState === 'idle' || dashState === 'submitted') && (
+          <button className={styles.registerBtn} onClick={handleRegisterClick}>
+            {existingSubmission ? 'Update →' : 'Register →'}
+          </button>
+        )}
+      </div>
+
+      {/* Main Content */}
+      <div className={styles.mainContent}>
+
+        <ResourceBanner />
+
+        {dashState === 'idle' && error && (
+          <div className={styles.errorBanner}>{error}</div>
+        )}
+
+        {dashState === 'idle' && <StudentPlaceholderSlots />}
+
+        {dashState === 'loading_blueprint' && (
+          <div className={styles.loadingState}>
+            <div className={styles.spinner} />
+            <p className={styles.loadingText}>Loading your courses...</p>
+          </div>
+        )}
+
+        {(dashState === 'ready' || dashState === 'submitting' || dashState === 'submitted') && blueprint && (
+          <>
+            {/* Submitted banner */}
+            {dashState === 'submitted' && (
+              <div className={styles.readOnlyBanner}>
+                ✓ Submitted — click Update to make changes
+              </div>
+            )}
+
+            {/* Credit Counter */}
+            <div className={styles.creditCounter}>
+              <span className={styles.creditLabel}>Estimated Credits (1st preference)</span>
+              <span className={`${styles.creditValue} ${
+                totalCredits === 0 ? '' : isValidCredits ? styles.valid : styles.invalid
+              }`}>
+                {totalCredits}
+                <span className={styles.creditRange}>
+                  &nbsp;(min {blueprint.min_credits} — max {blueprint.max_credits})
+                </span>
+              </span>
+            </div>
+
+            <p className={styles.sectionTitle}>Select Your Papers</p>
+
+            <div className={styles.slotsContainer}>
+              {blueprint.slots.map(slot => (
+                <div key={slot.slot} className={`${styles.slotCard} ${dashState === 'ready' ? styles.active : ''}`}>
+
+                  <div className={styles.slotHeader}>
+                    <span className={styles.slotLabel}>{slot.name}</span>
+                    {slot.rule === 'FIXED' && (
+                      <span className={styles.fixedBadge}>Fixed</span>
+                    )}
+                  </div>
+
+                  {/* FIXED slot */}
+                  {slot.rule === 'FIXED' && slot.course && (
+                    <div className={styles.fixedCourse}>
+                      <div>
+                        <p className={styles.fixedCourseTitle}>{slot.course.title}</p>
+                        <p className={styles.fixedCourseCode}>{slot.course.course_code}</p>
+                      </div>
+                      <span className={styles.creditPill}>{slot.course.credits} cr</span>
+                    </div>
+                  )}
+
+                  {/* ELECTIVE slot — ranked preference sub-slots */}
+                  {slot.rule !== 'FIXED' && slot.options && slot.options.length > 0 && (
+                    <div className={styles.preferencesContainer}>
+                      {slot.options.map((_, idx) => {
+                        const rank = idx + 1
+                        const selectedId = slotPreferences[slot.slot]?.[rank] ?? ''
+
+                        // Options available for this rank = all options minus ones
+                        // already selected at OTHER ranks in this slot
+                        const usedIds = Object.entries(slotPreferences[slot.slot] ?? {})
+                          .filter(([r]) => Number(r) !== rank)
+                          .map(([, id]) => id)
+
+                        const availableOptions = slot.options!.filter(
+                          c => !usedIds.includes(c.id) || c.id === selectedId
+                        )
+
+                        return (
+                          <div key={rank} className={styles.preferenceRow}>
+                            <span className={styles.preferenceRank}>
+                              {rank === 1 ? '1st' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`}
+                            </span>
+                            <select
+                              className={styles.selectInput}
+                              value={selectedId}
+                              onChange={e => handlePreferenceSelect(slot.slot, rank, e.target.value)}
+                              disabled={dashState === 'submitting' || dashState === 'submitted'}
+                            >
+                              <option value="">— Preference {rank} —</option>
+                              {availableOptions.map(course => (
+                                <option key={course.id} value={course.id}>
+                                  {course.title} ({course.credits} cr)
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )
+                      })}
+                      <p className={styles.preferenceHint}>
+                        Rank all options — allocation uses your highest available preference
+                      </p>
+                    </div>
+                  )}
+
+                  {slot.rule !== 'FIXED' && (!slot.options || slot.options.length === 0) && (
+                    <p className={styles.noCoursesMsg}>No courses available for this slot yet.</p>
+                  )}
+
+                </div>
+              ))}
+            </div>
+
+            {error && <div className={styles.errorBanner}>{error}</div>}
+            {successMsg && <div className={styles.successBanner}>✓ {successMsg}</div>}
+
+            {(dashState === 'ready' || dashState === 'submitting') && (
+              <button
+                className={styles.submitBtn}
+                onClick={handleSubmit}
+                disabled={dashState === 'submitting'}
+              >
+                {dashState === 'submitting'
+                  ? <><span className={styles.smallSpinner} /> Submitting...</>
+                  : existingSubmission ? 'Update Preferences →' : 'Submit Preferences →'
+                }
+              </button>
+            )}
+          </>
+        )}
+
+      </div>
+    </div>
+  )
+}
+</file>
+
+<file path="src/app/dashboard/student/student-dashboard.module.css">
+/* =========================================
+   STUDENT DASHBOARD — CSS MODULE
+   ========================================= */
+
+.pageWrapper {
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: 100vw;
+  background-color: #f0f2f5;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* ── TOP BAR ── */
+.topBar {
+  background-color: #002147;
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 33, 71, 0.3);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.topBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.logoSmall {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(201,162,39,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.topBarTitle {
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topBarSubtitle {
+  color: rgba(255,255,255,0.45);
+  font-size: 0.65rem;
+  margin: 0;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.logoutBtn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 0.4rem;
+  color: rgba(255,255,255,0.7);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-family: inherit;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.logoutBtn:hover {
+  background: rgba(255,255,255,0.15);
+  color: #ffffff;
+}
+
+/* ── STUDENT INFO CARD ── */
+.infoCard {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e5ea;
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.studentMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.studentName {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #002147;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studentDetails {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.detailBadge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.18rem 0.5rem;
+  border-radius: 2rem;
+  background: #f0f4f8;
+  color: #44474e;
+  border: 1px solid #dde1e7;
+  white-space: nowrap;
+}
+
+.detailBadge.semBadge {
+  background: #002147;
+  color: #ffffff;
+  border-color: #002147;
+}
+
+.registerBtn {
+  flex-shrink: 0;
+  background: #c9a227;
+  color: #002147;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  font-family: inherit;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.registerBtn:hover:not(:disabled) {
+  background: #b8911f;
+}
+
+.registerBtn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.registerBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── MAIN CONTENT ── */
+.mainContent {
+  flex: 1;
+  padding: 1rem 1.25rem;
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* ── CLOSED STATE ── */
+.closedState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2.5rem 1.25rem;
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.75rem;
+}
+
+.closedIcon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.closedTitle {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #002147;
+  margin: 0 0 0.5rem 0;
+}
+
+.closedSubtitle {
+  font-size: 0.78rem;
+  color: #44474e;
+  line-height: 1.5;
+  margin: 0 0 1rem 0;
+}
+
+.closedDeadline {
+  font-size: 0.72rem;
+  color: #9ba1ab;
+  background: #f0f2f5;
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.closedBackBtn {
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #002147;
+  background: transparent;
+  border: 1.5px solid #002147;
+  border-radius: 0.5rem;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.closedBackBtn:hover {
+  background: #002147;
+  color: #ffffff;
+}
+
+/* Window status banner */
+.windowBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.6rem;
+  margin-bottom: 1rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.windowBanner.open {
+  background: #f0faf4;
+  border: 1px solid #a8d5b5;
+  color: #1a6b3c;
+}
+
+.windowBanner.closed {
+  background: #fff8f0;
+  border: 1px solid #f5c6a0;
+  color: #8b4513;
+}
+
+.windowDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.windowBanner.open .windowDot {
+  background: #2ecc71;
+  animation: pulse 1.5s infinite;
+}
+
+.windowBanner.closed .windowDot {
+  background: #e67e22;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Section title */
+.sectionTitle {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #9ba1ab;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0 0 0.75rem 0;
+}
+
+/* Credit counter */
+.creditCounter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.6rem;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.creditLabel {
+  font-size: 0.75rem;
+  color: #44474e;
+  font-weight: 500;
+}
+
+.creditValue {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #002147;
+}
+
+.creditValue.valid {
+  color: #1a6b3c;
+}
+
+.creditValue.invalid {
+  color: #c0392b;
+}
+
+.creditRange {
+  font-size: 0.65rem;
+  color: #9ba1ab;
+  margin-left: 0.35rem;
+  font-weight: 400;
+}
+
+/* Slots container */
+.slotsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+}
+
+/* Slot card */
+.slotCard {
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.75rem;
+  padding: 0.85rem 1rem;
+  transition: border-color 0.15s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.slotCard.active {
+  border-color: #002147;
+}
+
+.slotCard.greyed {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.slotHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.slotLabel {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #9ba1ab;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Fixed course display */
+.fixedCourse {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8f9fa;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  gap: 0.5rem;
+}
+
+.fixedCourseTitle {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #002147;
+  margin: 0;
+}
+
+.fixedCourseCode {
+  font-size: 0.65rem;
+  color: #9ba1ab;
+  margin: 0.1rem 0 0 0;
+}
+
+.creditPill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #002147;
+  background: #e8f0fe;
+  border-radius: 2rem;
+  padding: 0.18rem 0.5rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Dropdown select */
+.selectInput {
+  width: 100%;
+  padding: 0.65rem 2.5rem 0.65rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: #191c1d;
+  background: #f8f9fa;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2344474e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  box-sizing: border-box;
+}
+
+.selectInput:focus {
+  border-color: #002147;
+  background-color: #ffffff;
+}
+
+.selectInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Submit button */
+.submitBtn {
+  width: 100%;
+  padding: 0.85rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffffff;
+  background-color: #002147;
+  border: none;
+  border-radius: 0.6rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-sizing: border-box;
+}
+
+.submitBtn:hover:not(:disabled) {
+  background-color: #001633;
+}
+
+.submitBtn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.submitBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Success banner */
+.successBanner {
+  background: #f0faf4;
+  border: 1px solid #a8d5b5;
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a6b3c;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+/* Error banner */
+.errorBanner {
+  background: #fdf2f2;
+  border: 1px solid #f5c6c6;
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  color: #c0392b;
+  margin-bottom: 1rem;
+}
+
+/* Loading state */
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  gap: 1rem;
+}
+
+.spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid #e2e5ea;
+  border-top-color: #002147;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.smallSpinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loadingText {
+  font-size: 0.82rem;
+  color: #9ba1ab;
+}
+
+/* Greyed placeholder slots */
+.greyedSlot {
+  background: #f8f9fa;
+  border: 1.5px dashed #dde1e7;
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.greyedBar {
+  height: 0.75rem;
+  border-radius: 2rem;
+  background: #e2e5ea;
+}
+
+/* Read only mode */
+.readOnlyBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f0f4ff;
+  border: 1px solid #c5d0f5;
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.78rem;
+  color: #2d4db5;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+/* Placeholder banner */
+.placeholderBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  background: #fff8e6;
+  border: 1px solid #f5d78c;
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.placeholderBannerIcon {
+  font-size: 1rem;
+  flex-shrink: 0;
+  justify-self: end;
+}
+
+.placeholderBannerText {
+  font-size: 0.78rem;
+  color: #8b6914;
+  margin: 0;
+  font-weight: 500;
+}
+
+.placeholderBannerText strong {
+  color: #c9a227;
+  font-weight: 800;
+}
+
+/* Tablet and up */
+@media (min-width: 640px) {
+  .topBar { padding: 1rem 1.5rem; }
+  .infoCard { padding: 1.25rem 1.5rem; }
+  .mainContent { padding: 1.5rem; }
+  .studentName { font-size: 1.1rem; }
+  .registerBtn { padding: 0.6rem 1rem; font-size: 0.78rem; }
+}
+/* ── APPEND THESE TO student-dashboard.module.css ── */
+
+/* Fixed badge */
+.fixedBadge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 2rem;
+  background: #e8f0fe;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Preferences container inside elective slot */
+.preferencesContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Each rank row */
+.preferenceRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Rank label e.g. "1st" */
+.preferenceRank {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #002147;
+  min-width: 2.2rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Hint below preferences */
+.preferenceHint {
+  font-size: 0.65rem;
+  color: #9ba1ab;
+  margin: 0.25rem 0 0 2.8rem;
+  font-style: italic;
+}
+
+/* No courses message */
+.noCoursesMsg {
+  font-size: 0.78rem;
+  color: #9ba1ab;
+  text-align: center;
+  padding: 0.75rem 0;
+  margin: 0;
+}
+</file>
+
 <file path="src/app/login/page.tsx">
 'use client'
 
@@ -8250,10 +9005,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [fieldErrors, setFieldErrors] = useState<{
-    email?: string
-    password?: string
-  }>({})
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
 
   function validate() {
     const errors: { email?: string; password?: string } = {}
@@ -8266,7 +9018,6 @@ export default function LoginPage() {
 
   async function handleLogin() {
     if (!validate()) return
-
     setLoading(true)
     setError('')
 
@@ -8289,34 +9040,23 @@ export default function LoginPage() {
 
   return (
     <div className={styles.pageWrapper}>
-
       <div className={styles.card}>
 
-        {/* Card Header */}
         <div className={styles.cardHeader}>
           <div className={styles.logoWrapper}>
-            <Image
-              src="/logo.png"
-              alt="Kannur University"
-              width={48}
-              height={48}
-              className={styles.logo}
-            />
+            <Image src="/logo.png" alt="Kannur University" width={48} height={48} className={styles.logo} />
           </div>
           <p className={styles.universityName}>Kannur University</p>
           <h1 className={styles.portalTitle}>FYIMP Registration Portal</h1>
           <div className={styles.goldLine} />
         </div>
 
-        {/* Card Body */}
         <div className={styles.cardBody}>
-
           <p className={styles.formTitle}>Sign In</p>
 
           {error && <div className={styles.errorBanner}>{error}</div>}
 
           <div className={styles.fieldGroup}>
-
             <div className={styles.field}>
               <label className={styles.label}>Email Address</label>
               <input
@@ -8324,16 +9064,11 @@ export default function LoginPage() {
                 className={`${styles.input} ${fieldErrors.email ? styles.inputError : ''}`}
                 placeholder="your@email.com"
                 value={email}
-                onChange={e => {
-                  setEmail(e.target.value)
-                  setFieldErrors(prev => ({ ...prev, email: undefined }))
-                }}
+                onChange={e => { setEmail(e.target.value); setFieldErrors(p => ({ ...p, email: undefined })) }}
                 autoComplete="email"
                 inputMode="email"
               />
-              {fieldErrors.email && (
-                <p className={styles.errorMsg}>{fieldErrors.email}</p>
-              )}
+              {fieldErrors.email && <p className={styles.errorMsg}>{fieldErrors.email}</p>}
             </div>
 
             <div className={styles.field}>
@@ -8343,43 +9078,24 @@ export default function LoginPage() {
                 className={`${styles.input} ${fieldErrors.password ? styles.inputError : ''}`}
                 placeholder="••••••••"
                 value={password}
-                onChange={e => {
-                  setPassword(e.target.value)
-                  setFieldErrors(prev => ({ ...prev, password: undefined }))
-                }}
+                onChange={e => { setPassword(e.target.value); setFieldErrors(p => ({ ...p, password: undefined })) }}
                 autoComplete="current-password"
               />
-              {fieldErrors.password && (
-                <p className={styles.errorMsg}>{fieldErrors.password}</p>
-              )}
+              {fieldErrors.password && <p className={styles.errorMsg}>{fieldErrors.password}</p>}
             </div>
-
           </div>
 
-          <button
-            className={styles.submitBtn}
-            onClick={handleLogin}
-            disabled={loading}
-            disabled={loading}
-          >
-            {loading ? (
-              <><span className={styles.spinner} /> Signing in...</>
-            ) : (
-              'Sign In →'
-            )}
+          <button className={styles.submitBtn} onClick={handleLogin} disabled={loading}>
+            {loading ? <><span className={styles.spinner} /> Signing in...</> : 'Sign In →'}
           </button>
 
           <p className={styles.forgotLink}>
             <Link href="/reset-password">Forgot password?</Link>
           </p>
-
         </div>
       </div>
 
-      <p className={styles.footer}>
-        © 2026 Kannur University • Internal Systems Division
-      </p>
-
+      <p className={styles.footer}>© 2026 Kannur University • Internal Systems Division</p>
     </div>
   )
 }
@@ -8572,7 +9288,7 @@ export default function SuperadminDashboard() {
     setLoadingDepts(true)
     setDeptError('')
     const params = filterCampusId ? `?campus_id=${filterCampusId}` : ''
-    const res = await fetch(`/api/superadmin/department${params}`)
+    const res = await fetch(`/api/superadmin/departments${params}`)
     const data = await res.json()
     if (!res.ok) setDeptError(data.error ?? 'Failed to fetch departments')
     else setDepartments(data)
@@ -8586,7 +9302,7 @@ export default function SuperadminDashboard() {
     }
     setSavingDept(true)
     setDeptError('')
-    const res = await fetch('/api/superadmin/department', {
+    const res = await fetch('/api/superadmin/departments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -8617,7 +9333,7 @@ export default function SuperadminDashboard() {
     }
     setUpdatingDept(true)
     setDeptError('')
-    const res = await fetch('/api/superadmin/department', {
+    const res = await fetch('/api/superadmin/departments', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -8641,7 +9357,7 @@ export default function SuperadminDashboard() {
   async function handleDeleteDept() {
     if (!deleteDept) return
     setDeletingDept(true)
-    const res = await fetch('/api/superadmin/department', {
+    const res = await fetch('/api/superadmin/departments', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: deleteDept._id }),
