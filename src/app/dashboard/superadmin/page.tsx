@@ -113,12 +113,13 @@ export default function SuperadminDashboard() {
   const [hodSuccess, setHodSuccess] = useState('')
 
   const [selectedDeptForHod, setSelectedDeptForHod] = useState<DepartmentWithHod | null>(null)
-  const [hodAssignType, setHodAssignType] = useState<'existing' | 'new'>('existing')
   const [selectedFacultyId, setSelectedFacultyId] = useState('')
-  const [newHodName, setNewHodName] = useState('')
   const [newHodEmail, setNewHodEmail] = useState('')
   const [newHodPassword, setNewHodPassword] = useState('')
   const [savingHod, setSavingHod] = useState(false)
+
+  // Logout state
+  const [loggingOut, setLoggingOut] = useState(false)
 
   // ── Auth guard ──
   useEffect(() => {
@@ -140,6 +141,24 @@ export default function SuperadminDashboard() {
     if (activeTab === 'departments') fetchDepartments()
     if (activeTab === 'hods') fetchHodsData()
   }, [activeTab])
+
+  // Auto-filter departments when campus filter changes (only on departments tab)
+  useEffect(() => {
+    if (activeTab !== 'departments') return
+    fetchDepartments()
+  }, [filterCampusId])
+
+  // Pre-fill HOD email when teaching staff is selected
+  useEffect(() => {
+    if (selectedFacultyId) {
+      const selectedFaculty = facultyList.find(f => f._id === selectedFacultyId)
+      if (selectedFaculty) {
+        setNewHodEmail(selectedFaculty.email)
+      }
+    } else {
+      setNewHodEmail('')
+    }
+  }, [selectedFacultyId, facultyList])
 
   // ══════════════════════════════════════════════════════════════════════════
   // CAMPUS FUNCTIONS
@@ -341,13 +360,13 @@ export default function SuperadminDashboard() {
   async function handleAssignHod() {
     if (!selectedDeptForHod) return
 
-    if (hodAssignType === 'existing' && !selectedFacultyId) {
+    if (!selectedFacultyId) {
       setHodError('Please select a faculty member')
       return
     }
 
-    if (hodAssignType === 'new' && (!newHodName.trim() || !newHodEmail.trim() || !newHodPassword.trim())) {
-      setHodError('All fields are required for creating a new faculty')
+    if (!newHodEmail.trim() || !newHodPassword.trim()) {
+      setHodError('HOD Email and Password are required')
       return
     }
 
@@ -355,17 +374,11 @@ export default function SuperadminDashboard() {
     setHodError('')
     setHodSuccess('')
 
-    const payload: any = {
+    const payload = {
       department_id: selectedDeptForHod._id,
-      assignment_type: hodAssignType
-    }
-
-    if (hodAssignType === 'existing') {
-      payload.user_id = selectedFacultyId
-    } else {
-      payload.full_name = newHodName
-      payload.email = newHodEmail
-      payload.password = newHodPassword
+      user_id: selectedFacultyId,
+      email: newHodEmail.trim(),
+      password: newHodPassword.trim()
     }
 
     const res = await fetch('/api/superadmin/hod', {
@@ -380,7 +393,6 @@ export default function SuperadminDashboard() {
       setHodSuccess('HOD assigned successfully')
       setSelectedDeptForHod(null)
       setSelectedFacultyId('')
-      setNewHodName('')
       setNewHodEmail('')
       setNewHodPassword('')
       fetchHodsData()
@@ -389,6 +401,7 @@ export default function SuperadminDashboard() {
   }
 
   async function handleLogout() {
+    setLoggingOut(true)
     await signOut({ redirect: false })
     router.push('/login')
   }
@@ -424,8 +437,8 @@ export default function SuperadminDashboard() {
             <p className={styles.topBarSubtitle}>Superadmin Dashboard</p>
           </div>
         </div>
-        <button className={styles.logoutBtn} onClick={handleLogout}>
-          Logout
+        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Logging out…' : 'Logout'}
         </button>
       </div>
 
@@ -592,13 +605,7 @@ export default function SuperadminDashboard() {
                   <option key={c._id} value={c._id}>{c.name}</option>
                 ))}
               </select>
-              <button
-                className={styles.fetchBtn}
-                onClick={fetchDepartments}
-                disabled={loadingDepts}
-              >
-                {loadingDepts ? 'Loading...' : 'Filter →'}
-              </button>
+              {loadingDepts && <span style={{ fontSize: '0.72rem', color: '#9ba1ab' }}>Filtering…</span>}
               <button
                 className={styles.addBtn}
                 onClick={() => {
@@ -758,10 +765,15 @@ export default function SuperadminDashboard() {
                             className={styles.addBtn}
                             onClick={() => {
                               setSelectedDeptForHod(dept)
-                              setHodAssignType('existing')
-                              setSelectedFacultyId('')
-                              setNewHodName('')
-                              setNewHodEmail('')
+                              // Find if current HOD is in facultyList and pre-select them
+                              const currentHodFaculty = dept.hod ? facultyList.find(f => f.email === dept.hod?.email) : null
+                              if (currentHodFaculty) {
+                                setSelectedFacultyId(currentHodFaculty._id)
+                                setNewHodEmail(currentHodFaculty.email)
+                              } else {
+                                setSelectedFacultyId('')
+                                setNewHodEmail('')
+                              }
                               setNewHodPassword('')
                               setHodError('')
                               setHodSuccess('')
@@ -1090,75 +1102,46 @@ export default function SuperadminDashboard() {
             {/* Error in modal */}
             {hodError && <div className={styles.errorBanner} style={{ margin: '0.5rem 0' }}>{hodError}</div>}
 
-            {/* Tabs for choosing assignment type */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
-              <button
-                className={`${styles.tabBtn} ${hodAssignType === 'existing' ? styles.tabActive : ''}`}
-                onClick={() => { setHodAssignType('existing'); setHodError('') }}
-                style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}
-              >
-                Existing Faculty
-              </button>
-              <button
-                className={`${styles.tabBtn} ${hodAssignType === 'new' ? styles.tabActive : ''}`}
-                onClick={() => { setHodAssignType('new'); setHodError('') }}
-                style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}
-              >
-                New HOD/Faculty
-              </button>
-            </div>
-
             <div className={styles.fieldGroup}>
-              {hodAssignType === 'existing' ? (
-                <div className={styles.field}>
-                  <label className={styles.label}>Select Faculty Member *</label>
-                  <select
-                    className={styles.input}
-                    value={selectedFacultyId}
-                    onChange={e => setSelectedFacultyId(e.target.value)}
-                  >
-                    <option value="">— Select Member —</option>
-                    {facultyList.map(f => (
+              <div className={styles.field}>
+                <label className={styles.label}>Select Teaching Staff *</label>
+                <select
+                  className={styles.input}
+                  value={selectedFacultyId}
+                  onChange={e => setSelectedFacultyId(e.target.value)}
+                >
+                  <option value="">— Select Member —</option>
+                  {facultyList
+                    .filter(f => f.role === 'teaching_staff' || (selectedDeptForHod.hod && f.email === selectedDeptForHod.hod.email))
+                    .map(f => (
                       <option key={f._id} value={f._id}>
-                        {f.full_name} ({f.email}) — Current Role: {f.role === 'hod' ? `HOD of ${f.department_name}` : 'Teaching Staff'}
+                        {f.full_name} ({f.email}) {f.role === 'hod' ? '(Current HOD)' : ''}
                       </option>
                     ))}
-                  </select>
-                </div>
-              ) : (
-                <>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Full Name *</label>
-                    <input
-                      type="text"
-                      className={styles.input}
-                      placeholder="e.g. Dr. Jane Doe"
-                      value={newHodName}
-                      onChange={e => setNewHodName(e.target.value)}
-                    />
-                  </div>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Email Address *</label>
-                    <input
-                      type="email"
-                      className={styles.input}
-                      placeholder="e.g. hod.maths@kannuruniversity.ac.in"
-                      value={newHodEmail}
-                      onChange={e => setNewHodEmail(e.target.value)}
-                    />
-                  </div>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Password *</label>
-                    <input
-                      type="password"
-                      className={styles.input}
-                      placeholder="••••••••"
-                      value={newHodPassword}
-                      onChange={e => setNewHodPassword(e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
+                </select>
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>HOD Email Address *</label>
+                <input
+                  type="email"
+                  className={styles.input}
+                  placeholder="e.g. hod.maths@kannuruniversity.ac.in"
+                  value={newHodEmail}
+                  onChange={e => setNewHodEmail(e.target.value)}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>HOD Temporary Password *</label>
+                <input
+                  type="password"
+                  className={styles.input}
+                  placeholder="••••••••"
+                  value={newHodPassword}
+                  onChange={e => setNewHodPassword(e.target.value)}
+                />
+              </div>
             </div>
 
             <div className={styles.modalActions}>

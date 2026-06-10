@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       semester: parsed.data.semester,
       credits: parsed.data.credits,
       category: parsed.data.category,
-      tag: parsed.data.tag || null,
+      tag: parsed.data.tag || undefined,
     })
     return NextResponse.json({ success: true, message: 'Course added successfully', course })
   } catch (err: any) {

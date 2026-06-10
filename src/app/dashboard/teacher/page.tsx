@@ -47,6 +47,7 @@ export default function TeacherDashboard() {
 
   const { data: session, status } = useSession()
   const teacherName = session?.user?.name ?? 'Teaching Staff'
+  const [loggingOut, setLoggingOut] = useState(false)
 
   // Load teacher info and course list on mount
   useEffect(() => {
@@ -58,7 +59,7 @@ export default function TeacherDashboard() {
       if (status === 'loading') return
 
       if (session?.user?.role !== 'teaching_staff') {
-        router.push(ROLE_DASHBOARD_MAP[session?.user?.role] ?? '/login')
+        router.push(ROLE_DASHBOARD_MAP[session?.user?.role ?? ''] ?? '/login')
         return
       }
 
@@ -121,6 +122,7 @@ export default function TeacherDashboard() {
 
   // Logout
   async function handleLogout() {
+    setLoggingOut(true)
     await signOut({ redirect: false })
     router.push('/login')
   }
@@ -150,8 +152,8 @@ export default function TeacherDashboard() {
             <p className={styles.topBarSubtitle}>Teacher Dashboard</p>
           </div>
         </div>
-        <button className={styles.logoutBtn} onClick={handleLogout}>
-          Logout
+        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Logging out…' : 'Logout'}
         </button>
       </div>
 

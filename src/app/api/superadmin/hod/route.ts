@@ -63,20 +63,16 @@ export async function GET() {
   }
 }
 
-// POST — assign HOD (either existing or new user)
+// POST — assign HOD (simplify to always update/create a persistent HOD user for the department)
 export async function POST(request: NextRequest) {
   const { error } = await verifyRole(['superadmin'])
   if (error) return error
 
   const body = await request.json()
-  const { department_id, assignment_type, user_id, full_name, email, password } = body
+  const { department_id, user_id, email, password } = body
 
-  if (!department_id || !assignment_type) {
-    return NextResponse.json({ error: 'Department ID and assignment type are required' }, { status: 400 })
-  }
-
-  if (assignment_type !== 'existing' && assignment_type !== 'new') {
-    return NextResponse.json({ error: 'Invalid assignment type' }, { status: 400 })
+  if (!department_id || !user_id || !email?.trim() || !password?.trim()) {
+    return NextResponse.json({ error: 'Department, Teaching Staff selection, Email, and Password are all required' }, { status: 400 })
   }
 
   await connectDB()
@@ -88,61 +84,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Department not found' }, { status: 404 })
     }
 
-    let assignedUserId: string | null = null
+    // 2. Verify the selected teaching staff exists
+    const teacher = await User.findById(user_id)
+    if (!teacher) {
+      return NextResponse.json({ error: 'Selected teaching staff not found' }, { status: 404 })
+    }
 
-    if (assignment_type === 'existing') {
-      if (!user_id) {
-        return NextResponse.json({ error: 'User ID is required for existing faculty assignment' }, { status: 400 })
-      }
-      const existingUser = await User.findById(user_id)
-      if (!existingUser) {
-        return NextResponse.json({ error: 'Faculty user not found' }, { status: 404 })
-      }
-      if (existingUser.role !== 'teaching_staff' && existingUser.role !== 'hod') {
-        return NextResponse.json({ error: 'Only teaching staff or HODs can be assigned as HOD' }, { status: 400 })
-      }
-      assignedUserId = existingUser._id.toString()
+    // 3. Find if there's already an HOD user for this department
+    const existingHod = await User.findOne({ role: 'hod', department_id: dept._id })
 
-      // Update the user to HOD and assign department
-      existingUser.role = 'hod'
-      existingUser.department_id = dept._id
-      await existingUser.save()
+    // 4. Check if the email is already taken by ANOTHER user
+    const emailConflictQuery: any = { email: email.toLowerCase().trim() }
+    if (existingHod) {
+      emailConflictQuery._id = { $ne: existingHod._id }
+    }
+    const emailConflictUser = await User.findOne(emailConflictQuery)
+    if (emailConflictUser) {
+      return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 })
+    }
+
+    const hashedPassword = await bcrypt.hash(password.trim(), 12)
+
+    if (existingHod) {
+      // Update existing HOD user document
+      existingHod.full_name = teacher.full_name
+      existingHod.email = email.toLowerCase().trim()
+      existingHod.password = hashedPassword
+      await existingHod.save()
     } else {
-      // Create new user
-      if (!full_name?.trim() || !email?.trim() || !password?.trim()) {
-        return NextResponse.json({ error: 'Full name, email, and password are required' }, { status: 400 })
-      }
-
-      // Check if email already taken
-      const existingUser = await User.findOne({ email: email.toLowerCase().trim() })
-      if (existingUser) {
-        return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 })
-      }
-
-      const hashedPassword = await bcrypt.hash(password.trim(), 12)
-      const newUser = await User.create({
-        full_name: full_name.trim(),
+      // Create new HOD user document
+      await User.create({
+        full_name: teacher.full_name,
         email: email.toLowerCase().trim(),
         password: hashedPassword,
         role: 'hod',
         department_id: dept._id,
         is_active: true,
       })
-      assignedUserId = newUser._id.toString()
-    }
-
-    // 2. Demote any PREVIOUS HODs of this department (excluding the newly assigned one)
-    if (assignedUserId) {
-      await User.updateMany(
-        {
-          department_id: dept._id,
-          role: 'hod',
-          _id: { $ne: new mongoose.Types.ObjectId(assignedUserId) }
-        },
-        {
-          $set: { role: 'teaching_staff' }
-        }
-      )
     }
 
     return NextResponse.json({ success: true, message: 'HOD assigned successfully' })

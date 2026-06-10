@@ -55,12 +55,22 @@ export default function StudentDashboard() {
   const [successMsg, setSuccessMsg] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
 
+  // Student info card state
+  interface StudentInfo { department_name: string; semester: number; roll_number: string | null }
+  const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null)
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
     } else if (status === 'authenticated') {
       if (session?.user?.role !== 'student') {
         router.push(ROLE_DASHBOARD_MAP[session.user.role] ?? '/login')
+      } else {
+        // Fetch student info
+        fetch('/api/student/info')
+          .then(r => r.json())
+          .then(d => { if (d.department_name) setStudentInfo(d) })
+          .catch(() => {})
       }
     }
   }, [status, session, router])
@@ -249,8 +259,19 @@ export default function StudentDashboard() {
           <p className={styles.studentName}>{studentName}</p>
           <div className={styles.studentDetails}>
             <span className={`${styles.detailBadge} ${styles.semBadge}`}>
-              {studentRole ?? 'Student'}
+              Student
             </span>
+            {studentInfo ? (
+              <>
+                <span className={styles.detailBadge}>{studentInfo.department_name}</span>
+                <span className={styles.detailBadge}>Semester {studentInfo.semester}</span>
+                {studentInfo.roll_number && (
+                  <span className={styles.detailBadge} style={{ fontFamily: 'monospace' }}>
+                    {studentInfo.roll_number}
+                  </span>
+                )}
+              </>
+            ) : null}
           </div>
         </div>
 

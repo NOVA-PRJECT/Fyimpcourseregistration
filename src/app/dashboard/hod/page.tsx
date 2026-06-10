@@ -75,7 +75,10 @@ export default function HodDashboard() {
   const [progName, setProgName] = useState('')
   const [progCode, setProgCode] = useState('')
   const [progSemesters, setProgSemesters] = useState(8)
-  const [progEligibility, setProgEligibility] = useState('')
+  const [progEligibility, setProgEligibility] = useState<string[]>([''])
+
+  // Logout state
+  const [loggingOut, setLoggingOut] = useState(false)
 
   // ── Courses State ──
   const [courses, setCourses] = useState<Course[]>([])
@@ -148,6 +151,13 @@ export default function HodDashboard() {
     }
   }, [activeTab, status, session])
 
+  // Auto-filter courses when filter values change (only when on courses tab)
+  useEffect(() => {
+    if (status !== 'authenticated' || session?.user?.role !== 'hod') return
+    if (activeTab !== 'courses') return
+    fetchCourses()
+  }, [filterProgramId, filterSemester])
+
   // ══════════════════════════════════════════════════════════════════════════
   // PROGRAM CRUD OPERATIONS
   // ══════════════════════════════════════════════════════════════════════════
@@ -168,7 +178,8 @@ export default function HodDashboard() {
   }
 
   async function handleAddProgram() {
-    if (!progName.trim() || !progCode.trim() || !progSemesters || !progEligibility.trim()) {
+    const eligibilityPoints = progEligibility.map(p => p.trim()).filter(Boolean)
+    if (!progName.trim() || !progCode.trim() || !progSemesters || eligibilityPoints.length === 0) {
       setProgramError('All fields are required')
       return
     }
@@ -183,7 +194,7 @@ export default function HodDashboard() {
           name: progName.trim(),
           code: progCode.trim(),
           semesters: progSemesters,
-          eligibility: progEligibility.trim()
+          eligibility: JSON.stringify(eligibilityPoints)
         })
       })
       const data = await res.json()
@@ -195,7 +206,7 @@ export default function HodDashboard() {
         setProgName('')
         setProgCode('')
         setProgSemesters(8)
-        setProgEligibility('')
+        setProgEligibility([''])
         fetchPrograms()
       }
     } catch {
@@ -207,7 +218,8 @@ export default function HodDashboard() {
 
   async function handleUpdateProgram() {
     if (!editProgram) return
-    if (!progName.trim() || !progSemesters || !progEligibility.trim()) {
+    const eligibilityPoints = progEligibility.map(p => p.trim()).filter(Boolean)
+    if (!progName.trim() || !progSemesters || eligibilityPoints.length === 0) {
       setProgramError('All fields are required')
       return
     }
@@ -222,7 +234,7 @@ export default function HodDashboard() {
           id: editProgram._id,
           name: progName.trim(),
           semesters: progSemesters,
-          eligibility: progEligibility.trim()
+          eligibility: JSON.stringify(eligibilityPoints)
         })
       })
       const data = await res.json()
@@ -234,7 +246,7 @@ export default function HodDashboard() {
         setProgName('')
         setProgCode('')
         setProgSemesters(8)
-        setProgEligibility('')
+        setProgEligibility([''])
         fetchPrograms()
       }
     } catch {
@@ -409,6 +421,7 @@ export default function HodDashboard() {
   }
 
   async function handleLogout() {
+    setLoggingOut(true)
     await signOut({ redirect: false })
     router.push('/login')
   }
@@ -438,7 +451,9 @@ export default function HodDashboard() {
             <p className={styles.topBarSubtitle}>HOD Dashboard</p>
           </div>
         </div>
-        <button className={styles.logoutBtn} onClick={handleLogout}>Logout</button>
+        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Logging out…' : 'Logout'}
+        </button>
       </div>
 
       {/* HOD Info Card */}
@@ -491,6 +506,7 @@ export default function HodDashboard() {
               <p className={styles.sectionTitle}>
                 Programs offered by department ({programs.length})
               </p>
+
               <button
                 className={styles.addBtn}
                 onClick={() => {
@@ -500,7 +516,7 @@ export default function HodDashboard() {
                   setProgName('')
                   setProgCode('')
                   setProgSemesters(8)
-                  setProgEligibility('')
+                  setProgEligibility([''])
                 }}
               >
                 + Add Program
@@ -538,7 +554,16 @@ export default function HodDashboard() {
                         <td style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{program.code}</td>
                         <td className={styles.nameCell} style={{ fontWeight: '600' }}>{program.name}</td>
                         <td>{program.semesters} sems</td>
-                        <td style={{ fontSize: '0.78rem', color: '#9ba1ab', maxWidth: '15rem' }}>{program.eligibility}</td>
+                        <td style={{ fontSize: '0.78rem', color: '#9ba1ab', maxWidth: '15rem' }}>
+                          {(() => {
+                            try {
+                              const pts: string[] = JSON.parse(program.eligibility)
+                              return <ul style={{ margin: 0, paddingLeft: '1rem' }}>{pts.map((p, i) => <li key={i}>{p}</li>)}</ul>
+                            } catch {
+                              return program.eligibility
+                            }
+                          })()}
+                        </td>
                         <td>
                           <div className={styles.actionBtns}>
                             <button
@@ -548,7 +573,12 @@ export default function HodDashboard() {
                                 setProgName(program.name)
                                 setProgCode(program.code)
                                 setProgSemesters(program.semesters)
-                                setProgEligibility(program.eligibility)
+                                try {
+                                  const pts = JSON.parse(program.eligibility)
+                                  setProgEligibility(Array.isArray(pts) ? pts : [program.eligibility])
+                                } catch {
+                                  setProgEligibility([program.eligibility])
+                                }
                                 setProgramError('')
                                 setProgramSuccess('')
                               }}
@@ -586,7 +616,7 @@ export default function HodDashboard() {
             {courseError && <div className={styles.errorBanner}>{courseError}</div>}
             {courseSuccess && <div className={styles.successBanner}>✓ {courseSuccess}</div>}
 
-            {/* Filters Row */}
+            {/* Filters Row — auto-filter on change */}
             <div className={styles.semesterRow}>
               <span className={styles.semesterLabel}>Filter Program:</span>
               <select
@@ -612,9 +642,7 @@ export default function HodDashboard() {
                 ))}
               </select>
 
-              <button className={styles.fetchBtn} onClick={fetchCourses} disabled={loadingCourses}>
-                Filter
-              </button>
+              {loadingCourses && <span style={{ fontSize: '0.72rem', color: '#9ba1ab' }}>Filtering…</span>}
 
               <button
                 className={styles.addBtn}
@@ -774,14 +802,39 @@ export default function HodDashboard() {
                 </select>
               </div>
               <div className={styles.field}>
-                <label className={styles.label}>Prerequisite / Eligibility Criteria *</label>
-                <textarea
-                  className={styles.input}
-                  placeholder="e.g. +2 Science with Mathematics as one of the subjects"
-                  value={progEligibility}
-                  onChange={e => setProgEligibility(e.target.value)}
-                  style={{ minHeight: '4.5rem', fontFamily: 'inherit', resize: 'vertical', padding: '0.45rem 0.65rem' }}
-                />
+                <label className={styles.label}>Prerequisites / Eligibility *</label>
+                {progEligibility.map((point, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#9ba1ab', minWidth: '1rem' }}>•</span>
+                    <input
+                      type="text"
+                      className={styles.input}
+                      placeholder={`Prerequisite ${idx + 1}`}
+                      value={point}
+                      onChange={e => {
+                        const updated = [...progEligibility]
+                        updated[idx] = e.target.value
+                        setProgEligibility(updated)
+                      }}
+                      style={{ flex: 1 }}
+                    />
+                    {progEligibility.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setProgEligibility(progEligibility.filter((_, i) => i !== idx))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c0392b', fontSize: '1rem', padding: '0 0.25rem', lineHeight: 1 }}
+                        title="Remove"
+                      >×</button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setProgEligibility([...progEligibility, ''])}
+                  style={{ alignSelf: 'flex-start', marginTop: '0.25rem', background: 'none', border: '1px dashed #9ba1ab', borderRadius: '0.35rem', padding: '0.25rem 0.65rem', fontSize: '0.72rem', color: '#44474e', cursor: 'pointer' }}
+                >
+                  + Add point
+                </button>
               </div>
             </div>
 
@@ -847,13 +900,39 @@ export default function HodDashboard() {
                 </select>
               </div>
               <div className={styles.field}>
-                <label className={styles.label}>Prerequisite / Eligibility Criteria *</label>
-                <textarea
-                  className={styles.input}
-                  value={progEligibility}
-                  onChange={e => setProgEligibility(e.target.value)}
-                  style={{ minHeight: '4.5rem', fontFamily: 'inherit', resize: 'vertical', padding: '0.45rem 0.65rem' }}
-                />
+                <label className={styles.label}>Prerequisites / Eligibility *</label>
+                {progEligibility.map((point, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#9ba1ab', minWidth: '1rem' }}>•</span>
+                    <input
+                      type="text"
+                      className={styles.input}
+                      placeholder={`Prerequisite ${idx + 1}`}
+                      value={point}
+                      onChange={e => {
+                        const updated = [...progEligibility]
+                        updated[idx] = e.target.value
+                        setProgEligibility(updated)
+                      }}
+                      style={{ flex: 1 }}
+                    />
+                    {progEligibility.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setProgEligibility(progEligibility.filter((_, i) => i !== idx))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c0392b', fontSize: '1rem', padding: '0 0.25rem', lineHeight: 1 }}
+                        title="Remove"
+                      >×</button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setProgEligibility([...progEligibility, ''])}
+                  style={{ alignSelf: 'flex-start', marginTop: '0.25rem', background: 'none', border: '1px dashed #9ba1ab', borderRadius: '0.35rem', padding: '0.25rem 0.65rem', fontSize: '0.72rem', color: '#44474e', cursor: 'pointer' }}
+                >
+                  + Add point
+                </button>
               </div>
             </div>
 
