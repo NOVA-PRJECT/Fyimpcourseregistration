@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'HOD has no associated department' }, { status: 400 })
   }
 
-  const { name, code, semesters, eligibility } = await request.json()
+  const { name, code, semesters, papers_per_semester, eligibility } = await request.json()
 
   if (!name?.trim() || !code?.trim() || !semesters || !eligibility?.trim()) {
     return NextResponse.json({ error: 'All fields are required' }, { status: 400 })
@@ -48,6 +48,11 @@ export async function POST(request: NextRequest) {
   const semNum = Number(semesters)
   if (isNaN(semNum) || semNum < 1 || semNum > 12) {
     return NextResponse.json({ error: 'Semesters must be a number between 1 and 12' }, { status: 400 })
+  }
+
+  const papersNum = Number(papers_per_semester || 4)
+  if (isNaN(papersNum) || papersNum < 1 || papersNum > 10) {
+    return NextResponse.json({ error: 'Papers per semester must be a number between 1 and 10' }, { status: 400 })
   }
 
   await connectDB()
@@ -64,6 +69,7 @@ export async function POST(request: NextRequest) {
       code: code.trim().toUpperCase(),
       department_id: new mongoose.Types.ObjectId(user.department_id),
       semesters: semNum,
+      papers_per_semester: papersNum,
       eligibility: eligibility.trim(),
     })
 
@@ -83,7 +89,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'HOD has no associated department' }, { status: 400 })
   }
 
-  const { id, name, semesters, eligibility } = await request.json()
+  const { id, name, semesters, papers_per_semester, eligibility } = await request.json()
 
   if (!id || !name?.trim() || !semesters || !eligibility?.trim()) {
     return NextResponse.json({ error: 'ID and all fields are required' }, { status: 400 })
@@ -92,6 +98,11 @@ export async function PUT(request: NextRequest) {
   const semNum = Number(semesters)
   if (isNaN(semNum) || semNum < 1 || semNum > 12) {
     return NextResponse.json({ error: 'Semesters must be a number between 1 and 12' }, { status: 400 })
+  }
+
+  const papersNum = Number(papers_per_semester || 4)
+  if (isNaN(papersNum) || papersNum < 1 || papersNum > 10) {
+    return NextResponse.json({ error: 'Papers per semester must be a number between 1 and 10' }, { status: 400 })
   }
 
   await connectDB()
@@ -104,6 +115,7 @@ export async function PUT(request: NextRequest) {
 
     program.name = name.trim()
     program.semesters = semNum
+    program.papers_per_semester = papersNum
     program.eligibility = eligibility.trim()
     await program.save()
 

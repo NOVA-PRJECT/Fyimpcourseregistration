@@ -8,6 +8,7 @@ export interface IUser {
   role: 'superadmin' | 'campus_director' | 'hod' | 'teaching_staff' | 'student'
   department_id?: mongoose.Types.ObjectId
   campus_id?: mongoose.Types.ObjectId
+  program_id?: mongoose.Types.ObjectId
   current_semester?: number
   cap_application_number?: string
   academic_year_joined?: string
@@ -29,6 +30,7 @@ const UserSchema = new mongoose.Schema<IUser>(
     },
     department_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Department' },
     campus_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Campus' },
+    program_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Program', default: null },
     current_semester: { type: Number, min: 1, max: 10, default: 1 },
     cap_application_number: { type: String, sparse: true, unique: true },
     academic_year_joined: { type: String },

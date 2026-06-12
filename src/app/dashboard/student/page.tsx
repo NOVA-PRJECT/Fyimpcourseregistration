@@ -15,24 +15,7 @@ interface Course {
   credits: number
 }
 
-interface BlueprintSlot {
-  slot: number
-  rule: string
-  name: string
-  course?: Course       // FIXED slots
-  options?: Course[]    // elective slots
-}
-
-interface BlueprintData {
-  min_credits: number
-  max_credits: number
-  slots: BlueprintSlot[]
-}
-
-// preferences[slotNumber][rank] = courseId
-type SlotPreferences = Record<number, Record<number, string>>
-
-type DashboardState = 'idle' | 'loading_blueprint' | 'ready' | 'submitting' | 'submitted'
+type DashboardState = 'idle' | 'loading_courses' | 'ready' | 'submitting' | 'submitted'
 
 const ROLE_DASHBOARD_MAP: Record<string, string> = {
   superadmin: '/dashboard/superadmin',
@@ -42,21 +25,29 @@ const ROLE_DASHBOARD_MAP: Record<string, string> = {
   student: '/dashboard/student',
 }
 
+interface StudentInfo {
+  department_name: string
+  semester: number
+  roll_number: string | null
+  program_id: string | null
+  program_name: string | null
+  papers_per_semester: number
+}
+
 export default function StudentDashboard() {
   const router = useRouter()
   const { data: session, status } = useSession()
 
   const [dashState, setDashState] = useState<DashboardState>('idle')
-  const [blueprint, setBlueprint] = useState<BlueprintData | null>(null)
-  // slotPreferences[slotNum][rank 1..N] = courseId
-  const [slotPreferences, setSlotPreferences] = useState<SlotPreferences>({})
+  const [papersPerSemester, setPapersPerSemester] = useState(4)
+  const [courses, setCourses] = useState<Course[]>([])
+  const [selectedCourses, setSelectedCourses] = useState<Record<number, string>>({})
   const [existingSubmission, setExistingSubmission] = useState(false)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
 
   // Student info card state
-  interface StudentInfo { department_name: string; semester: number; roll_number: string | null }
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null)
 
   useEffect(() => {
@@ -76,10 +67,9 @@ export default function StudentDashboard() {
   }, [status, session, router])
 
   const studentName = session?.user?.name ?? 'Student'
-  const studentRole = (session?.user as any)?.role
 
   async function handleRegisterClick() {
-    setDashState('loading_blueprint')
+    setDashState('loading_courses')
     setError('')
     setSuccessMsg('')
 
@@ -92,105 +82,71 @@ export default function StudentDashboard() {
       return
     }
 
-    setBlueprint(data.data)
+    setPapersPerSemester(data.papers_per_semester ?? 4)
+    setCourses(data.courses ?? [])
 
     // Pre-fill from existing submission if any
     if (data.existing) {
       setExistingSubmission(true)
-      const prefilled: SlotPreferences = {}
+      const prefilled: Record<number, string> = {}
       const existingSlots: any[] = data.existing.slots ?? []
       for (const s of existingSlots) {
-        if (s.type === 'ELECTIVE' && s.preferences?.length) {
-          prefilled[s.slot] = {}
-          for (const p of s.preferences) {
-            prefilled[s.slot][p.rank] = p.course_id.toString()
-          }
+        if (s.preferences && s.preferences.length > 0) {
+          prefilled[s.slot] = s.preferences[0].course_id.toString()
         }
       }
-      setSlotPreferences(prefilled)
+      setSelectedCourses(prefilled)
     } else {
-      setSlotPreferences({})
+      setSelectedCourses({})
       setExistingSubmission(false)
     }
 
     setDashState('ready')
   }
 
-  // Set a preference rank for a slot
-  function handlePreferenceSelect(slotNum: number, rank: number, courseId: string) {
-    setSlotPreferences(prev => {
-      const slotPrefs = { ...(prev[slotNum] ?? {}) }
-
-      // If this courseId is already selected at another rank in this slot, clear it
-      for (const r of Object.keys(slotPrefs)) {
-        if (slotPrefs[Number(r)] === courseId && Number(r) !== rank) {
-          delete slotPrefs[Number(r)]
-        }
-      }
-
+  function handleCourseSelect(slotNum: number, courseId: string) {
+    setSelectedCourses(prev => {
+      const updated = { ...prev }
       if (courseId === '') {
-        delete slotPrefs[rank]
+        delete updated[slotNum]
       } else {
-        slotPrefs[rank] = courseId
+        updated[slotNum] = courseId
       }
-
-      return { ...prev, [slotNum]: slotPrefs }
+      return updated
     })
     setError('')
   }
 
-  // Calculate total credits — use preference rank 1 for electives
   function calculateCredits(): number {
-    if (!blueprint) return 0
     let total = 0
-    for (const slot of blueprint.slots) {
-      if (slot.rule === 'FIXED' && slot.course) {
-        total += slot.course.credits
-      } else if (slot.options) {
-        const firstChoice = slotPreferences[slot.slot]?.[1]
-        if (firstChoice) {
-          const course = slot.options.find(c => c.id === firstChoice)
-          if (course) total += course.credits
-        }
-      }
+    for (const [_, courseId] of Object.entries(selectedCourses)) {
+      const course = courses.find(c => c.id === courseId)
+      if (course) total += course.credits
     }
     return total
   }
 
   async function handleSubmit() {
-    if (!blueprint) return
-
-    // Validate all elective slots have at least rank 1 selected
-    for (const slot of blueprint.slots) {
-      if (slot.rule !== 'FIXED' && slot.options && slot.options.length > 0) {
-        if (!slotPreferences[slot.slot]?.[1]) {
-          setError(`Please select at least your first preference for "${slot.name}"`)
-          return
-        }
+    // Validate that all slots are selected
+    for (let slot = 1; slot <= papersPerSemester; slot++) {
+      if (!selectedCourses[slot]) {
+        setError(`Please select a course for Paper ${slot}`)
+        return
       }
     }
 
     setDashState('submitting')
     setError('')
 
-    // Build slots payload matching Preference model
-    const slotsPayload = blueprint.slots.map(slot => {
-      if (slot.rule === 'FIXED' && slot.course) {
-        return {
-          slot: slot.slot,
-          type: 'FIXED',
-          course_id: slot.course.id,
-        }
-      }
-      const prefs = slotPreferences[slot.slot] ?? {}
-      const preferences = Object.entries(prefs)
-        .map(([rank, courseId]) => ({ rank: Number(rank), course_id: courseId }))
-        .sort((a, b) => a.rank - b.rank)
-
+    const slotsPayload = Array.from({ length: papersPerSemester }, (_, i) => {
+      const slot = i + 1
+      const courseId = selectedCourses[slot]
       return {
-        slot: slot.slot,
+        slot,
         type: 'ELECTIVE',
-        preferences,
+        preferences: [
+          { rank: 1, course_id: courseId }
+        ]
       }
     })
 
@@ -220,9 +176,6 @@ export default function StudentDashboard() {
   }
 
   const totalCredits = calculateCredits()
-  const isValidCredits = blueprint
-    ? totalCredits >= blueprint.min_credits && totalCredits <= blueprint.max_credits
-    : false
 
   if (status === 'loading' || (status === 'authenticated' && session?.user?.role !== 'student')) {
     return (
@@ -264,6 +217,9 @@ export default function StudentDashboard() {
             {studentInfo ? (
               <>
                 <span className={styles.detailBadge}>{studentInfo.department_name}</span>
+                {studentInfo.program_name && (
+                  <span className={styles.detailBadge}>{studentInfo.program_name}</span>
+                )}
                 <span className={styles.detailBadge}>Semester {studentInfo.semester}</span>
                 {studentInfo.roll_number && (
                   <span className={styles.detailBadge} style={{ fontFamily: 'monospace' }}>
@@ -293,14 +249,14 @@ export default function StudentDashboard() {
 
         {dashState === 'idle' && <StudentPlaceholderSlots />}
 
-        {dashState === 'loading_blueprint' && (
+        {dashState === 'loading_courses' && (
           <div className={styles.loadingState}>
             <div className={styles.spinner} />
             <p className={styles.loadingText}>Loading your courses...</p>
           </div>
         )}
 
-        {(dashState === 'ready' || dashState === 'submitting' || dashState === 'submitted') && blueprint && (
+        {(dashState === 'ready' || dashState === 'submitting' || dashState === 'submitted') && (
           <>
             {/* Submitted banner */}
             {dashState === 'submitted' && (
@@ -311,91 +267,50 @@ export default function StudentDashboard() {
 
             {/* Credit Counter */}
             <div className={styles.creditCounter}>
-              <span className={styles.creditLabel}>Estimated Credits (1st preference)</span>
-              <span className={`${styles.creditValue} ${
-                totalCredits === 0 ? '' : isValidCredits ? styles.valid : styles.invalid
-              }`}>
-                {totalCredits}
-                <span className={styles.creditRange}>
-                  &nbsp;(min {blueprint.min_credits} — max {blueprint.max_credits})
-                </span>
+              <span className={styles.creditLabel}>Total Credits Selected</span>
+              <span className={`${styles.creditValue} ${styles.valid}`}>
+                {totalCredits} cr
               </span>
             </div>
 
             <p className={styles.sectionTitle}>Select Your Papers</p>
 
             <div className={styles.slotsContainer}>
-              {blueprint.slots.map(slot => (
-                <div key={slot.slot} className={`${styles.slotCard} ${dashState === 'ready' ? styles.active : ''}`}>
+              {Array.from({ length: papersPerSemester }, (_, i) => {
+                const slotNum = i + 1
+                const selectedId = selectedCourses[slotNum] ?? ''
+                const usedIds = Object.entries(selectedCourses)
+                  .filter(([s]) => Number(s) !== slotNum)
+                  .map(([, id]) => id)
+                const availableOptions = courses.filter(
+                  c => !usedIds.includes(c.id) || c.id === selectedId
+                )
 
-                  <div className={styles.slotHeader}>
-                    <span className={styles.slotLabel}>{slot.name}</span>
-                    {slot.rule === 'FIXED' && (
-                      <span className={styles.fixedBadge}>Fixed</span>
-                    )}
-                  </div>
-
-                  {/* FIXED slot */}
-                  {slot.rule === 'FIXED' && slot.course && (
-                    <div className={styles.fixedCourse}>
-                      <div>
-                        <p className={styles.fixedCourseTitle}>{slot.course.title}</p>
-                        <p className={styles.fixedCourseCode}>{slot.course.course_code}</p>
-                      </div>
-                      <span className={styles.creditPill}>{slot.course.credits} cr</span>
+                return (
+                  <div key={slotNum} className={`${styles.slotCard} ${dashState === 'ready' ? styles.active : ''}`}>
+                    <div className={styles.slotHeader}>
+                      <span className={styles.slotLabel}>Paper {slotNum}</span>
                     </div>
-                  )}
-
-                  {/* ELECTIVE slot — ranked preference sub-slots */}
-                  {slot.rule !== 'FIXED' && slot.options && slot.options.length > 0 && (
                     <div className={styles.preferencesContainer}>
-                      {slot.options.map((_, idx) => {
-                        const rank = idx + 1
-                        const selectedId = slotPreferences[slot.slot]?.[rank] ?? ''
-
-                        // Options available for this rank = all options minus ones
-                        // already selected at OTHER ranks in this slot
-                        const usedIds = Object.entries(slotPreferences[slot.slot] ?? {})
-                          .filter(([r]) => Number(r) !== rank)
-                          .map(([, id]) => id)
-
-                        const availableOptions = slot.options!.filter(
-                          c => !usedIds.includes(c.id) || c.id === selectedId
-                        )
-
-                        return (
-                          <div key={rank} className={styles.preferenceRow}>
-                            <span className={styles.preferenceRank}>
-                              {rank === 1 ? '1st' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`}
-                            </span>
-                            <select
-                              className={styles.selectInput}
-                              value={selectedId}
-                              onChange={e => handlePreferenceSelect(slot.slot, rank, e.target.value)}
-                              disabled={dashState === 'submitting' || dashState === 'submitted'}
-                            >
-                              <option value="">— Preference {rank} —</option>
-                              {availableOptions.map(course => (
-                                <option key={course.id} value={course.id}>
-                                  {course.title} ({course.credits} cr)
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )
-                      })}
-                      <p className={styles.preferenceHint}>
-                        Rank all options — allocation uses your highest available preference
-                      </p>
+                      <div className={styles.preferenceRow}>
+                        <select
+                          className={styles.selectInput}
+                          value={selectedId}
+                          onChange={e => handleCourseSelect(slotNum, e.target.value)}
+                          disabled={dashState === 'submitting' || dashState === 'submitted'}
+                        >
+                          <option value="">— Choose Course —</option>
+                          {availableOptions.map(course => (
+                            <option key={course.id} value={course.id}>
+                              {course.title} ({course.course_code} - {course.credits} cr)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                  )}
-
-                  {slot.rule !== 'FIXED' && (!slot.options || slot.options.length === 0) && (
-                    <p className={styles.noCoursesMsg}>No courses available for this slot yet.</p>
-                  )}
-
-                </div>
-              ))}
+                  </div>
+                )
+              })}
             </div>
 
             {error && <div className={styles.errorBanner}>{error}</div>}
@@ -409,7 +324,7 @@ export default function StudentDashboard() {
               >
                 {dashState === 'submitting'
                   ? <><span className={styles.smallSpinner} /> Submitting...</>
-                  : existingSubmission ? 'Update Preferences →' : 'Submit Preferences →'
+                  : existingSubmission ? 'Update Selection →' : 'Submit Selection →'
                 }
               </button>
             )}

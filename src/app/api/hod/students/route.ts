@@ -24,14 +24,19 @@ export async function GET(request: NextRequest) {
     department_id: new mongoose.Types.ObjectId(user.department_id!),
     current_semester: Number(semester),
     is_active: true,
-  }).select('id full_name current_semester cap_application_number roll_number email')
+  })
+    .select('id full_name current_semester cap_application_number roll_number email program_id')
+    .populate('program_id', 'name code')
+    .lean()
 
-  return NextResponse.json(students.map(s => ({
-    id: s._id,
+  return NextResponse.json(students.map((s: any) => ({
+    id: s._id.toString(),
     full_name: s.full_name,
     current_semester: s.current_semester,
     cap_application_number: s.cap_application_number,
-    roll_number: s.roll_number,
+    roll_number: s.roll_number ?? null,
     email: s.email,
+    program_id: s.program_id?._id?.toString() ?? s.program_id?.toString() ?? null,
+    program_name: s.program_id?.name ?? null,
   })))
 }

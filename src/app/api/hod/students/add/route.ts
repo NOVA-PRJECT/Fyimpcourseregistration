@@ -3,6 +3,7 @@ import { connectDB } from '@/core/database/mongoose'
 import { User } from '@/core/database/models/User'
 import { verifyRole } from '@/core/security/auth'
 import bcrypt from 'bcryptjs'
+import mongoose from 'mongoose'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
   if (error) return error
 
   const body = await request.json()
-  const { full_name, cap_application_number, date_of_birth, email } = body
+  const { full_name, cap_application_number, date_of_birth, email, program_id, current_semester } = body
 
   if (!full_name || !cap_application_number || !date_of_birth) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -37,7 +38,8 @@ export async function POST(request: NextRequest) {
       password: hashedPassword,
       role: 'student',
       department_id: user.department_id,
-      current_semester: 1,
+      program_id: program_id ? new mongoose.Types.ObjectId(program_id) : undefined,
+      current_semester: current_semester ? Number(current_semester) : 1,
       cap_application_number,
       is_active: true,
     })

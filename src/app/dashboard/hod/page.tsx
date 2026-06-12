@@ -20,6 +20,7 @@ interface Program {
   name: string
   code: string
   semesters: number
+  papers_per_semester: number
   eligibility: string
 }
 
@@ -39,7 +40,7 @@ interface Course {
   } | null
 }
 
-type Tab = 'programs' | 'courses' | 'blueprint'
+type Tab = 'programs' | 'courses' | 'blueprint' | 'students'
 
 const ROLE_DASHBOARD_MAP: Record<string, string> = {
   superadmin: '/dashboard/superadmin',
@@ -75,10 +76,43 @@ export default function HodDashboard() {
   const [progName, setProgName] = useState('')
   const [progCode, setProgCode] = useState('')
   const [progSemesters, setProgSemesters] = useState(8)
+  const [progPapersPerSemester, setProgPapersPerSemester] = useState(4)
   const [progEligibility, setProgEligibility] = useState<string[]>([''])
 
   // Logout state
   const [loggingOut, setLoggingOut] = useState(false)
+
+  // ── Students State ──
+  interface Student {
+    id: string
+    full_name: string
+    current_semester: number
+    cap_application_number: string
+    roll_number: string | null
+    email: string
+    program_id: string | null
+    program_name: string | null
+  }
+  const [studentsList, setStudentsList] = useState<Student[]>([])
+  const [loadingStudents, setLoadingStudents] = useState(false)
+  const [studentError, setStudentError] = useState('')
+  const [studentSuccess, setStudentSuccess] = useState('')
+  const [filterStudentSemester, setFilterStudentSemester] = useState(1)
+
+  const [showAddStudent, setShowAddStudent] = useState(false)
+  const [editStudent, setEditStudent] = useState<Student | null>(null)
+  const [deleteStudent, setDeleteStudent] = useState<Student | null>(null)
+  const [savingStudent, setSavingStudent] = useState(false)
+  const [deletingStudent, setDeletingStudent] = useState(false)
+
+  // Student form fields
+  const [studName, setStudName] = useState('')
+  const [studEmail, setStudEmail] = useState('')
+  const [studCap, setStudCap] = useState('')
+  const [studRoll, setStudRoll] = useState('')
+  const [studDob, setStudDob] = useState('')
+  const [studSemester, setStudSemester] = useState(1)
+  const [studProgramId, setStudProgramId] = useState('')
 
   // ── Courses State ──
   const [courses, setCourses] = useState<Course[]>([])
@@ -148,6 +182,9 @@ export default function HodDashboard() {
     } else if (activeTab === 'courses') {
       fetchPrograms() // To populate course program selectors
       fetchCourses()
+    } else if (activeTab === 'students') {
+      fetchPrograms()
+      fetchStudents()
     }
   }, [activeTab, status, session])
 
@@ -157,6 +194,13 @@ export default function HodDashboard() {
     if (activeTab !== 'courses') return
     fetchCourses()
   }, [filterProgramId, filterSemester])
+
+  // Auto-filter students when semester filter changes (only on students tab)
+  useEffect(() => {
+    if (status !== 'authenticated' || session?.user?.role !== 'hod') return
+    if (activeTab !== 'students') return
+    fetchStudents()
+  }, [filterStudentSemester])
 
   // ══════════════════════════════════════════════════════════════════════════
   // PROGRAM CRUD OPERATIONS
@@ -194,6 +238,7 @@ export default function HodDashboard() {
           name: progName.trim(),
           code: progCode.trim(),
           semesters: progSemesters,
+          papers_per_semester: progPapersPerSemester,
           eligibility: JSON.stringify(eligibilityPoints)
         })
       })
@@ -206,6 +251,7 @@ export default function HodDashboard() {
         setProgName('')
         setProgCode('')
         setProgSemesters(8)
+        setProgPapersPerSemester(4)
         setProgEligibility([''])
         fetchPrograms()
       }
@@ -234,6 +280,7 @@ export default function HodDashboard() {
           id: editProgram._id,
           name: progName.trim(),
           semesters: progSemesters,
+          papers_per_semester: progPapersPerSemester,
           eligibility: JSON.stringify(eligibilityPoints)
         })
       })
@@ -246,6 +293,7 @@ export default function HodDashboard() {
         setProgName('')
         setProgCode('')
         setProgSemesters(8)
+        setProgPapersPerSemester(4)
         setProgEligibility([''])
         fetchPrograms()
       }
@@ -253,6 +301,136 @@ export default function HodDashboard() {
       setProgramError('Failed to update program')
     } finally {
       setSavingProgram(false)
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STUDENT CRUD OPERATIONS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async function fetchStudents() {
+    setLoadingStudents(true)
+    setStudentError('')
+    try {
+      const res = await fetch(`/api/hod/students?semester=${filterStudentSemester}`)
+      const data = await res.json()
+      if (!res.ok) setStudentError(data.error ?? 'Failed to fetch students')
+      else setStudentsList(data)
+    } catch {
+      setStudentError('Failed to fetch students')
+    } finally {
+      setLoadingStudents(false)
+    }
+  }
+
+  async function handleAddStudent() {
+    if (!studName.trim() || !studCap.trim() || !studDob.trim() || !studProgramId) {
+      setStudentError('Name, CAP Number, Date of Birth, and Program are required')
+      return
+    }
+    setSavingStudent(true)
+    setStudentError('')
+    setStudentSuccess('')
+    try {
+      const res = await fetch('/api/hod/students/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: studName.trim(),
+          cap_application_number: studCap.trim(),
+          date_of_birth: studDob.trim(),
+          email: studEmail.trim() || undefined,
+          program_id: studProgramId,
+          current_semester: studSemester,
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setStudentError(data.error ?? 'Failed to add student')
+      } else {
+        setStudentSuccess('Student added successfully')
+        setShowAddStudent(false)
+        setStudName('')
+        setStudCap('')
+        setStudDob('')
+        setStudEmail('')
+        setStudSemester(1)
+        setStudProgramId('')
+        fetchStudents()
+      }
+    } catch {
+      setStudentError('Failed to add student')
+    } finally {
+      setSavingStudent(false)
+    }
+  }
+
+  async function handleUpdateStudent() {
+    if (!editStudent) return
+    if (!studName.trim()) {
+      setStudentError('Name is required')
+      return
+    }
+    setSavingStudent(true)
+    setStudentError('')
+    setStudentSuccess('')
+    try {
+      const res = await fetch('/api/hod/students/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: editStudent.id,
+          full_name: studName.trim(),
+          current_semester: studSemester,
+          program_id: studProgramId || null,
+          roll_number: studRoll.trim() || null,
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setStudentError(data.error ?? 'Failed to update student')
+      } else {
+        setStudentSuccess('Student updated successfully')
+        setEditStudent(null)
+        setStudName('')
+        setStudCap('')
+        setStudDob('')
+        setStudEmail('')
+        setStudRoll('')
+        setStudSemester(1)
+        setStudProgramId('')
+        fetchStudents()
+      }
+    } catch {
+      setStudentError('Failed to update student')
+    } finally {
+      setSavingStudent(false)
+    }
+  }
+
+  async function handleDeleteStudent() {
+    if (!deleteStudent) return
+    setDeletingStudent(true)
+    setStudentError('')
+    setStudentSuccess('')
+    try {
+      const res = await fetch('/api/hod/students/remove', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: deleteStudent.id })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setStudentError(data.error ?? 'Failed to delete student')
+      } else {
+        setStudentSuccess('Student deleted successfully')
+        setDeleteStudent(null)
+        fetchStudents()
+      }
+    } catch {
+      setStudentError('Failed to delete student')
+    } finally {
+      setDeletingStudent(false)
     }
   }
 
@@ -489,6 +667,12 @@ export default function HodDashboard() {
         >
           📐 Blueprint Editor
         </button>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'students' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('students')}
+        >
+          🧑‍🎓 Students
+        </button>
       </div>
 
       {/* Main Content */}
@@ -516,6 +700,7 @@ export default function HodDashboard() {
                   setProgName('')
                   setProgCode('')
                   setProgSemesters(8)
+                  setProgPapersPerSemester(4)
                   setProgEligibility([''])
                 }}
               >
@@ -544,6 +729,7 @@ export default function HodDashboard() {
                       <th>Code</th>
                       <th>Program Name</th>
                       <th>Semesters</th>
+                      <th>Papers/Sem</th>
                       <th>Eligibility / Prerequisites</th>
                       <th>Actions</th>
                     </tr>
@@ -554,6 +740,7 @@ export default function HodDashboard() {
                         <td style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{program.code}</td>
                         <td className={styles.nameCell} style={{ fontWeight: '600' }}>{program.name}</td>
                         <td>{program.semesters} sems</td>
+                        <td>{program.papers_per_semester ?? 4} papers</td>
                         <td style={{ fontSize: '0.78rem', color: '#9ba1ab', maxWidth: '15rem' }}>
                           {(() => {
                             try {
@@ -573,6 +760,7 @@ export default function HodDashboard() {
                                 setProgName(program.name)
                                 setProgCode(program.code)
                                 setProgSemesters(program.semesters)
+                                setProgPapersPerSemester(program.papers_per_semester ?? 4)
                                 try {
                                   const pts = JSON.parse(program.eligibility)
                                   setProgEligibility(Array.isArray(pts) ? pts : [program.eligibility])
@@ -753,6 +941,124 @@ export default function HodDashboard() {
         ══════════════════════════════════════ */}
         {activeTab === 'blueprint' && <BlueprintTab />}
 
+        {/* ══════════════════════════════════════
+            TAB 4 — STUDENTS MANAGEMENT
+        ══════════════════════════════════════ */}
+        {activeTab === 'students' && (
+          <>
+            {studentError && <div className={styles.errorBanner}>{studentError}</div>}
+            {studentSuccess && <div className={styles.successBanner}>✓ {studentSuccess}</div>}
+
+            <div className={styles.semesterRow}>
+              <span className={styles.semesterLabel}>Filter Semester:</span>
+              <select
+                className={styles.semesterSelect}
+                value={filterStudentSemester}
+                onChange={e => setFilterStudentSemester(Number(e.target.value))}
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(s => (
+                  <option key={s} value={s}>Semester {s}</option>
+                ))}
+              </select>
+
+              {loadingStudents && <span style={{ fontSize: '0.72rem', color: '#9ba1ab', marginLeft: '0.5rem' }}>Filtering…</span>}
+
+              <button
+                className={styles.addBtn}
+                style={{ marginLeft: 'auto' }}
+                onClick={() => {
+                  setShowAddStudent(true)
+                  setStudentError('')
+                  setStudentSuccess('')
+                  setStudName('')
+                  setStudCap('')
+                  setStudDob('')
+                  setStudEmail('')
+                  setStudSemester(filterStudentSemester)
+                  setStudProgramId(programs[0]?._id ?? '')
+                }}
+              >
+                + Add Student
+              </button>
+            </div>
+
+            <div className={styles.tableWrapper}>
+              {loadingStudents ? (
+                <div className={styles.loadingState}>
+                  <div className={styles.spinner} />
+                  <p className={styles.loadingText}>Loading students...</p>
+                </div>
+              ) : studentsList.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>🧑‍🎓</div>
+                  <p className={styles.emptyTitle}>No students found</p>
+                  <p className={styles.emptySubtitle}>
+                    Add your first student or adjust filters to view students.
+                  </p>
+                </div>
+              ) : (
+                <table className={styles.table}>
+                  <thead className={styles.tableHead}>
+                    <tr>
+                      <th>CAP App No</th>
+                      <th>Roll No</th>
+                      <th>Student Name</th>
+                      <th>Assigned Program</th>
+                      <th>Email</th>
+                      <th>Semester</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {studentsList.map((student) => (
+                      <tr key={student.id} className={styles.tableRow}>
+                        <td style={{ fontSize: '0.78rem', fontFamily: 'monospace', fontWeight: 'bold' }}>{student.cap_application_number}</td>
+                        <td style={{ fontSize: '0.78rem', fontFamily: 'monospace' }}>{student.roll_number ?? '—'}</td>
+                        <td style={{ fontWeight: '500' }}>{student.full_name}</td>
+                        <td style={{ fontSize: '0.78rem', color: '#9ba1ab' }}>
+                          {student.program_name ?? '—'}
+                        </td>
+                        <td style={{ fontSize: '0.78rem', color: '#9ba1ab' }}>{student.email}</td>
+                        <td>S{student.current_semester}</td>
+                        <td>
+                          <div className={styles.actionBtns}>
+                            <button
+                              className={styles.approveBtn}
+                              onClick={() => {
+                                setEditStudent(student)
+                                setStudName(student.full_name)
+                                setStudRoll(student.roll_number ?? '')
+                                setStudSemester(student.current_semester)
+                                setStudProgramId(student.program_id ?? '')
+                                setStudentError('')
+                                setStudentSuccess('')
+                              }}
+                              title="Edit"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className={styles.rejectBtn}
+                              onClick={() => {
+                                setDeleteStudent(student)
+                                setStudentError('')
+                                setStudentSuccess('')
+                              }}
+                              title="Delete"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+
       </div>
 
       {/* ════════════════════════════════════════════════════════════════════
@@ -800,6 +1106,17 @@ export default function HodDashboard() {
                     <option key={s} value={s}>{s} Semesters</option>
                   ))}
                 </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Number of Papers to Choose *</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  className={styles.input}
+                  value={progPapersPerSemester}
+                  onChange={e => setProgPapersPerSemester(Number(e.target.value))}
+                />
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Prerequisites / Eligibility *</label>
@@ -898,6 +1215,17 @@ export default function HodDashboard() {
                     <option key={s} value={s}>{s} Semesters</option>
                   ))}
                 </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Number of Papers to Choose *</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  className={styles.input}
+                  value={progPapersPerSemester}
+                  onChange={e => setProgPapersPerSemester(Number(e.target.value))}
+                />
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Prerequisites / Eligibility *</label>
@@ -1236,6 +1564,210 @@ export default function HodDashboard() {
                 disabled={deletingCourse}
               >
                 {deletingCourse ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Student Modal */}
+      {showAddStudent && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal} style={{ maxWidth: '25rem' }}>
+            <h3 className={styles.modalTitle}>Add Student</h3>
+            <p className={styles.modalSubtitle}>Register a new student in your department.</p>
+
+            {studentError && <div className={styles.errorBanner}>{studentError}</div>}
+
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Full Name *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. Alice John"
+                  value={studName}
+                  onChange={e => setStudName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>CAP Application Number *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. CAP202612345"
+                  value={studCap}
+                  onChange={e => setStudCap(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Date of Birth (Password) *</label>
+                <input
+                  type="date"
+                  className={styles.input}
+                  value={studDob}
+                  onChange={e => setStudDob(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Email Address (Optional)</label>
+                <input
+                  type="email"
+                  className={styles.input}
+                  placeholder="e.g. student@email.com"
+                  value={studEmail}
+                  onChange={e => setStudEmail(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Program *</label>
+                <select
+                  className={styles.input}
+                  value={studProgramId}
+                  onChange={e => setStudProgramId(e.target.value)}
+                >
+                  <option value="">— Select Program —</option>
+                  {programs.map(p => (
+                    <option key={p._id} value={p._id}>{p.name} ({p.code})</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Current Semester *</label>
+                <select
+                  className={styles.input}
+                  value={studSemester}
+                  onChange={e => setStudSemester(Number(e.target.value))}
+                >
+                  {[1,2,3,4,5,6,7,8,9,10].map(s => (
+                    <option key={s} value={s}>Semester {s}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setShowAddStudent(false)}
+                disabled={savingStudent}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleAddStudent}
+                disabled={savingStudent}
+              >
+                {savingStudent ? 'Saving...' : 'Add Student →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Student Modal */}
+      {editStudent && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal} style={{ maxWidth: '25rem' }}>
+            <h3 className={styles.modalTitle}>Edit Student</h3>
+            <p className={styles.modalSubtitle}>Update student profile information.</p>
+
+            {studentError && <div className={styles.errorBanner}>{studentError}</div>}
+
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Full Name *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={studName}
+                  onChange={e => setStudName(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Roll Number</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. ROLL-101"
+                  value={studRoll}
+                  onChange={e => setStudRoll(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Program *</label>
+                <select
+                  className={styles.input}
+                  value={studProgramId}
+                  onChange={e => setStudProgramId(e.target.value)}
+                >
+                  <option value="">— Select Program —</option>
+                  {programs.map(p => (
+                    <option key={p._id} value={p._id}>{p.name} ({p.code})</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Current Semester *</label>
+                <select
+                  className={styles.input}
+                  value={studSemester}
+                  onChange={e => setStudSemester(Number(e.target.value))}
+                >
+                  {[1,2,3,4,5,6,7,8,9,10].map(s => (
+                    <option key={s} value={s}>Semester {s}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setEditStudent(null)}
+                disabled={savingStudent}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleUpdateStudent}
+                disabled={savingStudent}
+              >
+                {savingStudent ? 'Saving...' : 'Save Changes →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Student Modal */}
+      {deleteStudent && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Delete Student</h3>
+            <p className={styles.modalSubtitle}>
+              Are you sure you want to permanently delete student <strong>{deleteStudent.full_name}</strong>?
+              This will also remove all their course preferences. This action cannot be undone.
+            </p>
+
+            {studentError && <div className={styles.errorBanner}>{studentError}</div>}
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setDeleteStudent(null)}
+                disabled={deletingStudent}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalDeleteBtn}
+                onClick={handleDeleteStudent}
+                disabled={deletingStudent}
+              >
+                {deletingStudent ? 'Deleting...' : 'Yes, Delete'}
               </button>
             </div>
           </div>

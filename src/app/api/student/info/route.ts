@@ -14,7 +14,7 @@ export async function GET() {
   await connectDB()
 
   try {
-    const student = await User.findById(user.id).lean()
+    const student = await User.findById(user.id).populate('program_id').lean()
     if (!student) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 })
     }
@@ -25,10 +25,15 @@ export async function GET() {
       if (dept) department_name = dept.name
     }
 
+    const program: any = student.program_id
+
     return NextResponse.json({
       department_name,
       semester: student.current_semester ?? 1,
       roll_number: student.roll_number ?? null,
+      program_id: program?._id?.toString() ?? null,
+      program_name: program?.name ?? null,
+      papers_per_semester: program?.papers_per_semester ?? 4,
     })
   } catch (err: any) {
     console.error('student/info GET failed:', err)
