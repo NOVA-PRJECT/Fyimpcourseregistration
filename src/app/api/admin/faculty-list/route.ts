@@ -55,7 +55,10 @@ export async function POST(request: NextRequest) {
   const response = await createFacultyUser(result.data)
 
   if (!response.success) {
-    return NextResponse.json({ error: response.error }, { status: response.status })
+    return NextResponse.json(
+      { error: response.error, details: response.details },
+      { status: response.status }
+    )
   }
 
   return NextResponse.json({ success: true, message: response.message })

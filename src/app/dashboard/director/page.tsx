@@ -6,11 +6,6 @@ import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import styles from './director-dashboard.module.css'
 
-interface Department {
-  id: string
-  name: string
-}
-
 export default function DirectorDashboard() {
   const router = useRouter()
 
@@ -18,7 +13,6 @@ export default function DirectorDashboard() {
   const [campusName, setCampusName] = useState('')
   const [campusId, setCampusId] = useState('')
   const [loadingDirector, setLoadingDirector] = useState(true)
-  const [departments, setDepartments] = useState<Department[]>([])
 
   // Window settings state
   const [currentDeadline, setCurrentDeadline] = useState<string | null>(null)
@@ -35,16 +29,6 @@ export default function DirectorDashboard() {
   const [promoteError, setPromoteError] = useState('')
   const [promoteStep, setPromoteStep] = useState<0 | 1 | 2>(0) // 0=hidden 1=step1 2=step2
   const [lastPromotedAt, setLastPromotedAt] = useState<string | null>(null)
-
-  // Add faculty state
-  const [facultyName, setFacultyName] = useState('')
-  const [facultyEmail, setFacultyEmail] = useState('')
-  const [facultyPassword, setFacultyPassword] = useState('')
-  const [facultyRole, setFacultyRole] = useState<'hod' | 'campus_director'>('hod')
-  const [facultyDeptId, setFacultyDeptId] = useState('')
-  const [addingFaculty, setAddingFaculty] = useState(false)
-  const [facultySuccess, setFacultySuccess] = useState('')
-  const [facultyError, setFacultyError] = useState('')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -99,13 +83,7 @@ export default function DirectorDashboard() {
         setLastPromotedAt((settings as any).last_promoted_at ?? null)
       }
 
-      // Get departments for this campus
-      const { data: depts } = await supabase
-        .from('departments')
-        .select('id, name')
-        .eq('campus_id', faculty.campus_id)
 
-      if (depts) setDepartments(depts)
 
       setLoadingDirector(false)
     }
@@ -186,48 +164,7 @@ export default function DirectorDashboard() {
     setPromoteStep(0)
   }
 
-  // Add faculty
-  async function handleAddFaculty() {
-    if (!facultyName || !facultyEmail || !facultyPassword) {
-      setFacultyError('All fields are required')
-      return
-    }
-    if (facultyRole === 'hod' && !facultyDeptId) {
-      setFacultyError('Please select a department for the HOD')
-      return
-    }
 
-    setAddingFaculty(true)
-    setFacultyError('')
-    setFacultySuccess('')
-
-    const response = await fetch('/api/admin/campus/faculty', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        full_name: facultyName,
-        email: facultyEmail,
-        password: facultyPassword,
-        role: facultyRole,
-        department_id: facultyRole === 'hod' ? facultyDeptId : undefined,
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      setFacultyError(data.error ?? 'Failed to create faculty account.')
-      setAddingFaculty(false)
-      return
-    }
-
-    setFacultySuccess(data.message)
-    setFacultyName('')
-    setFacultyEmail('')
-    setFacultyPassword('')
-    setFacultyDeptId('')
-    setAddingFaculty(false)
-  }
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -452,89 +389,7 @@ export default function DirectorDashboard() {
         </div>
 
 
-        {/* ── ADD FACULTY ── */}
-        <p className={styles.sectionTitle}>Add Faculty</p>
 
-        {facultyError && <div className={styles.errorBanner}>{facultyError}</div>}
-        {facultySuccess && <div className={styles.successBanner}>✓ {facultySuccess}</div>}
-
-        <div className={styles.facultyCard}>
-          <div className={styles.fieldGroup}>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Full Name</label>
-              <input
-                type="text"
-                className={styles.input}
-                placeholder="Dr. Anjali Menon"
-                value={facultyName}
-                onChange={e => setFacultyName(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Email</label>
-              <input
-                type="email"
-                className={styles.input}
-                placeholder="anjali@ku.ac.in"
-                value={facultyEmail}
-                onChange={e => setFacultyEmail(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Password</label>
-              <input
-                type="password"
-                className={styles.input}
-                placeholder="Min. 8 characters"
-                value={facultyPassword}
-                onChange={e => setFacultyPassword(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Role</label>
-              <select
-                className={styles.input}
-                value={facultyRole}
-                onChange={e => setFacultyRole(e.target.value as 'hod' | 'campus_director')}
-              >
-                <option value="hod">HOD</option>
-                <option value="campus_director">Campus Director</option>
-              </select>
-            </div>
-
-            {facultyRole === 'hod' && (
-              <div className={styles.field}>
-                <label className={styles.label}>Department</label>
-                <select
-                  className={styles.input}
-                  value={facultyDeptId}
-                  onChange={e => setFacultyDeptId(e.target.value)}
-                >
-                  <option value="">— Select Department —</option>
-                  {departments.map(dept => (
-                    <option key={dept.id} value={dept.id}>{dept.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-          </div>
-
-          <button
-            className={styles.primaryBtn}
-            onClick={handleAddFaculty}
-            disabled={addingFaculty}
-          >
-            {addingFaculty
-              ? <><span className={styles.spinner} /> Creating Account...</>
-              : 'Create Faculty Account →'
-            }
-          </button>
-        </div>
 
       </div>
     </div>

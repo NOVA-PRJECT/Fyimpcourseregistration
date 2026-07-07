@@ -241,7 +241,17 @@ export default function SuperAdminDashboard() {
       }),
     })
     const data = await res.json()
-    if (!res.ok) { setError(data.error ?? 'Failed to add faculty') }
+    if (!res.ok) {
+      if (data.details && typeof data.details === 'object') {
+        const fieldErrors = data.details.fieldErrors || {}
+        const formatted = Object.entries(fieldErrors)
+          .map(([field, msgs]) => `${field}: ${(msgs as any).join(', ')}`)
+          .join('; ')
+        setError(formatted || data.error || 'Failed to add faculty')
+      } else {
+        setError(data.details ?? data.error ?? 'Failed to add faculty')
+      }
+    }
     else {
       setSuccess(data.message)
       setShowAddFaculty(false)

@@ -33,11 +33,12 @@ export async function createFacultyUser({
   })
 
   if (authError || !authData.user) {
+    const isDuplicate = authError?.message?.toLowerCase().includes('already') || authError?.status === 422
     return {
       success: false,
-      error: 'Failed to create auth account',
+      error: isDuplicate ? 'A user with this email address has already been registered' : 'Failed to create auth account',
       details: authError?.message,
-      status: 500,
+      status: isDuplicate ? 400 : 500,
     }
   }
 
@@ -56,10 +57,12 @@ export async function createFacultyUser({
 
   if (facultyError) {
     await supabaseAdmin.auth.admin.deleteUser(authUserId)
+    const isForeignKeyError = facultyError.code === '23503'
     return {
       success: false,
-      error: 'Failed to create faculty record',
-      status: 500,
+      error: isForeignKeyError ? 'Invalid department or campus selected' : 'Failed to create faculty record',
+      details: facultyError.message,
+      status: isForeignKeyError ? 400 : 500,
     }
   }
 
