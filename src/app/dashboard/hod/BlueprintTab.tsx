@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import styles from './hod-dashboard.module.css'
 
 const RULES = [
@@ -47,12 +47,17 @@ export default function BlueprintTab() {
   const [savingCourse, setSavingCourse] = useState(false)
   const [deletingCourse, setDeletingCourse] = useState(false)
 
-  async function fetchBlueprint() {
+  // Fetch on mount
+  useEffect(() => {
+    fetchBlueprint(1)
+  }, [])
+
+  async function fetchBlueprint(sem: number = semester) {
     setLoading(true)
     setError('')
     setSuccess('')
 
-    const res = await fetch(`/api/hod/blueprint?semester=${semester}`)
+    const res = await fetch(`/api/hod/blueprint?semester=${sem}`)
     const data = await res.json()
 
     if (!res.ok) {
@@ -77,13 +82,13 @@ export default function BlueprintTab() {
       })))
     }
 
-    await fetchCourses()
+    await fetchCourses(sem)
     setLoading(false)
   }
 
-  async function fetchCourses() {
+  async function fetchCourses(sem: number = semester) {
     setLoadingCourses(true)
-    const res = await fetch(`/api/hod/courses?semester=${semester}`)
+    const res = await fetch(`/api/hod/courses?semester=${sem}`)
     const data = await res.json()
     if (res.ok) setCourses(data)
     setLoadingCourses(false)
@@ -162,14 +167,15 @@ export default function BlueprintTab() {
       <div className={styles.semesterRow}>
         <span className={styles.semesterLabel}>Semester:</span>
         <select className={styles.semesterSelect} value={semester}
-          onChange={e => setSemester(Number(e.target.value))}>
+          onChange={e => {
+            const nextSem = Number(e.target.value)
+            setSemester(nextSem)
+            fetchBlueprint(nextSem)
+          }}>
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(s => (
             <option key={s} value={s}>Semester {s}</option>
           ))}
         </select>
-        <button className={styles.fetchBtn} onClick={fetchBlueprint} disabled={loading}>
-          {loading ? 'Loading...' : 'Load →'}
-        </button>
       </div>
 
       {!loading && (

@@ -49,26 +49,7 @@ export async function middleware(request: NextRequest) {
   const isResetRoute = pathname.startsWith('/reset-password')
   if (isResetRoute) return response
 
-  // ── Student API password gate ──
-  // If a student hits any /api/student/* route except change-password, and
-  // must_change_password is true, block with 403.
-  if (isApiRoute && user && (role === 'student' || cookieRole === 'student')) {
-    const isExemptApi = STUDENT_EXEMPT_API.some(p => pathname.startsWith(p))
-    if (!isExemptApi && pathname.startsWith('/api/student/')) {
-      const { data: studentRow } = await supabase
-        .from('students')
-        .select('must_change_password')
-        .eq('id', user.id)
-        .single()
 
-      if (studentRow?.must_change_password) {
-        return NextResponse.json(
-          { error: 'You must change your password before accessing this resource.' },
-          { status: 403 }
-        )
-      }
-    }
-  }
 
   // API routes handle their own auth (for non-student or exempt routes)
   if (isApiRoute) return response
@@ -109,24 +90,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL(fallback, request.url))
     }
 
-    // ── Student dashboard password gate ──
-    // Block all /dashboard/student/* pages except the change-password page
-    if (targetRole === 'student') {
-      const isExemptPage = STUDENT_EXEMPT_PAGES.some(p => pathname.startsWith(p))
-      if (!isExemptPage) {
-        const { data: studentRow } = await supabase
-          .from('students')
-          .select('must_change_password')
-          .eq('id', user.id)
-          .single()
 
-        if (studentRow?.must_change_password) {
-          return NextResponse.redirect(
-            new URL('/dashboard/student/change-password', request.url)
-          )
-        }
-      }
-    }
   }
 
   return response

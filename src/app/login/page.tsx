@@ -65,7 +65,7 @@ export default function LoginPage() {
       }
 
       // Step 3 — Redirect to correct dashboard
-      router.push(data.redirectTo)
+      window.location.href = data.redirectTo
 
     } catch {
       setError('Something went wrong. Please try again.')
@@ -188,4 +188,4 @@ export default function LoginPage() {
     </div>
   )
 }
-                                                                                                                                                    
+                                                                                                                            

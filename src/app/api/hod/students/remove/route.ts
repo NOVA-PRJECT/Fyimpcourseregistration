@@ -26,18 +26,12 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Student not found' }, { status: 404 })
   }
 
-  // Delete auth account first — if this fails, DB is untouched
-  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(student_id)
-  if (authDeleteError) {
-    console.error('hod/students/remove — auth deletion failed:', authDeleteError)
-    return NextResponse.json({ error: 'Failed to delete student account' }, { status: 500 })
-  }
-
-  // Cascade delete dependent rows before deleting the student row
-  await supabaseAdmin.from('attendance').delete().eq('student_id', student_id)
-  await supabaseAdmin.from('marks').delete().eq('student_id', student_id)
-  await supabaseAdmin.from('student_registrations').delete().eq('student_id', student_id)
+  // 2. Delete the students row — cascade handles student_registrations automatically
   await supabaseAdmin.from('students').delete().eq('id', student_id)
 
+  // 3. Delete the Supabase auth user
+  await supabaseAdmin.auth.admin.deleteUser(student_id)
+
+  // 4. Return success
   return NextResponse.json({ success: true, message: 'Student removed successfully' })
 }

@@ -123,10 +123,12 @@ export default function HodDashboard() {
     loadHodInfo()
   }, [])
 
-  // Auto-load all-semesters defaulter view on tab switch
+  // Auto-load views on tab switch
   useEffect(() => {
     if (activeTab === 'defaulters' && !deptData && !loadingDefaulters) {
-      handleFetch()
+      handleFetch('all')
+    } else if (activeTab === 'students' && students.length === 0 && !loadingStudents) {
+      fetchStudents(studentSemester)
     }
   }, [activeTab])
 
@@ -195,11 +197,11 @@ export default function HodDashboard() {
   }
 
   // ── Students Tab Functions ──
-  async function fetchStudents() {
+  async function fetchStudents(sem: number = studentSemester) {
     setLoadingStudents(true)
     setStudentError('')
     setStudentSuccess('')
-    const response = await fetch(`/api/hod/students?semester=${studentSemester}`)
+    const response = await fetch(`/api/hod/students?semester=${sem}`)
     const result = await response.json()
     if (!response.ok) {
       setStudentError(result.error ?? 'Failed to fetch students')
@@ -289,12 +291,12 @@ export default function HodDashboard() {
   }
 
   // ── Defaulters Tab Functions ──
-  async function handleFetch() {
+  async function handleFetch(sem: number | 'all' = defaulterSemester) {
     setLoadingDefaulters(true)
     setDefaulterError('')
     setDeptData(null)
     setCopied(false)
-    const semParam = defaulterSemester === 'all' ? '' : `?semester=${defaulterSemester}`
+    const semParam = sem === 'all' ? '' : `?semester=${sem}`
     const response = await fetch(`/api/faculty/defaulters${semParam}`)
     const result = await response.json()
     if (!response.ok) {
@@ -488,12 +490,13 @@ export default function HodDashboard() {
 
             <div className={styles.semesterRow}>
               <span className={styles.semesterLabel}>Semester:</span>
-              <select className={styles.semesterSelect} value={studentSemester} onChange={e => setStudentSemester(Number(e.target.value))}>
+              <select className={styles.semesterSelect} value={studentSemester} onChange={e => {
+                const nextSem = Number(e.target.value)
+                setStudentSemester(nextSem)
+                fetchStudents(nextSem)
+              }}>
                 {[1,2,3,4,5,6,7,8,9,10].map(s => <option key={s} value={s}>Semester {s}</option>)}
               </select>
-              <button className={styles.fetchBtn} onClick={fetchStudents} disabled={loadingStudents}>
-                {loadingStudents ? 'Loading...' : 'Load →'}
-              </button>
               <button className={styles.addBtn} onClick={() => { setShowAddModal(true); setStudentError(''); setStudentSuccess('') }}>
                 + Add
               </button>
@@ -626,14 +629,15 @@ export default function HodDashboard() {
               <select
                 className={styles.semesterSelect}
                 value={defaulterSemester}
-                onChange={e => setDefaulterSemester(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                onChange={e => {
+                  const nextVal = e.target.value === 'all' ? 'all' : Number(e.target.value)
+                  setDefaulterSemester(nextVal)
+                  handleFetch(nextVal)
+                }}
               >
                 <option value="all">All Semesters</option>
                 {[1,2,3,4,5,6,7,8,9,10].map(s => <option key={s} value={s}>Semester {s}</option>)}
               </select>
-              <button className={styles.fetchBtn} onClick={handleFetch} disabled={loadingDefaulters}>
-                {loadingDefaulters ? 'Loading...' : 'Refresh →'}
-              </button>
             </div>
 
             {loadingDefaulters && (

@@ -40,6 +40,7 @@ export default function StudentDashboard() {
           roll_number,
           current_semester,
           academic_year_joined,
+          must_change_password,
           departments (name),
           campuses (name)
         `)
@@ -47,6 +48,11 @@ export default function StudentDashboard() {
         .single()
 
       if (student) {
+        if (student.must_change_password) {
+          router.replace('/dashboard/student/change-password')
+          return
+        }
+
         setStudentInfo({
           full_name: student.full_name,
           roll_number: student.roll_number,
