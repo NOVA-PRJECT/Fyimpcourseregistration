@@ -6,13 +6,6 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
-// 5 attempts per hour for CAP verification
-export const eligibilityLimiter = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(5, '1 h'),
-  prefix: 'fyimp:eligibility',
-})
-
 // 10 attempts per 15 minutes for login
 export const loginLimiter = new Ratelimit({
   redis,
@@ -27,9 +20,16 @@ export const submitLimiter = new Ratelimit({
   prefix: 'fyimp:submit',
 })
 
-// 10 attempts per day per CAP number (prevents targeted DOB enumeration)
-export const capNumberLimiter = new Ratelimit({
+// 3 bulk uploads per hour per HOD (keyed by HOD user ID)
+export const bulkUploadLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(10, '1 d'),
-  prefix: 'fyimp:cap',
+  limiter: Ratelimit.slidingWindow(3, '1 h'),
+  prefix: 'fyimp:bulk-upload',
+})
+
+// 5 password-change attempts per hour per student (keyed by user ID)
+export const changePasswordLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '1 h'),
+  prefix: 'fyimp:change-password',
 })

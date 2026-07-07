@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseServerClient } from '@/core/database/supabaseClient'
+import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifyHod } from '@/core/auth/verifyRole'
 import { z } from 'zod'
 
@@ -27,19 +27,18 @@ export async function PUT(request: NextRequest) {
     )
   }
 
-  // Verify student belongs to HOD's department
-  const supabase = await getSupabaseServerClient()
-  const { data: student } = await supabase
+  // Verify student belongs to HOD's department AND campus — never trust client IDs
+  const { data: student } = await supabaseAdmin
     .from('students')
-    .select('id, department_id')
+    .select('id, department_id, campus_id')
     .eq('id', result.data.student_id)
     .single()
 
-  if (!student || student.department_id !== auth.department_id) {
+  if (!student || student.department_id !== auth.department_id || student.campus_id !== auth.campus_id) {
     return NextResponse.json({ error: 'Student not found' }, { status: 404 })
   }
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('students')
     .update({
       full_name: result.data.full_name,

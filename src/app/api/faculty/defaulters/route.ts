@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDefaulters } from '@/modules/hod/services/getDefaulters'
+import { getAllDepartmentStudents } from '@/modules/hod/services/getDefaulters'
 import { verifyHod } from '@/core/auth/verifyRole'
 
+export const dynamic = 'force-dynamic'
+
+// GET — returns all dept students with submission status; semester filter is optional
 export async function GET(request: NextRequest) {
   const auth = await verifyHod()
   if (!auth.success) {
@@ -10,18 +13,13 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const semesterParam = searchParams.get('semester')
+  const semesterFilter = semesterParam ? Number(semesterParam) : undefined
 
-  if (!semesterParam) {
-    return NextResponse.json({ error: 'Semester parameter is required' }, { status: 400 })
-  }
-
-  const semester = parseInt(semesterParam)
-
-  if (isNaN(semester) || semester < 1 || semester > 10) {
-    return NextResponse.json({ error: 'Invalid semester value' }, { status: 400 })
-  }
-
-  const response = await getDefaulters(semester, auth.department_id, auth.campus_id)
+  const response = await getAllDepartmentStudents(
+    auth.department_id,
+    auth.campus_id,
+    semesterFilter
+  )
 
   if (!response.success) {
     return NextResponse.json({ error: response.error }, { status: response.status })

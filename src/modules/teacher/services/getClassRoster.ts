@@ -69,7 +69,7 @@ export async function getClassRoster(courseId: string, campus_id: string) {
     }
   }
 
-  const studentIds = registrations.map(r => r.student_id)
+  const studentIds = registrations.map((r: any) => r.student_id)
 
   const { data: students, error: studentError } = await supabaseAdmin
     .from('students')
@@ -90,12 +90,12 @@ export async function getClassRoster(courseId: string, campus_id: string) {
   }
 
   const departmentBreakdown: Record<string, number> = {}
-  students.forEach(student => {
+  students.forEach((student: any) => {
     const deptName = (student.departments as any)?.name ?? 'Unknown'
     departmentBreakdown[deptName] = (departmentBreakdown[deptName] ?? 0) + 1
   })
 
-  const roster = students.map(student => ({
+  const roster = students.map((student: any) => ({
     id: student.id,
     full_name: student.full_name,
     roll_number: student.roll_number,

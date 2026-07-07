@@ -64,9 +64,7 @@ export default function Home() {
           Login to Portal →
         </Link>
 
-        <p className={styles.note}>
-          New student? You'll verify your CAP details on the next screen.
-        </p>
+
 
       </div>
 

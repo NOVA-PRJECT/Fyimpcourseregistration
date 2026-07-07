@@ -539,3 +539,200 @@
   .fetchBtn { width: auto; padding: 0.65rem 1.25rem; }
   .statsRow { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ══════════════════════════════════════
+   ATTENDANCE TAB STYLES (Task 6)
+══════════════════════════════════════ */
+
+.attTabRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #e2e5ea;
+  padding-bottom: 0.75rem;
+}
+
+.attTab {
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  border-radius: 0.45rem;
+  border: 1px solid #dde1e7;
+  background: #f8f9fa;
+  color: #44474e;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.attTab:hover { background: #e8eaed; }
+
+.attTabActive {
+  background: #002147;
+  color: #ffffff;
+  border-color: #002147;
+}
+
+.attControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.attSelect {
+  font-family: inherit;
+  font-size: 0.82rem;
+  padding: 0.5rem 0.75rem;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  background: #f8f9fa;
+  color: #191c1d;
+  cursor: pointer;
+}
+
+.attHint {
+  font-size: 0.72rem;
+  color: #9ba1ab;
+  margin: 0 0 0.75rem;
+}
+
+.attGridWrapper {
+  overflow-x: auto;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.65rem;
+  margin-bottom: 1rem;
+  max-height: 28rem;
+  overflow-y: auto;
+}
+
+.attGrid {
+  border-collapse: collapse;
+  min-width: 100%;
+  font-size: 0.72rem;
+}
+
+.attGrid thead {
+  background: #002147;
+  color: #ffffff;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.attNameHeader {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 700;
+  min-width: 9rem;
+  white-space: nowrap;
+  position: sticky;
+  left: 0;
+  background: #002147;
+  z-index: 3;
+}
+
+.attDayHeader {
+  padding: 0.5rem 0.35rem;
+  text-align: center;
+  font-weight: 700;
+  min-width: 2rem;
+}
+
+.attStudentName {
+  padding: 0.4rem 0.75rem;
+  white-space: nowrap;
+  background: #f8f9fa;
+  border-right: 1px solid #e2e5ea;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.attStudentName span:first-child {
+  font-weight: 600;
+  color: #002147;
+  font-size: 0.75rem;
+}
+
+.attRoll {
+  font-size: 0.65rem;
+  color: #9ba1ab;
+  font-family: monospace;
+}
+
+.attCell {
+  text-align: center;
+  cursor: pointer;
+  padding: 0.45rem 0.35rem;
+  border: 1px solid #f0f0f0;
+  font-size: 0.7rem;
+  transition: background 0.1s;
+  user-select: none;
+  min-width: 2rem;
+}
+
+.attCell:hover { background: #e8f0fe; }
+
+.attPresent {
+  background: #dcfce7;
+  color: #16a34a;
+  font-weight: 700;
+}
+
+.attAbsent {
+  background: #fee2e2;
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.attPending {
+  outline: 2px solid #c4a227;
+  outline-offset: -2px;
+}
+
+.attSaveRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.attPendingHint {
+  font-size: 0.75rem;
+  color: #c4a227;
+  font-weight: 600;
+  margin: 0;
+}
+
+.attSaveBtn {
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.6rem 1.2rem;
+  background: #002147;
+  color: #ffffff;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.attSaveBtn:hover:not(:disabled) { background: #001633; }
+.attSaveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.successBanner {
+  background: #f0faf4;
+  border: 1px solid #a8d5b5;
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a6b3c;
+  margin-bottom: 1rem;
+}

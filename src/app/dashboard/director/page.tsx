@@ -33,7 +33,8 @@ export default function DirectorDashboard() {
   const [promoting, setPromoting] = useState(false)
   const [promoteSuccess, setPromoteSuccess] = useState('')
   const [promoteError, setPromoteError] = useState('')
-  const [showConfirm, setShowConfirm] = useState(false)
+  const [promoteStep, setPromoteStep] = useState<0 | 1 | 2>(0) // 0=hidden 1=step1 2=step2
+  const [lastPromotedAt, setLastPromotedAt] = useState<string | null>(null)
 
   // Add faculty state
   const [facultyName, setFacultyName] = useState('')
@@ -95,6 +96,7 @@ export default function DirectorDashboard() {
         )
         setMinCredits(settings.min_credits ?? 18)
         setMaxCredits(settings.max_credits ?? 26)
+        setLastPromotedAt((settings as any).last_promoted_at ?? null)
       }
 
       // Get departments for this campus
@@ -174,13 +176,14 @@ export default function DirectorDashboard() {
     if (!response.ok) {
       setPromoteError(data.error ?? 'Failed to promote students.')
       setPromoting(false)
-      setShowConfirm(false)
+      setPromoteStep(0)
       return
     }
 
-    setPromoteSuccess(data.message)
+    setPromoteSuccess(`${data.message}${data.graduated_count > 0 ? ` (${data.graduated_count} students graduated and removed)` : ''}`)
+    setLastPromotedAt(new Date().toISOString())
     setPromoting(false)
-    setShowConfirm(false)
+    setPromoteStep(0)
   }
 
   // Add faculty
@@ -359,22 +362,70 @@ export default function DirectorDashboard() {
         <div className={styles.windowCard}>
           <p style={{ fontSize: '0.82rem', color: '#44474e', margin: '0 0 1rem 0' }}>
             Promote all students in this campus to the next semester.
-            This action cannot be undone. Use only at the start of a new semester.
+            Students in their final semester (10) will be removed from the system.
+            This action cannot be undone.
           </p>
 
-          {!showConfirm ? (
+          {/* Step 0: Just show the button */}
+          {promoteStep === 0 && (
             <button
               className={styles.primaryBtn}
-              onClick={() => setShowConfirm(true)}
+              onClick={() => setPromoteStep(1)}
               style={{ background: '#c9a227', color: '#002147' }}
             >
               Promote All Students →
             </button>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <p style={{ fontSize: '0.82rem', color: '#c0392b', fontWeight: 700, margin: 0 }}>
-                ⚠️ Are you sure? This will increment all student semesters by 1.
+          )}
+
+          {/* Step 1: Show last promotion time and ask to continue */}
+          {promoteStep === 1 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div style={{ background: '#fff8e6', border: '1px solid #f5d78c', borderRadius: '0.6rem', padding: '0.9rem 1rem' }}>
+                <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#8b6914', margin: '0 0 0.3rem' }}>
+                  📅 Last Promotion
+                </p>
+                <p style={{ fontSize: '0.85rem', color: '#44474e', margin: 0 }}>
+                  {lastPromotedAt
+                    ? new Date(lastPromotedAt).toLocaleString('en-IN', {
+                        day: 'numeric', month: 'long', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                      })
+                    : 'Never promoted on this system'}
+                </p>
+              </div>
+              <p style={{ fontSize: '0.82rem', color: '#44474e', margin: 0 }}>
+                Please verify the date above before continuing. Only proceed if you intend to start a new semester now.
               </p>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  className={styles.primaryBtn}
+                  onClick={() => setPromoteStep(2)}
+                  style={{ background: '#c9a227', color: '#002147' }}
+                >
+                  Continue →
+                </button>
+                <button
+                  className={styles.primaryBtn}
+                  onClick={() => setPromoteStep(0)}
+                  style={{ background: '#9ba1ab' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Explicit confirmation */}
+          {promoteStep === 2 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div style={{ background: '#fdf2f2', border: '1px solid #f5c6c6', borderRadius: '0.6rem', padding: '0.9rem 1rem' }}>
+                <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#c0392b', margin: 0 }}>
+                  ⚠️ Has the next semester officially started?
+                </p>
+                <p style={{ fontSize: '0.78rem', color: '#44474e', margin: '0.35rem 0 0' }}>
+                  This will increment every student's semester by 1 and permanently remove Semester 10 graduates.
+                </p>
+              </div>
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <button
                   className={styles.primaryBtn}
@@ -384,21 +435,22 @@ export default function DirectorDashboard() {
                 >
                   {promoting
                     ? <><span className={styles.spinner} /> Promoting...</>
-                    : 'Yes, Promote →'
+                    : 'Yes, Start New Semester →'
                   }
                 </button>
                 <button
                   className={styles.primaryBtn}
-                  onClick={() => setShowConfirm(false)}
+                  onClick={() => setPromoteStep(0)}
                   disabled={promoting}
                   style={{ background: '#9ba1ab' }}
                 >
-                  Cancel
+                  No, Cancel
                 </button>
               </div>
             </div>
           )}
         </div>
+
 
         {/* ── ADD FACULTY ── */}
         <p className={styles.sectionTitle}>Add Faculty</p>

@@ -186,9 +186,10 @@ export type VerifiedStudent = {
   department_id: string
   campus_id: string
   role: 'student'
+  must_change_password: boolean
 }
 
-export async function verifyStudent(): Promise<AuthSuccess<VerifiedStudent> | AuthError> {
+export async function verifyStudent(options?: { allowMustChangePassword?: boolean }): Promise<AuthSuccess<VerifiedStudent> | AuthError> {
   const cookieStore = await cookies()
   const supabase = buildSupabaseClient(cookieStore)
 
@@ -197,11 +198,15 @@ export async function verifyStudent(): Promise<AuthSuccess<VerifiedStudent> | Au
 
   const { data: student, error } = await supabase
     .from('students')
-    .select('department_id, campus_id')
+    .select('department_id, campus_id, must_change_password')
     .eq('id', user.id)
     .single()
 
   if (error || !student) return { success: false, error: 'Student not found', status: 404 }
+
+  if (student.must_change_password && !options?.allowMustChangePassword) {
+    return { success: false, error: 'Password change required', status: 403 }
+  }
 
   return {
     success: true,
@@ -209,5 +214,6 @@ export async function verifyStudent(): Promise<AuthSuccess<VerifiedStudent> | Au
     department_id: student.department_id,
     campus_id: student.campus_id,
     role: 'student',
+    must_change_password: student.must_change_password,
   }
 }

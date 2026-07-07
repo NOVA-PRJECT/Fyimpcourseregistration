@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseServerClient } from '@/core/database/supabaseClient'
+import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifyHod } from '@/core/auth/verifyRole'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
 const AddStudentSchema = z.object({
-  cap_application_number: z.string().min(1, 'CAP number is required'),
-  date_of_birth: z.string().min(1, 'Date of birth is required'),
   full_name: z.string().min(1, 'Full name is required'),
-  email: z.string().email().optional().or(z.literal('')),
+  roll_number: z.string().min(1, 'Roll number is required'),
+  cap_application_number: z.string().min(1, 'CAP number is required'),
+  academic_year_joined: z.string().min(1, 'Academic year joined is required'),
+  current_semester: z.coerce
+    .number({ message: 'Semester must be a number' })
+    .int()
+    .min(1)
+    .max(10)
+    .default(1),
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
 })
 
 export async function POST(request: NextRequest) {
@@ -30,51 +36,64 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Use session client for campus_settings read — RLS applies
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (cookiesToSet) =>
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          ),
-      },
-    }
-  )
+  const { full_name, roll_number, cap_application_number, academic_year_joined, current_semester, email, password } = result.data
 
-  const { data: settings } = await supabase
-    .from('campus_settings')
-    .select('academic_year')
-    .eq('campus_id', auth.campus_id)
-    .single()
+  // Duplicate check
+  const [{ data: existingCap }, { data: existingRoll }] = await Promise.all([
+    supabaseAdmin
+      .from('students')
+      .select('id')
+      .eq('cap_application_number', cap_application_number)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('students')
+      .select('id')
+      .eq('roll_number', roll_number)
+      .maybeSingle(),
+  ])
 
-  const { error: insertError } = await supabase
-    .from('admissions_master')
-    .insert({
-      cap_application_number: result.data.cap_application_number,
-      date_of_birth: result.data.date_of_birth,
-      full_name: result.data.full_name,
-      email: result.data.email || null,
-      department_id: auth.department_id,
-      campus_id: auth.campus_id,
-      academic_year: settings?.academic_year ?? new Date().getFullYear().toString(),
-      is_claimed: false,
-    })
-
-  if (insertError) {
-    if (insertError.code === '23505') {
-      return NextResponse.json(
-        { error: 'This CAP number already exists' },
-        { status: 409 }
-      )
-    }
-    console.error('hod/students/add POST failed:', insertError)
-    return NextResponse.json({ error: 'Failed to add student' }, { status: 500 })
+  if (existingCap) {
+    return NextResponse.json({ error: 'This CAP number already exists' }, { status: 409 })
+  }
+  if (existingRoll) {
+    return NextResponse.json({ error: 'This roll number already exists' }, { status: 409 })
   }
 
-  return NextResponse.json({ success: true, message: 'Student added successfully' })
+  // Create Supabase Auth user
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  })
+
+  if (authError || !authData.user) {
+    return NextResponse.json(
+      { error: authError?.message ?? 'Failed to create auth account' },
+      { status: 500 }
+    )
+  }
+
+  const authUserId = authData.user.id
+
+  // Insert students row — department_id and campus_id locked to HOD's own
+  const { error: studentError } = await supabaseAdmin.from('students').insert({
+    id: authUserId,
+    full_name,
+    roll_number,
+    cap_application_number,
+    academic_year_joined,
+    current_semester,
+    department_id: auth.department_id,
+    campus_id: auth.campus_id,
+    must_change_password: true,
+  })
+
+  if (studentError) {
+    // Rollback: remove orphaned auth user
+    await supabaseAdmin.auth.admin.deleteUser(authUserId)
+    console.error('hod/students/add POST — student insert failed:', studentError)
+    return NextResponse.json({ error: 'Failed to create student record' }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true, message: 'Student created successfully' })
 }

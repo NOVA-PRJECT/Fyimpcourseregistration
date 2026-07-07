@@ -2,6 +2,8 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { SubmitCoursesInput } from '../schemas/submitSchema'
 import { SLOT_RULES } from '@/core/constants/courseCategories'
+import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+
 
 export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
 
@@ -261,10 +263,11 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
     slot_6_course_id: courses[5] ?? null,
   }
 
-  // 12. Upsert — insert if new, update if already submitted
-  const { error: upsertError } = await supabase
+  // 12. Upsert via supabaseAdmin — student_registrations RLS denies direct client writes
+  const { error: upsertError } = await supabaseAdmin
     .from('student_registrations')
     .upsert(payload, { onConflict: 'student_id,semester,academic_year'})
+
 
   if (upsertError) {
     console.error('submitCourses — upsert failed:', upsertError)

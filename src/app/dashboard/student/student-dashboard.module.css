@@ -612,3 +612,202 @@
   .studentName { font-size: 1.1rem; }
   .registerBtn { padding: 0.6rem 1rem; font-size: 0.78rem; }
 }
+
+/* ══════════════════════════════════════
+   PROFILE SECTION (Task 5 redesign)
+══════════════════════════════════════ */
+
+.profileSection {
+  background: linear-gradient(160deg, #002147 0%, #003a7a 60%, #001533 100%);
+  padding: 2rem 1.25rem 2.5rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.profileSkeleton {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.skeletonAvatar {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  flex-shrink: 0;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeletonBar {
+  border-radius: 0.4rem;
+  background: rgba(255,255,255,0.08);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.profileTop {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.profileAvatar {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c4a227, #e8bf32);
+  color: #002147;
+  font-size: 1.8rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 20px rgba(196, 162, 39, 0.35);
+  border: 3px solid rgba(196, 162, 39, 0.4);
+}
+
+.profileMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.profileName {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profileRole {
+  font-size: 0.72rem;
+  color: rgba(196, 162, 39, 0.85);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.profileGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 380px) {
+  .profileGrid { grid-template-columns: 1fr; }
+}
+
+.profileField {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  backdrop-filter: blur(8px);
+  transition: background 0.2s;
+}
+
+.profileField:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.profileFieldLabel {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.profileFieldValue {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #ffffff;
+  word-break: break-word;
+}
+
+.semBadge {
+  display: inline-block;
+  background: linear-gradient(135deg, #c4a227, #e8bf32);
+  color: #002147;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+  border-radius: 2rem;
+}
+
+.profileAction {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.registerLink {
+  display: block;
+  width: 100%;
+  max-width: 20rem;
+  text-align: center;
+  background: linear-gradient(135deg, #c4a227, #e8bf32);
+  color: #002147;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.9rem 1.5rem;
+  border-radius: 0.75rem;
+  text-decoration: none;
+  box-shadow: 0 4px 20px rgba(196, 162, 39, 0.4);
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+.registerLink:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.registerHint {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  margin: 0;
+}
+
+.profileError {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+@media (min-width: 640px) {
+  .profileSection {
+    padding: 2.5rem 2rem 3rem;
+    max-width: 48rem;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 0;
+    min-height: calc(100dvh - 4rem);
+  }
+  .profileGrid { grid-template-columns: 1fr 1fr 1fr; }
+  .profileName { font-size: 1.7rem; }
+}
