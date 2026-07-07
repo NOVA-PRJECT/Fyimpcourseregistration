@@ -169,15 +169,10 @@ export default function LoginPage() {
           {/* Divider */}
           <div className={styles.divider}>
             <div className={styles.dividerLine} />
-            <span className={styles.dividerText}>New Student?</span>
+            <span className={styles.dividerText}></span>
             <div className={styles.dividerLine} />
           </div>
 
-          {/* Signup Link */}
-          <p className={styles.signupLink}>
-            Claim your account{' '}
-            <Link href="/signup">here →</Link>
-          </p>
           <p className={styles.forgotLink}>
             <Link href="/reset-password">Forgot password?</Link>
           </p>
@@ -193,3 +188,4 @@ export default function LoginPage() {
     </div>
   )
 }
+                                                                                                                                                    

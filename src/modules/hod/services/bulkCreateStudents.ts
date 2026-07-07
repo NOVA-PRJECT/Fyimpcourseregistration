@@ -121,7 +121,7 @@ export async function bulkCreateStudents(
       email: data.email,
       password: batch_default_password,
       email_confirm: true,
-    })
+        })
 
     if (authError || !authData.user) {
       results.push({

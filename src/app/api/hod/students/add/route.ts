@@ -64,6 +64,8 @@ export async function POST(request: NextRequest) {
     email,
     password,
     email_confirm: true,
+
+
   })
 
   if (authError || !authData.user) {
