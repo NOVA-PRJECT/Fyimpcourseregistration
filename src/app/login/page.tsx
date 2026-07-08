@@ -11,6 +11,11 @@ import { Role } from '@/core/constants/roles'
 export default function LoginPage() {
   const router = useRouter()
   const [checking, setChecking] = useState(true)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
 
   useEffect(() => {
     async function checkSession() {
@@ -72,12 +77,6 @@ export default function LoginPage() {
       </div>
     )
   }
-
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
 
   function validate() {
     const errors: { email?: string; password?: string } = {}
