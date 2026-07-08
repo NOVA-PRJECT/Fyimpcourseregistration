@@ -1,13 +1,77 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import styles from './login.module.css'
+import { ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
+import { Role } from '@/core/constants/roles'
 
 export default function LoginPage() {
   const router = useRouter()
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    async function checkSession() {
+      try {
+        const response = await fetch('/api/auth/profile')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.role) {
+            const target = ROLE_DASHBOARD_MAP[data.role as Role] || '/dashboard/student'
+            router.replace(target)
+            return
+          }
+        }
+      } catch (err) {
+        console.error('Session check failed:', err)
+      }
+      setChecking(false)
+    }
+
+    // Check on mount (for normal reloads or disk cache restorations)
+    checkSession()
+
+    // Check on pageshow (for true bfcache restorations)
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        checkSession()
+      }
+    }
+
+    window.addEventListener('pageshow', handlePageShow)
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow)
+    }
+  }, [router])
+
+  if (checking) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#0a0a0a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{
+          width: '50px',
+          height: '50px',
+          border: '3px solid rgba(212, 175, 55, 0.1)',
+          borderTop: '3px solid #d4af37',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    )
+  }
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

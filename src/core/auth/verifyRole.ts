@@ -41,7 +41,7 @@ export type VerifiedStudent = {
   full_name: string
 }
 
-export type AuthError = { success: false; error: string; status: number }
+export type AuthError = { success: false; error: string; status: number; actualRole?: Role }
 export type AuthSuccess<T> = { success: true } & T
 
 // ─────────────────────────────────────────────
@@ -61,7 +61,7 @@ async function verifyFacultyRole(
 
   const role = claims.app_metadata?.role
   if (role !== expectedRole) {
-    return { success: false, error: 'Unauthorized', status: 403 }
+    return { success: false, error: 'Unauthorized', status: 403, actualRole: role }
   }
 
   let departmentId = claims.app_metadata?.department_id
@@ -79,7 +79,7 @@ async function verifyFacultyRole(
       return { success: false, error: 'Faculty not found', status: 404 }
     }
     if (faculty.role !== expectedRole) {
-      return { success: false, error: 'Unauthorized', status: 403 }
+      return { success: false, error: 'Unauthorized', status: 403, actualRole: faculty.role }
     }
     departmentId = faculty.department_id
     campusId = faculty.campus_id
@@ -132,7 +132,7 @@ export const verifySuperAdmin = cache(async (): Promise<AuthSuccess<VerifiedSupe
 
   const role = claims.app_metadata?.role
   if (role !== 'superadmin') {
-    return { success: false, error: 'Unauthorized', status: 403 }
+    return { success: false, error: 'Unauthorized', status: 403, actualRole: role }
   }
 
   return {
@@ -167,7 +167,7 @@ export const verifyStudent = cache(async (options?: { allowMustChangePassword?: 
 
   const role = claims.app_metadata?.role
   if (role !== 'student') {
-    return { success: false, error: 'Unauthorized', status: 403 }
+    return { success: false, error: 'Unauthorized', status: 403, actualRole: role }
   }
 
   let departmentId = claims.app_metadata?.department_id
