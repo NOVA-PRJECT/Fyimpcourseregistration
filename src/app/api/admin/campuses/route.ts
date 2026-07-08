@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { verifySuperAdmin } from '@/core/auth/verifyRole'
+import { verifySuperAdmin, handleAuthError } from '@/core/auth/verifyRole'
 import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 import { logServerError } from '@/core/logging/logger'
 import { z } from 'zod'
@@ -15,9 +15,7 @@ const CampusSchema = z.object({
 // GET — list all campuses
 export async function GET() {
   const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { data, error } = await supabaseAdmin
     .from('campuses')
@@ -35,9 +33,7 @@ export async function GET() {
 // POST — add campus
 export async function POST(request: NextRequest) {
   const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const body = await request.json()
   const result = CampusSchema.safeParse(body)
@@ -63,9 +59,7 @@ export async function POST(request: NextRequest) {
 // PUT — edit campus
 export async function PUT(request: NextRequest) {
   const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { id, name, code } = await request.json()
   if (!id || !name || !code) {
@@ -89,7 +83,7 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   
   const auth = await verifySuperAdmin()
-if (!auth.success) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  if (!auth.success) return handleAuthError(auth)
 
   const { campus_id } = await request.json()
   if (!campus_id) return NextResponse.json({ error: 'Campus ID required' }, { status: 400 })
@@ -110,11 +104,30 @@ if (!auth.success) return NextResponse.json({ error: auth.error }, { status: aut
 
   // Delete auth accounts after DB rows are gone
   // These can't be in the Postgres function
-  for (const s of students ?? []) {
-    await deleteAuthUser(s.id)
-  }
-  for (const f of faculty ?? []) {
-    await deleteAuthUser(f.id)
+  const allUserIds = [
+    ...(students ?? []).map((s) => s.id),
+    ...(faculty ?? []).map((f) => f.id),
+  ]
+
+  if (allUserIds.length > 0) {
+    const results = await Promise.allSettled(
+      allUserIds.map((id) => deleteAuthUser(id))
+    )
+
+    results.forEach((res, index) => {
+      const targetUserId = allUserIds[index]
+      if (res.status === 'rejected') {
+        logServerError('/api/admin/campuses', res.reason, {
+          targetUserId,
+          operation: 'delete_auth_user_cascade',
+        })
+      } else if (res.value?.error) {
+        logServerError('/api/admin/campuses', res.value.error, {
+          targetUserId,
+          operation: 'delete_auth_user_cascade',
+        })
+      }
+    })
   }
 
   return NextResponse.json({ success: true, message: 'Campus deleted successfully' })

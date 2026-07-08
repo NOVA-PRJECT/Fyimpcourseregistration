@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { bulkCreateStudents } from '@/modules/hod/services/bulkCreateStudents'
-import { verifyHod } from '@/core/auth/verifyRole'
+import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { bulkUploadLimiter } from '@/core/security/rateLimiter'
 import { z } from 'zod'
 
@@ -17,9 +17,7 @@ export async function POST(request: NextRequest) {
 
   // Auth — HOD only
   const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   // Rate limit by HOD user ID
   const { success: withinLimit } = await bulkUploadLimiter.limit(auth.userId)

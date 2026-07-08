@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { verifyHod } from '@/core/auth/verifyRole'
+import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { z } from 'zod'
 import { logServerError } from '@/core/logging/logger'
 
@@ -14,9 +14,7 @@ const UpdateStudentSchema = z.object({
 
 export async function PUT(request: NextRequest) {
   const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const body = await request.json()
   const result = UpdateStudentSchema.safeParse(body)

@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { z } from 'zod'
 import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { verifyStudent } from '@/core/auth/verifyRole'
+import { verifyStudent, handleAuthError } from '@/core/auth/verifyRole'
 import { logServerError } from '@/core/logging/logger'
 import { changePasswordLimiter } from '@/core/security/rateLimiter'
 
@@ -23,9 +23,7 @@ const ChangePasswordSchema = z.object({
 
 export async function POST(request: NextRequest) {
   const auth = await verifyStudent({ allowMustChangePassword: true })
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   // Rate limit by student user ID
   const { success: withinLimit } = await changePasswordLimiter.limit(auth.userId)

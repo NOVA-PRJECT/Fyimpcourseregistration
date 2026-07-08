@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { verifyDirector } from '@/core/auth/verifyRole'
+import { verifyDirector, handleAuthError } from '@/core/auth/verifyRole'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
@@ -11,9 +11,7 @@ export async function POST() {
 
   // Auth — verified campus_director only
   const auth = await verifyDirector()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const supabase = await getSupabaseServerClient()
 

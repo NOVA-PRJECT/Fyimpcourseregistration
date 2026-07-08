@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { verifyHod } from '@/core/auth/verifyRole'
+import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 import { logServerError } from '@/core/logging/logger'
 
@@ -8,9 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export async function DELETE(request: NextRequest) {
   const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { student_id } = await request.json()
   if (!student_id) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { verifySuperAdmin } from '@/core/auth/verifyRole'
+import { verifySuperAdmin, handleAuthError } from '@/core/auth/verifyRole'
 import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 import { logServerError } from '@/core/logging/logger'
 import { AddFacultySchema } from '@/modules/admin/schemas/addFacultySchema'
@@ -12,9 +12,7 @@ export const dynamic = 'force-dynamic'
 // GET — list all faculty
 export async function GET() {
   const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { data, error } = await supabaseAdmin
     .from('faculty')
@@ -40,9 +38,7 @@ const SuperAdminAddFacultySchema = AddFacultySchema.extend({
 
 export async function POST(request: NextRequest) {
   const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const body = await request.json()
   const result = SuperAdminAddFacultySchema.safeParse(body)
@@ -76,9 +72,7 @@ const UpdateFacultySchema = z.object({
 
 export async function PUT(request: NextRequest) {
   const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const body = await request.json()
   const result = UpdateFacultySchema.safeParse(body)
@@ -121,9 +115,7 @@ export async function PUT(request: NextRequest) {
 // DELETE — delete faculty account
 export async function DELETE(request: NextRequest) {
   const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { faculty_id } = await request.json()
   if (!faculty_id) {

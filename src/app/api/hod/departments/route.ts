@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { verifyHod } from '@/core/auth/verifyRole'
+import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { logServerError } from '@/core/logging/logger'
 
@@ -8,9 +8,7 @@ export const dynamic = 'force-dynamic'
 // GET — return departments for the HOD's campus (for blueprint dropdown)
 export async function GET() {
   const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { data, error } = await supabaseAdmin
     .from('departments')

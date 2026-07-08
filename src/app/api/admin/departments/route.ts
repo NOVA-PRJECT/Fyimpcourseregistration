@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
-import { verifySuperAdmin } from '@/core/auth/verifyRole'
+import { verifySuperAdmin, handleAuthError } from '@/core/auth/verifyRole'
 import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 import { logServerError } from '@/core/logging/logger'
 import { z } from 'zod'
@@ -16,9 +16,7 @@ const DepartmentSchema = z.object({
 // GET — list all departments
 export async function GET() {
   const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { data, error } = await supabaseAdmin
     .from('departments')
@@ -36,9 +34,7 @@ export async function GET() {
 // POST — add department
 export async function POST(request: NextRequest) {
   const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const body = await request.json()
   const result = DepartmentSchema.safeParse(body)
@@ -68,9 +64,7 @@ export async function POST(request: NextRequest) {
 // PUT — edit department
 export async function PUT(request: NextRequest) {
   const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { id, name, code } = await request.json()
   if (!id || !name || !code) {
@@ -93,9 +87,7 @@ export async function PUT(request: NextRequest) {
 // DELETE — delete department and everything under it
 export async function DELETE(request: NextRequest) {
   const auth = await verifySuperAdmin()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { department_id } = await request.json()
   if (!department_id) {
@@ -124,11 +116,30 @@ export async function DELETE(request: NextRequest) {
   }
 
   // Delete auth accounts after DB rows are gone
-  for (const s of students ?? []) {
-    await deleteAuthUser(s.id)
-  }
-  for (const f of faculty ?? []) {
-    await deleteAuthUser(f.id)
+  const allUserIds = [
+    ...(students ?? []).map((s) => s.id),
+    ...(faculty ?? []).map((f) => f.id),
+  ]
+
+  if (allUserIds.length > 0) {
+    const results = await Promise.allSettled(
+      allUserIds.map((id) => deleteAuthUser(id))
+    )
+
+    results.forEach((res, index) => {
+      const targetUserId = allUserIds[index]
+      if (res.status === 'rejected') {
+        logServerError('/api/admin/departments', res.reason, {
+          targetUserId,
+          operation: 'delete_auth_user_cascade',
+        })
+      } else if (res.value?.error) {
+        logServerError('/api/admin/departments', res.value.error, {
+          targetUserId,
+          operation: 'delete_auth_user_cascade',
+        })
+      }
+    })
   }
 
   return NextResponse.json({ success: true, message: 'Department deleted successfully' })

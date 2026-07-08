@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClassRoster } from '@/modules/teacher/services/getClassRoster'
-import { verifyTeacher } from '@/core/auth/verifyRole'
+import { verifyTeacher, handleAuthError } from '@/core/auth/verifyRole'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { z } from 'zod'
 
@@ -9,9 +9,7 @@ export const dynamic = 'force-dynamic'
 // GET — Returns class roster for a given course
 export async function GET(request: NextRequest) {
   const auth = await verifyTeacher()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { searchParams } = new URL(request.url)
   const courseId = searchParams.get('course_id')

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/core/database/supabaseClient'
-import { verifyHod } from '@/core/auth/verifyRole'
+import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { logServerError } from '@/core/logging/logger'
 import { BlueprintUpdateSchema } from '@/modules/hod/schemas/blueprintSchema'
 
@@ -9,9 +9,7 @@ export const dynamic = 'force-dynamic'
 // GET — fetch blueprint for dept + semester
 export async function GET(request: NextRequest) {
   const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { searchParams } = new URL(request.url)
   const semester = searchParams.get('semester')
@@ -38,9 +36,7 @@ export async function GET(request: NextRequest) {
 // PUT — save blueprint changes (upsert)
 export async function PUT(request: NextRequest) {
   const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const body = await request.json()
   const result = BlueprintUpdateSchema.safeParse(body)

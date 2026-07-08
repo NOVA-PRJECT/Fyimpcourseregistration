@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/core/database/supabaseClient'
-import { verifyHod } from '@/core/auth/verifyRole'
+import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { z } from 'zod'
 import { logServerError } from '@/core/logging/logger'
 
@@ -18,9 +18,7 @@ const CourseSchema = z.object({
 // GET — fetch courses for dept + semester
 export async function GET(request: NextRequest) {
   const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { searchParams } = new URL(request.url)
   const semester = searchParams.get('semester')
@@ -47,9 +45,7 @@ export async function GET(request: NextRequest) {
 // POST — add new course
 export async function POST(request: NextRequest) {
   const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const body = await request.json()
   const parsed = CourseSchema.safeParse(body)
@@ -84,9 +80,7 @@ export async function POST(request: NextRequest) {
 // PUT — edit course
 export async function PUT(request: NextRequest) {
   const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const body = await request.json()
   const { id, ...rest } = body
@@ -124,9 +118,7 @@ export async function PUT(request: NextRequest) {
 // DELETE — delete course
 export async function DELETE(request: NextRequest) {
   const auth = await verifyHod()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
+  if (!auth.success) return handleAuthError(auth)
 
   const { course_id } = await request.json()
   if (!course_id) {
