@@ -108,6 +108,14 @@ export async function submitCourses(auth: VerifiedStudent, { semester, courses }
       return { success: false, error: `Invalid course in slot ${slot}`, status: 400 }
     }
 
+    if (course.semester !== auth.current_semester) {
+      return {
+        success: false,
+        error: `Course for Slot ${slot} must belong to your active semester (Semester ${auth.current_semester})`,
+        status: 400,
+      }
+    }
+
     if (!rule || !target) continue
 
     const isEligible = isCourseEligibleForSlot(

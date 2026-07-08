@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { z } from 'zod'
 import { logServerError } from '@/core/logging/logger'
+import { adminCrudLimiter } from '@/core/security/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +48,11 @@ export async function POST(request: NextRequest) {
   const auth = await verifyHod()
   if (!auth.success) return handleAuthError(auth)
 
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
+
   const body = await request.json()
   const parsed = CourseSchema.safeParse(body)
   if (!parsed.success) {
@@ -81,6 +87,11 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const auth = await verifyHod()
   if (!auth.success) return handleAuthError(auth)
+
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
 
   const body = await request.json()
   const { id, ...rest } = body
@@ -119,6 +130,11 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await verifyHod()
   if (!auth.success) return handleAuthError(auth)
+
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
 
   const { course_id } = await request.json()
   if (!course_id) {

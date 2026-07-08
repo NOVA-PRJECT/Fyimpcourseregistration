@@ -3,9 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { DASHBOARD_ROLE_MAP, ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
 import { Role } from '@/core/constants/roles'
 
-// Routes students are ALWAYS allowed to access (even before changing password)
-const STUDENT_EXEMPT_PAGES = ['/dashboard/student/change-password']
-const STUDENT_EXEMPT_API = ['/api/student/change-password']
+
 
 export async function middleware(request: NextRequest) {
 

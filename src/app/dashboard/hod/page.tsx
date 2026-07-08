@@ -103,19 +103,14 @@ export default function HodDashboard() {
 
   useEffect(() => {
     async function loadHodInfo() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      const response = await fetch('/api/auth/profile')
+      const data = await response.json()
+      if (!response.ok) { router.push('/login'); return }
 
-      const { data: faculty } = await supabase
-        .from('faculty')
-        .select('full_name, departments (name)')
-        .eq('id', user.id)
-        .single()
-
-      if (faculty) {
+      if (data.profile) {
         setHodInfo({
-          full_name: faculty.full_name,
-          department_name: (faculty.departments as any)?.name ?? 'Unknown',
+          full_name: data.profile.full_name,
+          department_name: data.profile.departments?.name ?? 'Unknown',
         })
       }
       setLoadingHod(false)

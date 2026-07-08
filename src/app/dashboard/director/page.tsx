@@ -40,50 +40,25 @@ export default function DirectorDashboard() {
 
   useEffect(() => {
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      const response = await fetch('/api/director/settings')
+      const data = await response.json()
+      if (!response.ok) { router.push('/login'); return }
 
-      // Get faculty (director) info
-      const { data: faculty } = await supabase
-        .from('faculty')
-        .select('full_name, campus_id')
-        .eq('id', user.id)
-        .single()
+      setDirectorName(data.directorName)
+      setCampusId(data.campusId)
+      setCampusName(data.campusName)
 
-      if (!faculty) { router.push('/login'); return }
-
-      setDirectorName(faculty.full_name)
-      setCampusId(faculty.campus_id)
-
-      // Get campus name
-      const { data: campus } = await supabase
-        .from('campuses')
-        .select('name')
-        .eq('id', faculty.campus_id)
-        .single()
-
-      if (campus) setCampusName(campus.name)
-
-      // Get campus settings
-      const { data: settings } = await supabase
-        .from('campus_settings')
-        .select('deadline, min_credits, max_credits')
-        .eq('campus_id', faculty.campus_id)
-        .single()
-
-      if (settings) {
-        setCurrentDeadline(settings.deadline)
+      if (data.settings) {
+        setCurrentDeadline(data.settings.deadline)
         setDeadline(
-          settings.deadline
-            ? new Date(settings.deadline).toISOString().slice(0, 16)
+          data.settings.deadline
+            ? new Date(data.settings.deadline).toISOString().slice(0, 16)
             : ''
         )
-        setMinCredits(settings.min_credits ?? 18)
-        setMaxCredits(settings.max_credits ?? 26)
-        setLastPromotedAt((settings as any).last_promoted_at ?? null)
+        setMinCredits(data.settings.min_credits ?? 18)
+        setMaxCredits(data.settings.max_credits ?? 26)
+        setLastPromotedAt(data.settings.last_promoted_at ?? null)
       }
-
-
 
       setLoadingDirector(false)
     }

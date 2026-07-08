@@ -94,11 +94,10 @@ export default function SuperAdminDashboard() {
 
   useEffect(() => {
     async function loadAdmin() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-      const { data: admin } = await supabase
-        .from('admins').select('full_name').eq('id', user.id).single()
-      if (admin) setAdminName(admin.full_name)
+      const response = await fetch('/api/auth/profile')
+      const data = await response.json()
+      if (!response.ok) { router.push('/login'); return }
+      if (data.profile) setAdminName(data.profile.full_name)
       setLoadingAdmin(false)
     }
     loadAdmin()

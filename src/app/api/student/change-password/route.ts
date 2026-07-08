@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { z } from 'zod'
-import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifyStudent, handleAuthError } from '@/core/auth/verifyRole'
+import { logServerError } from '@/core/logging/logger'
+import { changePasswordLimiter } from '@/core/security/rateLimiter'
+import { createResponseTrackingClient } from '@/core/database/supabaseClient'
 import { logServerError } from '@/core/logging/logger'
 import { changePasswordLimiter } from '@/core/security/rateLimiter'
 
@@ -80,26 +81,7 @@ export async function POST(request: NextRequest) {
   }
 
   // 3. Initialize cookie-tracking client to refresh the active session and write updated JWT claims
-  const cookieStore = await cookies()
-  const cookiesToSetAtEnd: { name: string; value: string; options: any }[] = []
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options)
-            cookiesToSetAtEnd.push({ name, value, options })
-          })
-        },
-      },
-    }
-  )
+  const { client: supabase, cookiesToSetAtEnd } = await createResponseTrackingClient()
 
   // Get active session and refresh it to update cookies with must_change_password = false
   const { data: { session } } = await supabase.auth.getSession()

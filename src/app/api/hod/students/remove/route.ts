@@ -3,12 +3,18 @@ import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 import { logServerError } from '@/core/logging/logger'
+import { adminCrudLimiter } from '@/core/security/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 
 export async function DELETE(request: NextRequest) {
   const auth = await verifyHod()
   if (!auth.success) return handleAuthError(auth)
+
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
 
   const { student_id } = await request.json()
   if (!student_id) {

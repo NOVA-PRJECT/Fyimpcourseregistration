@@ -4,6 +4,7 @@ import { verifySuperAdmin, handleAuthError } from '@/core/auth/verifyRole'
 import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 import { logServerError } from '@/core/logging/logger'
 import { z } from 'zod'
+import { adminCrudLimiter } from '@/core/security/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,11 @@ export async function POST(request: NextRequest) {
   const auth = await verifySuperAdmin()
   if (!auth.success) return handleAuthError(auth)
 
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
+
   const body = await request.json()
   const result = DepartmentSchema.safeParse(body)
   if (!result.success) {
@@ -66,6 +72,11 @@ export async function PUT(request: NextRequest) {
   const auth = await verifySuperAdmin()
   if (!auth.success) return handleAuthError(auth)
 
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
+
   const { id, name, code } = await request.json()
   if (!id || !name || !code) {
     return NextResponse.json({ error: 'ID, name and code are required' }, { status: 400 })
@@ -88,6 +99,11 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await verifySuperAdmin()
   if (!auth.success) return handleAuthError(auth)
+
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
 
   const { department_id } = await request.json()
   if (!department_id) {

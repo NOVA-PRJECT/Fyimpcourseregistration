@@ -55,20 +55,6 @@ export default function RegisterPage() {
 
   useEffect(() => {
     async function loadBlueprint() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-
-      // Load student info for the top bar
-      const { data: student } = await supabase
-        .from('students')
-        .select('full_name, current_semester')
-        .eq('id', user.id)
-        .single()
-
-      if (student) {
-        setStudentInfo({ full_name: student.full_name, current_semester: student.current_semester })
-      }
-
       // Load blueprint
       const response = await fetch('/api/registrations/blueprint')
       const data = await response.json()
@@ -77,6 +63,10 @@ export default function RegisterPage() {
         setError(data.error ?? 'Failed to load courses. Please try again.')
         setPageState('closed')
         return
+      }
+
+      if (data.student) {
+        setStudentInfo({ full_name: data.student.full_name, current_semester: data.student.current_semester })
       }
 
       setBlueprint(data.data)

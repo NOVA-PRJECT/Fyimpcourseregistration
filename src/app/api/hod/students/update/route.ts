@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { z } from 'zod'
 import { logServerError } from '@/core/logging/logger'
+import { adminCrudLimiter } from '@/core/security/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,11 @@ const UpdateStudentSchema = z.object({
 export async function PUT(request: NextRequest) {
   const auth = await verifyHod()
   if (!auth.success) return handleAuthError(auth)
+
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
 
   const body = await request.json()
   const result = UpdateStudentSchema.safeParse(body)

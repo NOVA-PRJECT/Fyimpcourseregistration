@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { logServerError } from '@/core/logging/logger'
 import { BlueprintUpdateSchema } from '@/modules/hod/schemas/blueprintSchema'
+import { adminCrudLimiter } from '@/core/security/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,11 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const auth = await verifyHod()
   if (!auth.success) return handleAuthError(auth)
+
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
 
   const body = await request.json()
   const result = BlueprintUpdateSchema.safeParse(body)

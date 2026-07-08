@@ -45,23 +45,15 @@ export default function TeacherDashboard() {
 
   useEffect(() => {
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      const response = await fetch('/api/faculty/courses')
+      const data = await response.json()
+      if (!response.ok) {
+        router.push('/login')
+        return
+      }
 
-      const { data: faculty } = await supabase
-        .from('faculty')
-        .select('full_name')
-        .eq('id', user.id)
-        .single()
-
-      if (faculty) setTeacherName(faculty.full_name)
-
-      const { data: courseList } = await supabase
-        .from('courses')
-        .select('id, course_code, title')
-        .order('title')
-
-      if (courseList) setCourses(courseList)
+      setTeacherName(data.teacherName)
+      setCourses(data.courses)
       setLoadingTeacher(false)
     }
     loadData()

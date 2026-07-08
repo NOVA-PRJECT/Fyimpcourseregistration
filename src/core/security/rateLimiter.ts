@@ -33,3 +33,10 @@ export const changePasswordLimiter = new Ratelimit({
   limiter: Ratelimit.slidingWindow(5, '1 h'),
   prefix: 'fyimp:change-password',
 })
+
+// 60 administrative CRUD actions per minute per admin/HOD (keyed by user ID)
+export const adminCrudLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(60, '1 m'),
+  prefix: 'fyimp:admin-crud',
+})

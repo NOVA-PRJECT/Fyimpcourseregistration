@@ -6,6 +6,7 @@ import { logServerError } from '@/core/logging/logger'
 import { AddFacultySchema } from '@/modules/admin/schemas/addFacultySchema'
 import { createFacultyUser } from '@/modules/admin/services/createFacultyUser'
 import { z } from 'zod'
+import { adminCrudLimiter } from '@/core/security/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,6 +41,11 @@ export async function POST(request: NextRequest) {
   const auth = await verifySuperAdmin()
   if (!auth.success) return handleAuthError(auth)
 
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
+
   const body = await request.json()
   const result = SuperAdminAddFacultySchema.safeParse(body)
 
@@ -73,6 +79,11 @@ const UpdateFacultySchema = z.object({
 export async function PUT(request: NextRequest) {
   const auth = await verifySuperAdmin()
   if (!auth.success) return handleAuthError(auth)
+
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
 
   const body = await request.json()
   const result = UpdateFacultySchema.safeParse(body)
@@ -116,6 +127,11 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await verifySuperAdmin()
   if (!auth.success) return handleAuthError(auth)
+
+  const { success: withinLimit } = await adminCrudLimiter.limit(auth.userId)
+  if (!withinLimit) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+  }
 
   const { faculty_id } = await request.json()
   if (!faculty_id) {

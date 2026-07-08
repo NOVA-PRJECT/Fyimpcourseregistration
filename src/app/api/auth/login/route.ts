@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
 import { determineUserRoute } from '@/modules/auth/services/routeUser'
 import { loginLimiter } from '@/core/security/rateLimiter'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { createResponseTrackingClient } from '@/core/database/supabaseClient'
 
 export async function POST(request: NextRequest) {
   // 1. Rate Limiting (prevent brute force logins from the same IP)
@@ -32,27 +31,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
   }
 
-  const cookieStore = await cookies()
-  const cookiesToSetAtEnd: { name: string; value: string; options: any }[] = []
-
-  // Initialize server client and track set cookies to forward to client response
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options)
-            cookiesToSetAtEnd.push({ name, value, options })
-          })
-        },
-      },
-    }
-  )
+  const { client: supabase, cookiesToSetAtEnd } = await createResponseTrackingClient()
 
   // 4. Perform signInWithPassword
   const { data: authData, error: authError } = await supabase.auth.signInWithPassword({

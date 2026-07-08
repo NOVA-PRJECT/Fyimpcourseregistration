@@ -139,6 +139,7 @@ export async function getBlueprint(auth: VerifiedStudent) {
         const { data: options } = await query
           .eq('department_id', auth.department_id)
           .eq('tag', target)
+          .eq('semester', auth.current_semester)
 
         const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
         return { slot, rule, name, options: filtered }
@@ -146,7 +147,7 @@ export async function getBlueprint(auth: VerifiedStudent) {
 
       // GLOBAL_BASKET — other departments by tag
       if (rule === SLOT_RULES.GLOBAL_BASKET) {
-        let q = query.eq('tag', target)
+        let q = query.eq('tag', target).eq('semester', auth.current_semester)
         if (target.includes('MDC')) {
           q = q.neq('department_id', auth.department_id)
         }
@@ -171,6 +172,10 @@ export async function getBlueprint(auth: VerifiedStudent) {
 
   return {
     success: true,
+    student: {
+      full_name: auth.full_name,
+      current_semester: auth.current_semester,
+    },
     data: response,
     ...(existingRegistrationRes.data && { existing: existingRegistrationRes.data })
   }

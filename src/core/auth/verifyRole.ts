@@ -38,6 +38,7 @@ export type VerifiedStudent = {
   role: 'student'
   must_change_password: boolean
   current_semester: number
+  full_name: string
 }
 
 export type AuthError = { success: false; error: string; status: number }
@@ -174,11 +175,13 @@ export const verifyStudent = cache(async (options?: { allowMustChangePassword?: 
   let mustChangePassword = claims.app_metadata?.must_change_password
   let currentSemester: number
 
+  let fullName = ''
+
   // Fetch current_semester (since it is dynamic/promotion-based) and fallbacks
   if (departmentId && campusId && mustChangePassword !== undefined) {
     const { data: student, error } = await supabase
       .from('students')
-      .select('current_semester, must_change_password')
+      .select('current_semester, must_change_password, full_name')
       .eq('id', claims.sub)
       .single()
 
@@ -187,10 +190,11 @@ export const verifyStudent = cache(async (options?: { allowMustChangePassword?: 
     }
     mustChangePassword = student.must_change_password
     currentSemester = student.current_semester
+    fullName = student.full_name
   } else {
     const { data: student, error } = await supabase
       .from('students')
-      .select('department_id, campus_id, current_semester, must_change_password')
+      .select('department_id, campus_id, current_semester, must_change_password, full_name')
       .eq('id', claims.sub)
       .single()
 
@@ -201,6 +205,7 @@ export const verifyStudent = cache(async (options?: { allowMustChangePassword?: 
     campusId = student.campus_id
     mustChangePassword = student.must_change_password
     currentSemester = student.current_semester
+    fullName = student.full_name
   }
 
   if (mustChangePassword && !options?.allowMustChangePassword) {
@@ -215,6 +220,7 @@ export const verifyStudent = cache(async (options?: { allowMustChangePassword?: 
     role: 'student',
     must_change_password: mustChangePassword,
     current_semester: currentSemester,
+    full_name: fullName,
   }
 })
 
