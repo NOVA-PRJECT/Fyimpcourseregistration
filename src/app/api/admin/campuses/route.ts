@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifySuperAdmin } from '@/core/auth/verifyRole'
+import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
+import { logServerError } from '@/core/logging/logger'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -23,7 +25,7 @@ export async function GET() {
     .order('name')
 
   if (error) {
-    console.error('admin/campuses GET failed:', error)
+    logServerError('/api/admin/campuses', error, { userId: auth.userId, method: 'GET' })
     return NextResponse.json({ error: 'Failed to fetch campuses' }, { status: 500 })
   }
 
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Campus name or code already exists' }, { status: 409 })
     }
-    console.error('admin/campuses POST failed:', error)
+    logServerError('/api/admin/campuses', error, { userId: auth.userId, method: 'POST', body: result.data })
     return NextResponse.json({ error: 'Failed to add campus' }, { status: 500 })
   }
 
@@ -76,7 +78,7 @@ export async function PUT(request: NextRequest) {
     .eq('id', id)
 
   if (error) {
-    console.error('admin/campuses PUT failed:', error)
+    logServerError('/api/admin/campuses', error, { userId: auth.userId, method: 'PUT', body: { id, name, code } })
     return NextResponse.json({ error: 'Failed to update campus' }, { status: 500 })
   }
 
@@ -109,10 +111,10 @@ if (!auth.success) return NextResponse.json({ error: auth.error }, { status: aut
   // Delete auth accounts after DB rows are gone
   // These can't be in the Postgres function
   for (const s of students ?? []) {
-    await supabaseAdmin.auth.admin.deleteUser(s.id)
+    await deleteAuthUser(s.id)
   }
   for (const f of faculty ?? []) {
-    await supabaseAdmin.auth.admin.deleteUser(f.id)
+    await deleteAuthUser(f.id)
   }
 
   return NextResponse.json({ success: true, message: 'Campus deleted successfully' })

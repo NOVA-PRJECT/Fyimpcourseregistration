@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { verifyDirector } from '@/core/auth/verifyRole'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { getSupabaseServerClient } from '@/core/database/supabaseClient'
+import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
+import { logServerError } from '@/core/logging/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +29,7 @@ export async function POST() {
     .rpc('promote_campus_students', { p_campus_id: auth.campus_id })
 
   if (error) {
-    console.error('promote-students RPC failed:', error)
+    logServerError('/api/admin/campus/promote-students', error, { userId: auth.userId, method: 'POST', campusId: auth.campus_id })
     return NextResponse.json({ error: 'Failed to promote students' }, { status: 500 })
   }
 
@@ -39,12 +41,18 @@ export async function POST() {
 
   // Delete auth users for graduated students (semester was 10, trigger deleted their DB rows)
   if (nearMaxStudents && nearMaxStudents.length > 0) {
-    for (const student of nearMaxStudents) {
-      const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(student.id)
-      if (authDeleteError) {
-        console.error(`promote-students — failed to delete auth user ${student.id}:`, authDeleteError)
-      }
-    }
+    await Promise.all(
+      nearMaxStudents.map(async (student) => {
+        try {
+          const { error: authDeleteError } = await deleteAuthUser(student.id)
+          if (authDeleteError) {
+            logServerError('/api/admin/campus/promote-students', authDeleteError, { userId: auth.userId, targetStudentId: student.id, step: 'auth_deletion' })
+          }
+        } catch (err) {
+          logServerError('/api/admin/campus/promote-students', err, { userId: auth.userId, targetStudentId: student.id, step: 'auth_deletion_try_catch' })
+        }
+      })
+    )
   }
 
   return NextResponse.json({

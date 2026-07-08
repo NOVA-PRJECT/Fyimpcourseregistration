@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { z } from 'zod'
+import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifyStudent } from '@/core/auth/verifyRole'
+import { logServerError } from '@/core/logging/logger'
 import { changePasswordLimiter } from '@/core/security/rateLimiter'
-import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +22,6 @@ const ChangePasswordSchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
-
   const auth = await verifyStudent({ allowMustChangePassword: true })
   if (!auth.success) {
     return NextResponse.json({ error: auth.error }, { status: auth.status })
@@ -49,28 +51,70 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Update password via admin API (service-role)
+  // 1. Update password & app_metadata via admin API
   const { error: pwError } = await supabaseAdmin.auth.admin.updateUserById(
     auth.userId,
-    { password: result.data.new_password }
+    {
+      password: result.data.new_password,
+      app_metadata: {
+        role: 'student',
+        department_id: auth.department_id,
+        campus_id: auth.campus_id,
+        must_change_password: false,
+      }
+    }
   )
 
   if (pwError) {
-    console.error('change-password — auth update failed:', pwError)
+    logServerError('/api/student/change-password', pwError, { userId: auth.userId, step: 'auth_update' })
     return NextResponse.json({ error: 'Failed to update password' }, { status: 500 })
   }
 
-  // Clear the must_change_password flag
+  // 2. Clear the must_change_password flag in DB
   const { error: flagError } = await supabaseAdmin
     .from('students')
     .update({ must_change_password: false })
     .eq('id', auth.userId)
 
   if (flagError) {
-    console.error('change-password — flag update failed:', flagError)
-    // Password was already changed; still return success but log the discrepancy
-    return NextResponse.json({ success: true, warning: 'Password changed, but flag update failed. Please contact support.' })
+    logServerError('/api/student/change-password', flagError, { userId: auth.userId, step: 'flag_update' })
+    return NextResponse.json({ error: 'Failed to update user flags' }, { status: 500 })
   }
 
-  return NextResponse.json({ success: true, message: 'Password changed successfully' })
+  // 3. Initialize cookie-tracking client to refresh the active session and write updated JWT claims
+  const cookieStore = await cookies()
+  const cookiesToSetAtEnd: { name: string; value: string; options: any }[] = []
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options)
+            cookiesToSetAtEnd.push({ name, value, options })
+          })
+        },
+      },
+    }
+  )
+
+  // Get active session and refresh it to update cookies with must_change_password = false
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session) {
+    await supabase.auth.refreshSession(session)
+  }
+
+  const response = NextResponse.json({ success: true, message: 'Password changed successfully' })
+
+  // Forward all refreshed session cookies to the response
+  cookiesToSetAtEnd.forEach(({ name, value, options }) => {
+    response.cookies.set(name, value, options)
+  })
+
+  return response
 }

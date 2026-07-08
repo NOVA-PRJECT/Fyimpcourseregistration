@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { logServerError } from '@/core/logging/logger'
 
 // ── getDefaulters: single-semester (kept for backwards compat) ──
 export async function getDefaulters(
@@ -6,20 +7,23 @@ export async function getDefaulters(
   department_id: string,
   campus_id: string
 ) {
-  const { data: campusSettings } = await supabaseAdmin
-    .from('campus_settings')
-    .select('academic_year')
-    .eq('campus_id', campus_id)
-    .single()
+  // Parallel fetch: campus settings and students
+  const [settingsRes, studentsRes] = await Promise.all([
+    supabaseAdmin
+      .from('campus_settings')
+      .select('academic_year')
+      .eq('campus_id', campus_id)
+      .single(),
+    supabaseAdmin
+      .from('students')
+      .select('id, full_name, roll_number')
+      .eq('department_id', department_id)
+      .eq('campus_id', campus_id)
+      .eq('current_semester', semester)
+  ])
 
-  const academicYear = campusSettings?.academic_year ?? ''
-
-  const { data: allStudents, error: allError } = await supabaseAdmin
-    .from('students')
-    .select('id, full_name, roll_number')
-    .eq('department_id', department_id)
-    .eq('campus_id', campus_id)
-    .eq('current_semester', semester)
+  const academicYear = settingsRes.data?.academic_year ?? ''
+  const { data: allStudents, error: allError } = studentsRes
 
   if (allError) {
     return { success: false, error: 'Failed to fetch students', status: 500 }
@@ -57,15 +61,7 @@ export async function getAllDepartmentStudents(
   campus_id: string,
   semesterFilter?: number // optional narrowing
 ) {
-  const { data: campusSettings } = await supabaseAdmin
-    .from('campus_settings')
-    .select('academic_year')
-    .eq('campus_id', campus_id)
-    .single()
-
-  const academicYear = campusSettings?.academic_year ?? ''
-
-  let query = supabaseAdmin
+  let studentsQuery = supabaseAdmin
     .from('students')
     .select('id, full_name, roll_number, current_semester')
     .eq('department_id', department_id)
@@ -74,13 +70,24 @@ export async function getAllDepartmentStudents(
     .order('full_name', { ascending: true })
 
   if (semesterFilter !== undefined) {
-    query = query.eq('current_semester', semesterFilter) as typeof query
+    studentsQuery = studentsQuery.eq('current_semester', semesterFilter) as typeof studentsQuery
   }
 
-  const { data: students, error } = await query
+  // Parallel fetch: campus settings and students list
+  const [settingsRes, studentsRes] = await Promise.all([
+    supabaseAdmin
+      .from('campus_settings')
+      .select('academic_year')
+      .eq('campus_id', campus_id)
+      .single(),
+    studentsQuery
+  ])
+
+  const academicYear = settingsRes.data?.academic_year ?? ''
+  const { data: students, error } = studentsRes
 
   if (error) {
-    console.error('getAllDepartmentStudents — students fetch failed:', error)
+    logServerError('getAllDepartmentStudents', error, { department_id, campus_id, semesterFilter })
     return { success: false, error: 'Failed to fetch students', status: 500 }
   }
 
@@ -104,7 +111,7 @@ export async function getAllDepartmentStudents(
     .in('student_id', students.map((s: any) => s.id))
 
   if (regError) {
-    console.error('getAllDepartmentStudents — registrations fetch failed:', regError)
+    logServerError('getAllDepartmentStudents', regError, { department_id, campus_id, academicYear })
     return { success: false, error: 'Failed to fetch registration data', status: 500 }
   }
 

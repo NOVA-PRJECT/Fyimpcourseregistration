@@ -1,6 +1,7 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies'
+import { getSupabaseServerClient } from '@/core/database/supabaseClient'
+import { Role } from '@/core/constants/roles'
+import { NextResponse } from 'next/server'
+import { cache } from 'react'
 
 // ─────────────────────────────────────────────
 // Types
@@ -30,190 +31,218 @@ export type VerifiedTeacher = {
   role: 'teaching_staff'
 }
 
-type AuthError = { success: false; error: string; status: number }
-type AuthSuccess<T> = { success: true } & T
-
-// ─────────────────────────────────────────────
-// Internal: build a session-based Supabase client
-// ─────────────────────────────────────────────
-
-function buildSupabaseClient(cookieStore: ReadonlyRequestCookies) {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (cookiesToSet) => {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-}
-
-// ─────────────────────────────────────────────
-// verifyHod
-// Returns the verified HOD's userId, department_id, and campus_id.
-// Use at the top of every HOD route handler.
-// ─────────────────────────────────────────────
-
-export async function verifyHod(): Promise<AuthSuccess<VerifiedHod> | AuthError> {
-  const cookieStore = await cookies()
-  const supabase = buildSupabaseClient(cookieStore)
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, error: 'Unauthorized', status: 401 }
-
-  const { data: faculty, error } = await supabase
-    .from('faculty')
-    .select('role, department_id, campus_id')
-    .eq('id', user.id)
-    .single()
-
-  if (error || !faculty) return { success: false, error: 'Faculty not found', status: 404 }
-  if (faculty.role !== 'hod') return { success: false, error: 'Unauthorized', status: 403 }
-  if (!faculty.department_id) return { success: false, error: 'HOD has no department assigned', status: 400 }
-
-  return {
-    success: true,
-    userId: user.id,
-    department_id: faculty.department_id,
-    campus_id: faculty.campus_id,
-    role: 'hod',
-  }
-}
-
-// ─────────────────────────────────────────────
-// verifyDirector
-// Returns the verified Campus Director's userId and campus_id.
-// Use at the top of every campus_director route handler.
-// ─────────────────────────────────────────────
-
-export async function verifyDirector(): Promise<AuthSuccess<VerifiedDirector> | AuthError> {
-  const cookieStore = await cookies()
-  const supabase = buildSupabaseClient(cookieStore)
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, error: 'Unauthorized', status: 401 }
-
-  const { data: faculty, error } = await supabase
-    .from('faculty')
-    .select('role, campus_id')
-    .eq('id', user.id)
-    .single()
-
-  if (error || !faculty) return { success: false, error: 'Faculty not found', status: 404 }
-  if (faculty.role !== 'campus_director') return { success: false, error: 'Unauthorized', status: 403 }
-
-  return {
-    success: true,
-    userId: user.id,
-    campus_id: faculty.campus_id,
-    role: 'campus_director',
-  }
-}
-
-// ─────────────────────────────────────────────
-// verifySuperAdmin
-// Returns the verified superadmin's userId.
-// Use at the top of every superadmin route handler.
-// ─────────────────────────────────────────────
-
-export async function verifySuperAdmin(): Promise<AuthSuccess<VerifiedSuperAdmin> | AuthError> {
-  const cookieStore = await cookies()
-  const supabase = buildSupabaseClient(cookieStore)
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, error: 'Unauthorized', status: 401 }
-
-  const { data: admin, error } = await supabase
-    .from('admins')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (error || !admin) return { success: false, error: 'Unauthorized', status: 401 }
-  if (admin.role !== 'superadmin') return { success: false, error: 'Unauthorized', status: 403 }
-
-  return {
-    success: true,
-    userId: user.id,
-    role: 'superadmin',
-  }
-}
-
-// ─────────────────────────────────────────────
-// verifyTeacher
-// Returns the verified teaching_staff's userId and campus_id.
-// Use at the top of every teacher route handler.
-// ─────────────────────────────────────────────
-
-export async function verifyTeacher(): Promise<AuthSuccess<VerifiedTeacher> | AuthError> {
-  const cookieStore = await cookies()
-  const supabase = buildSupabaseClient(cookieStore)
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, error: 'Unauthorized', status: 401 }
-
-  const { data: faculty, error } = await supabase
-    .from('faculty')
-    .select('role, campus_id')
-    .eq('id', user.id)
-    .single()
-
-  if (error || !faculty) return { success: false, error: 'Faculty not found', status: 404 }
-  if (faculty.role !== 'teaching_staff') return { success: false, error: 'Unauthorized', status: 403 }
-
-  return {
-    success: true,
-    userId: user.id,
-    campus_id: faculty.campus_id,
-    role: 'teaching_staff',
-  }
-}
-
-// ─────────────────────────────────────────────
-// verifyStudent
-// Returns the verified student's userId and department_id.
-// Use at the top of every student route handler.
-// ─────────────────────────────────────────────
-
 export type VerifiedStudent = {
   userId: string
   department_id: string
   campus_id: string
   role: 'student'
   must_change_password: boolean
+  current_semester: number
 }
 
-export async function verifyStudent(options?: { allowMustChangePassword?: boolean }): Promise<AuthSuccess<VerifiedStudent> | AuthError> {
-  const cookieStore = await cookies()
-  const supabase = buildSupabaseClient(cookieStore)
+export type AuthError = { success: false; error: string; status: number }
+export type AuthSuccess<T> = { success: true } & T
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, error: 'Unauthorized', status: 401 }
+// ─────────────────────────────────────────────
+// Shared Faculty Role verification helper
+// ─────────────────────────────────────────────
 
-  const { data: student, error } = await supabase
-    .from('students')
-    .select('department_id, campus_id, must_change_password')
-    .eq('id', user.id)
-    .single()
+async function verifyFacultyRole(
+  expectedRole: 'hod' | 'campus_director' | 'teaching_staff'
+): Promise<AuthSuccess<{ userId: string; department_id?: string; campus_id: string; role: typeof expectedRole }> | AuthError> {
+  const supabase = await getSupabaseServerClient()
+  const { data, error: claimsError } = await (supabase.auth as any).getClaims()
+  const claims = data?.claims
 
-  if (error || !student) return { success: false, error: 'Student not found', status: 404 }
+  if (claimsError || !claims) {
+    return { success: false, error: 'Unauthorized', status: 401 }
+  }
 
-  if (student.must_change_password && !options?.allowMustChangePassword) {
+  const role = claims.app_metadata?.role
+  if (role !== expectedRole) {
+    return { success: false, error: 'Unauthorized', status: 403 }
+  }
+
+  let departmentId = claims.app_metadata?.department_id
+  let campusId = claims.app_metadata?.campus_id
+
+  // If fields are missing from app_metadata, fall back to DB query
+  if (!campusId || (expectedRole === 'hod' && !departmentId)) {
+    const { data: faculty, error } = await supabase
+      .from('faculty')
+      .select('role, department_id, campus_id')
+      .eq('id', claims.sub)
+      .single()
+
+    if (error || !faculty) {
+      return { success: false, error: 'Faculty not found', status: 404 }
+    }
+    if (faculty.role !== expectedRole) {
+      return { success: false, error: 'Unauthorized', status: 403 }
+    }
+    departmentId = faculty.department_id
+    campusId = faculty.campus_id
+  }
+
+  return {
+    success: true,
+    userId: claims.sub,
+    department_id: departmentId,
+    campus_id: campusId!,
+    role: expectedRole,
+  } as any
+}
+
+// ─────────────────────────────────────────────
+// verifyHod
+// ─────────────────────────────────────────────
+
+export const verifyHod = cache(async (): Promise<AuthSuccess<VerifiedHod> | AuthError> => {
+  const auth = await verifyFacultyRole('hod')
+  if (!auth.success) return auth
+  if (!auth.department_id) {
+    return { success: false, error: 'HOD has no department assigned', status: 400 }
+  }
+  return auth as AuthSuccess<VerifiedHod>
+})
+
+// ─────────────────────────────────────────────
+// verifyDirector
+// ─────────────────────────────────────────────
+
+export const verifyDirector = cache(async (): Promise<AuthSuccess<VerifiedDirector> | AuthError> => {
+  const auth = await verifyFacultyRole('campus_director')
+  if (!auth.success) return auth
+  return auth as AuthSuccess<VerifiedDirector>
+})
+
+// ─────────────────────────────────────────────
+// verifySuperAdmin
+// ─────────────────────────────────────────────
+
+export const verifySuperAdmin = cache(async (): Promise<AuthSuccess<VerifiedSuperAdmin> | AuthError> => {
+  const supabase = await getSupabaseServerClient()
+  const { data, error: claimsError } = await (supabase.auth as any).getClaims()
+  const claims = data?.claims
+
+  if (claimsError || !claims) {
+    return { success: false, error: 'Unauthorized', status: 401 }
+  }
+
+  const role = claims.app_metadata?.role
+  if (role !== 'superadmin') {
+    return { success: false, error: 'Unauthorized', status: 403 }
+  }
+
+  return {
+    success: true,
+    userId: claims.sub,
+    role: 'superadmin',
+  }
+})
+
+// ─────────────────────────────────────────────
+// verifyTeacher
+// ─────────────────────────────────────────────
+
+export const verifyTeacher = cache(async (): Promise<AuthSuccess<VerifiedTeacher> | AuthError> => {
+  const auth = await verifyFacultyRole('teaching_staff')
+  if (!auth.success) return auth
+  return auth as AuthSuccess<VerifiedTeacher>
+})
+
+// ─────────────────────────────────────────────
+// verifyStudent
+// ─────────────────────────────────────────────
+
+export const verifyStudent = cache(async (options?: { allowMustChangePassword?: boolean }): Promise<AuthSuccess<VerifiedStudent> | AuthError> => {
+  const supabase = await getSupabaseServerClient()
+  const { data, error: claimsError } = await (supabase.auth as any).getClaims()
+  const claims = data?.claims
+
+  if (claimsError || !claims) {
+    return { success: false, error: 'Unauthorized', status: 401 }
+  }
+
+  const role = claims.app_metadata?.role
+  if (role !== 'student') {
+    return { success: false, error: 'Unauthorized', status: 403 }
+  }
+
+  let departmentId = claims.app_metadata?.department_id
+  let campusId = claims.app_metadata?.campus_id
+  let mustChangePassword = claims.app_metadata?.must_change_password
+  let currentSemester: number
+
+  // Fetch current_semester (since it is dynamic/promotion-based) and fallbacks
+  if (departmentId && campusId && mustChangePassword !== undefined) {
+    const { data: student, error } = await supabase
+      .from('students')
+      .select('current_semester, must_change_password')
+      .eq('id', claims.sub)
+      .single()
+
+    if (error || !student) {
+      return { success: false, error: 'Student not found', status: 404 }
+    }
+    mustChangePassword = student.must_change_password
+    currentSemester = student.current_semester
+  } else {
+    const { data: student, error } = await supabase
+      .from('students')
+      .select('department_id, campus_id, current_semester, must_change_password')
+      .eq('id', claims.sub)
+      .single()
+
+    if (error || !student) {
+      return { success: false, error: 'Student not found', status: 404 }
+    }
+    departmentId = student.department_id
+    campusId = student.campus_id
+    mustChangePassword = student.must_change_password
+    currentSemester = student.current_semester
+  }
+
+  if (mustChangePassword && !options?.allowMustChangePassword) {
     return { success: false, error: 'Password change required', status: 403 }
   }
 
   return {
     success: true,
-    userId: user.id,
-    department_id: student.department_id,
-    campus_id: student.campus_id,
+    userId: claims.sub,
+    department_id: departmentId!,
+    campus_id: campusId!,
     role: 'student',
-    must_change_password: student.must_change_password,
+    must_change_password: mustChangePassword,
+    current_semester: currentSemester,
   }
+})
+
+// ─────────────────────────────────────────────
+// requireRole
+// ─────────────────────────────────────────────
+
+export async function requireRole(role: Role): Promise<AuthSuccess<any> | AuthError> {
+  switch (role) {
+    case 'student':
+      return verifyStudent()
+    case 'hod':
+      return verifyHod()
+    case 'campus_director':
+      return verifyDirector()
+    case 'teaching_staff':
+      return verifyTeacher()
+    case 'superadmin':
+      return verifySuperAdmin()
+    default:
+      return { success: false, error: 'Unauthorized', status: 403 }
+  }
+}
+
+// ─────────────────────────────────────────────
+// Shared JSON Response helper for Auth errors
+// ─────────────────────────────────────────────
+
+export function handleAuthError(auth: { success: false; error: string; status: number }) {
+  return NextResponse.json({ error: auth.error }, { status: auth.status })
 }

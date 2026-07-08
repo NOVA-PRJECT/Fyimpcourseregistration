@@ -11,8 +11,18 @@ export async function middleware(request: NextRequest) {
 
   // Guard against missing environment variables
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    console.warn('Supabase environment variables are missing. Middleware is bypassed.')
-    return NextResponse.next()
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      route: request.nextUrl.pathname,
+      userID: 'system',
+      role: 'system',
+      operation: 'middleware_auth_guard',
+      error: 'Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY) are missing.'
+    }))
+    return new NextResponse(
+      JSON.stringify({ error: 'Internal Server Error: Missing system configuration' }),
+      { status: 500, headers: { 'content-type': 'application/json' } }
+    )
   }
 
   let response = NextResponse.next({
@@ -54,13 +64,21 @@ export async function middleware(request: NextRequest) {
   // API routes handle their own auth (for non-student or exempt routes)
   if (isApiRoute) return response
 
-  // No user — kick to login
-  if (!user && isDashboardRoute) {
-    return NextResponse.redirect(new URL('/login', request.url))
+  // No user — clear user_role cookie and kick to login if accessing dashboard
+  if (!user) {
+    if (isDashboardRoute) {
+      const redirectResponse = NextResponse.redirect(new URL('/login', request.url))
+      redirectResponse.cookies.delete('user_role')
+      return redirectResponse
+    }
+    if (cookieRole) {
+      response.cookies.delete('user_role')
+    }
   }
 
-  // Logged in user tries to access login — send to their dashboard
-  if (user && isLoginRoute) {
+  // Logged in user tries to access login or home page — send to their dashboard
+  const isHomeRoute = pathname === '/'
+  if (user && (isLoginRoute || isHomeRoute)) {
     const targetRole = role || cookieRole
     if (targetRole && ROLE_DASHBOARD_MAP[targetRole]) {
       return NextResponse.redirect(new URL(ROLE_DASHBOARD_MAP[targetRole], request.url))

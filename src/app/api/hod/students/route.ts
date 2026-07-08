@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { verifyHod } from '@/core/auth/verifyRole'
+import { logServerError } from '@/core/logging/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
     .order('full_name')
 
   if (error) {
-    console.error('hod/students GET failed:', error)
+    logServerError('/api/hod/students', error, { userId: auth.userId, department_id: auth.department_id, semester })
     return NextResponse.json({ error: 'Failed to fetch students' }, { status: 500 })
   }
 

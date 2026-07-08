@@ -1,50 +1,21 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { SubmitCoursesInput } from '../schemas/submitSchema'
 import { SLOT_RULES } from '@/core/constants/courseCategories'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { getSupabaseServerClient } from '@/core/database/supabaseClient'
+import { VerifiedStudent } from '@/core/auth/verifyRole'
+import { isCourseEligibleForSlot } from '@/core/utils/slotRules'
+import { logServerError } from '@/core/logging/logger'
 
-
-export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
-
-  const cookieStore = await cookies()
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (cookiesToSet) =>
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          ),
-      },
-    }
-  )
-
-  // 1. Get logged in student
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, error: 'Unauthorized', status: 401 }
+export async function submitCourses(auth: VerifiedStudent, { semester, courses }: SubmitCoursesInput) {
+  const supabase = await getSupabaseServerClient()
 
   // M3 fix: Server-side duplicate course check (defense against schema bypass)
   if (new Set(courses).size !== courses.length) {
     return { success: false, error: 'Duplicate courses detected', status: 400 }
   }
 
-  // 2. Get student details
-  const { data: student, error: studentError } = await supabase
-    .from('students')
-    .select('campus_id, department_id, current_semester')
-    .eq('id', user.id)
-    .single()
-
-  if (studentError || !student) {
-    return { success: false, error: 'Student not found', status: 404 }
-  }
-
-  // 3. Verify submitted semester matches current semester
-  if (semester !== student.current_semester) {
+  // Verify submitted semester matches current semester
+  if (semester !== auth.current_semester) {
     return {
       success: false,
       error: 'Submitted semester does not match your current semester',
@@ -52,7 +23,7 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
     }
   }
 
-  // 4. Parallel fetch: campus settings + blueprint + all departments
+  // Parallel fetch: campus settings + blueprint + all departments
   const [
     { data: settings, error: settingsError },
     { data: blueprint, error: blueprintError },
@@ -61,12 +32,12 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
     supabase
       .from('campus_settings')
       .select('deadline, min_credits, max_credits, academic_year')
-      .eq('campus_id', student.campus_id)
+      .eq('campus_id', auth.campus_id)
       .single(),
     supabase
       .from('semester_blueprints')
       .select('*')
-      .eq('department_id', student.department_id)
+      .eq('department_id', auth.department_id)
       .eq('semester', semester)
       .single(),
     supabase
@@ -78,7 +49,7 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
     return { success: false, error: 'Campus settings not found', status: 404 }
   }
 
-  // 5. Check registration window
+  // Check registration window
   const now = new Date()
   const deadline = settings.deadline ? new Date(settings.deadline) : null
   const windowOpen = deadline !== null && now < deadline
@@ -91,14 +62,14 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
     return { success: false, error: 'No blueprint found for your semester', status: 404 }
   }
 
-  // 6. Build slot definitions from blueprint
+  // Build slot definitions from blueprint
   const slots = Array.from({ length: 6 }, (_, i) => ({
     slot: i + 1,
     rule: blueprint[`slot_${i + 1}_rule`] as string | null,
     target: blueprint[`slot_${i + 1}_target`] as string | null,
   })).filter(s => s.rule) // only defined slots
 
-  // 7. Validate course count matches defined slots
+  // Validate course count matches defined slots
   if (courses.length !== slots.length) {
     return {
       success: false,
@@ -107,7 +78,7 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
     }
   }
 
-  // 8. Fetch full details of all submitted courses in one query
+  // Fetch full details of all submitted courses in one query
   const { data: courseData, error: courseError } = await supabase
     .from('courses')
     .select('id, course_code, credits, category, tag, department_id, semester')
@@ -127,7 +98,7 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
   // Build course lookup by id
   const courseMap = new Map(courseData.map(c => [c.id, c]))
 
-  // 9. Validate each course against its blueprint slot rule
+  // Validate each course against its blueprint slot rule
   for (let i = 0; i < slots.length; i++) {
     const { slot, rule, target } = slots[i]
     const courseId = courses[i]
@@ -137,98 +108,88 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
       return { success: false, error: `Invalid course in slot ${slot}`, status: 400 }
     }
 
-    // FIXED — must match the exact course code
-    if (rule === SLOT_RULES.FIXED) {
-      if (course.course_code !== target) {
+    if (!rule || !target) continue
+
+    const isEligible = isCourseEligibleForSlot(
+      course,
+      rule,
+      target,
+      auth.department_id,
+      deptMap
+    )
+
+    if (!isEligible) {
+      // Return the specific detailed error messages to keep user experience identical
+      if (rule === SLOT_RULES.FIXED) {
         return {
           success: false,
           error: `Slot ${slot} requires a fixed course and cannot be changed`,
           status: 400,
         }
       }
-      continue
-    }
-
-    // DEPT_RESTRICTED — must come from specific department, DSC or DSE only
-    if (rule === SLOT_RULES.DEPT_RESTRICTED) {
-      const requiredDeptId = deptMap.get(target ?? '')
-      if (course.department_id !== requiredDeptId) {
-        return {
-          success: false,
-          error: `Slot ${slot} requires a course from a specific department`,
-          status: 400,
+      if (rule === SLOT_RULES.DEPT_RESTRICTED) {
+        const requiredDeptId = deptMap.get(target)
+        if (course.department_id !== requiredDeptId) {
+          return {
+            success: false,
+            error: `Slot ${slot} requires a course from a specific department`,
+            status: 400,
+          }
         }
-      }
-      if (!['DSC', 'DSE'].includes(course.category)) {
         return {
           success: false,
           error: `Slot ${slot} requires a DSC or DSE category course`,
           status: 400,
         }
       }
-      continue
-    }
-
-    // EXCLUDE_DEPT — must NOT come from specific department, DSC or DSE only
-    if (rule === SLOT_RULES.EXCLUDE_DEPT) {
-      const excludedDeptId = deptMap.get(target ?? '')
-      if (course.department_id === excludedDeptId) {
-        return {
-          success: false,
-          error: `Slot ${slot} does not allow courses from that department`,
-          status: 400,
+      if (rule === SLOT_RULES.EXCLUDE_DEPT) {
+        const excludedDeptId = deptMap.get(target)
+        if (course.department_id === excludedDeptId) {
+          return {
+            success: false,
+            error: `Slot ${slot} does not allow courses from that department`,
+            status: 400,
+          }
         }
-      }
-      if (!['DSC', 'DSE'].includes(course.category)) {
         return {
           success: false,
           error: `Slot ${slot} requires a DSC or DSE category course`,
           status: 400,
         }
       }
-      continue
-    }
-
-    // POOL_RESTRICTED — must come from student's own dept, matching tag
-    if (rule === SLOT_RULES.POOL_RESTRICTED) {
-      if (course.department_id !== student.department_id) {
-        return {
-          success: false,
-          error: `Slot ${slot} requires a course from your own department`,
-          status: 400,
+      if (rule === SLOT_RULES.POOL_RESTRICTED) {
+        if (course.department_id !== auth.department_id) {
+          return {
+            success: false,
+            error: `Slot ${slot} requires a course from your own department`,
+            status: 400,
+          }
         }
-      }
-      if (course.tag !== target) {
         return {
           success: false,
           error: `Slot ${slot} requires a course from pool "${target}"`,
           status: 400,
         }
       }
-      continue
-    }
-
-    // GLOBAL_BASKET — must match tag; if MDC, must exclude student's own dept
-    if (rule === SLOT_RULES.GLOBAL_BASKET) {
-      if (course.tag !== target) {
-        return {
-          success: false,
-          error: `Slot ${slot} requires a course with tag "${target}"`,
-          status: 400,
+      if (rule === SLOT_RULES.GLOBAL_BASKET) {
+        if (course.tag !== target) {
+          return {
+            success: false,
+            error: `Slot ${slot} requires a course with tag "${target}"`,
+            status: 400,
+          }
         }
-      }
-      if (target?.includes('MDC') && course.department_id === student.department_id) {
         return {
           success: false,
           error: `Slot ${slot} requires a course from a different department`,
           status: 400,
         }
       }
-      continue
+      return { success: false, error: `Invalid course for slot ${slot}`, status: 400 }
     }
   }
 
-  // 10. Calculate total credits
+  // Calculate total credits
   const totalCredits = courseData.reduce((sum, c) => sum + c.credits, 0)
 
   if (totalCredits < settings.min_credits) {
@@ -247,10 +208,10 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
     }
   }
 
-  // 11. Build upsert payload — slot assignment follows blueprint order
+  // Build upsert payload — slot assignment follows blueprint order
   const payload: Record<string, unknown> = {
-    student_id: user.id,
-    campus_id: student.campus_id,
+    student_id: auth.userId,
+    campus_id: auth.campus_id,
     semester,
     academic_year: settings.academic_year,
     total_credits: totalCredits,
@@ -263,14 +224,13 @@ export async function submitCourses({ semester, courses }: SubmitCoursesInput) {
     slot_6_course_id: courses[5] ?? null,
   }
 
-  // 12. Upsert via supabaseAdmin — student_registrations RLS denies direct client writes
+  // Upsert via supabaseAdmin — student_registrations RLS denies direct client writes
   const { error: upsertError } = await supabaseAdmin
     .from('student_registrations')
     .upsert(payload, { onConflict: 'student_id,semester,academic_year'})
 
-
   if (upsertError) {
-    console.error('submitCourses — upsert failed:', upsertError)
+    logServerError('submitCourses', upsertError, { userId: auth.userId, academicYear: settings.academic_year, semester })
     return { success: false, error: 'Failed to save registration', status: 500 }
   }
 

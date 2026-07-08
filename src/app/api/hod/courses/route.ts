@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { verifyHod } from '@/core/auth/verifyRole'
 import { z } from 'zod'
+import { logServerError } from '@/core/logging/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
     .order('category')
 
   if (error) {
-    console.error('hod/courses GET failed:', error)
+    logServerError('/api/hod/courses', error, { userId: auth.userId, method: 'GET', semester })
     return NextResponse.json({ error: 'Failed to fetch courses' }, { status: 500 })
   }
 
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Course code already exists' }, { status: 409 })
     }
-    console.error('hod/courses POST failed:', error)
+    logServerError('/api/hod/courses', error, { userId: auth.userId, method: 'POST', body: parsed.data })
     return NextResponse.json({ error: 'Failed to add course' }, { status: 500 })
   }
 
@@ -96,18 +97,7 @@ export async function PUT(request: NextRequest) {
 
   const supabase = await getSupabaseServerClient()
 
-  // Verify course belongs to HOD's department
-  const { data: course } = await supabase
-    .from('courses')
-    .select('department_id')
-    .eq('id', id)
-    .single()
-
-  if (!course || course.department_id !== auth.department_id) {
-    return NextResponse.json({ error: 'Course not found' }, { status: 404 })
-  }
-
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('courses')
     .update({
       title: rest.title,
@@ -116,10 +106,16 @@ export async function PUT(request: NextRequest) {
       tag: rest.tag || null,
     })
     .eq('id', id)
+    .eq('department_id', auth.department_id)
+    .select()
 
   if (error) {
-    console.error('hod/courses PUT failed:', error)
+    logServerError('/api/hod/courses', error, { userId: auth.userId, method: 'PUT', courseId: id })
     return NextResponse.json({ error: 'Failed to update course' }, { status: 500 })
+  }
+
+  if (!data || data.length === 0) {
+    return NextResponse.json({ error: 'Course not found' }, { status: 404 })
   }
 
   return NextResponse.json({ success: true, message: 'Course updated successfully' })
@@ -139,25 +135,20 @@ export async function DELETE(request: NextRequest) {
 
   const supabase = await getSupabaseServerClient()
 
-  // Verify course belongs to HOD's department
-  const { data: course } = await supabase
-    .from('courses')
-    .select('department_id')
-    .eq('id', course_id)
-    .single()
-
-  if (!course || course.department_id !== auth.department_id) {
-    return NextResponse.json({ error: 'Course not found' }, { status: 404 })
-  }
-
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('courses')
     .delete()
     .eq('id', course_id)
+    .eq('department_id', auth.department_id)
+    .select()
 
   if (error) {
-    console.error('hod/courses DELETE failed:', error)
+    logServerError('/api/hod/courses', error, { userId: auth.userId, method: 'DELETE', courseId: course_id })
     return NextResponse.json({ error: 'Failed to delete course' }, { status: 500 })
+  }
+
+  if (!data || data.length === 0) {
+    return NextResponse.json({ error: 'Course not found' }, { status: 404 })
   }
 
   return NextResponse.json({ success: true, message: 'Course deleted successfully' })

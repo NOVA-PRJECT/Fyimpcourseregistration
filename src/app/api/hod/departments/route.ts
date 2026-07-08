@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { verifyHod } from '@/core/auth/verifyRole'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { logServerError } from '@/core/logging/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +19,7 @@ export async function GET() {
     .order('name')
 
   if (error) {
-    console.error('hod/departments GET failed:', error)
+    logServerError('/api/hod/departments', error, { userId: auth.userId })
     return NextResponse.json({ error: 'Failed to fetch departments' }, { status: 500 })
   }
 

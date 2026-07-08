@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { BulkUploadRowSchema, BulkUploadRow } from '@/modules/admin/schemas/bulkUploadSchema'
+import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 
 export interface BulkCreateResult {
   row: number
@@ -149,7 +150,7 @@ export async function bulkCreateStudents(
 
     if (studentError) {
       // Rollback: delete orphaned auth user
-      await supabaseAdmin.auth.admin.deleteUser(authUserId)
+      await deleteAuthUser(authUserId)
       results.push({
         ...rowResult,
         status: 'error',

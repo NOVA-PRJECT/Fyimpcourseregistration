@@ -49,7 +49,7 @@ export default function ChangePasswordPage() {
       return
     }
 
-    router.push('/dashboard/student')
+    window.location.href = '/dashboard/student'
   }
 
   return (

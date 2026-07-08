@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { AddFacultyInput } from '@/modules/admin/schemas/addFacultySchema'
+import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 
 export async function createFacultyUser({
   full_name,
@@ -56,7 +57,7 @@ export async function createFacultyUser({
     })
 
   if (facultyError) {
-    await supabaseAdmin.auth.admin.deleteUser(authUserId)
+    await deleteAuthUser(authUserId)
     const isForeignKeyError = facultyError.code === '23503'
     return {
       success: false,

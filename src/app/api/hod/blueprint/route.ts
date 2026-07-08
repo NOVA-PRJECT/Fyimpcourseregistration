@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { verifyHod } from '@/core/auth/verifyRole'
+import { logServerError } from '@/core/logging/logger'
+import { BlueprintUpdateSchema } from '@/modules/hod/schemas/blueprintSchema'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +28,7 @@ export async function GET(request: NextRequest) {
     .single()
 
   if (error && error.code !== 'PGRST116') {
-    console.error('hod/blueprint GET failed:', error)
+    logServerError('/api/hod/blueprint', error, { userId: auth.userId, method: 'GET', semester })
     return NextResponse.json({ error: 'Failed to fetch blueprint' }, { status: 500 })
   }
 
@@ -41,17 +43,22 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { semester, min_credits, max_credits, slots } = body
+  const result = BlueprintUpdateSchema.safeParse(body)
 
-  if (!semester || !slots) {
-    return NextResponse.json({ error: 'Semester and slots are required' }, { status: 400 })
+  if (!result.success) {
+    return NextResponse.json(
+      { error: result.error.issues[0].message },
+      { status: 400 }
+    )
   }
+
+  const { semester, min_credits, max_credits, slots } = result.data
 
   const payload: Record<string, any> = {
     department_id: auth.department_id,
-    semester: Number(semester),
-    min_credits: min_credits ?? 18,
-    max_credits: max_credits ?? 26,
+    semester,
+    min_credits,
+    max_credits,
   }
 
   for (let i = 1; i <= 6; i++) {
@@ -67,7 +74,7 @@ export async function PUT(request: NextRequest) {
     .upsert(payload, { onConflict: 'department_id,semester' })
 
   if (error) {
-    console.error('hod/blueprint PUT failed:', error)
+    logServerError('/api/hod/blueprint', error, { userId: auth.userId, method: 'PUT', semester })
     return NextResponse.json({ error: 'Failed to save blueprint' }, { status: 500 })
   }
 

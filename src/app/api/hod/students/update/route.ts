@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifyHod } from '@/core/auth/verifyRole'
 import { z } from 'zod'
+import { logServerError } from '@/core/logging/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,28 +28,24 @@ export async function PUT(request: NextRequest) {
     )
   }
 
-  // Verify student belongs to HOD's department AND campus — never trust client IDs
-  const { data: student } = await supabaseAdmin
-    .from('students')
-    .select('id, department_id, campus_id')
-    .eq('id', result.data.student_id)
-    .single()
-
-  if (!student || student.department_id !== auth.department_id || student.campus_id !== auth.campus_id) {
-    return NextResponse.json({ error: 'Student not found' }, { status: 404 })
-  }
-
-  const { error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('students')
     .update({
       full_name: result.data.full_name,
       current_semester: result.data.current_semester,
     })
     .eq('id', result.data.student_id)
+    .eq('department_id', auth.department_id)
+    .eq('campus_id', auth.campus_id)
+    .select()
 
   if (error) {
-    console.error('hod/students/update PUT failed:', error)
+    logServerError('/api/hod/students/update', error, { userId: auth.userId, targetStudentId: result.data.student_id })
     return NextResponse.json({ error: 'Failed to update student' }, { status: 500 })
+  }
+
+  if (!data || data.length === 0) {
+    return NextResponse.json({ error: 'Student not found' }, { status: 404 })
   }
 
   return NextResponse.json({ success: true, message: 'Student updated successfully' })

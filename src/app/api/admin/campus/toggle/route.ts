@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { CampusSettingsSchema } from '@/modules/admin/schemas/campusSettingsSchema'
 import { updateSettings } from '@/modules/admin/services/updateSettings'
-import { verifyDirector } from '@/core/auth/verifyRole'
+import { verifyDirector, handleAuthError } from '@/core/auth/verifyRole'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
-  
   const auth = await verifyDirector()
-  if (!auth.success) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-  
-  
+  if (!auth.success) return handleAuthError(auth)
   
   const body = await request.json()
   const result = CampusSettingsSchema.safeParse(body)
@@ -24,7 +19,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const response = await updateSettings(result.data)
+  const response = await updateSettings(auth, result.data)
 
   if (!response.success) {
     return NextResponse.json(

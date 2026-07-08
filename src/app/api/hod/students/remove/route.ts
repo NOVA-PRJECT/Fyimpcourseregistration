@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifyHod } from '@/core/auth/verifyRole'
+import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
+import { logServerError } from '@/core/logging/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,22 +17,26 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Student ID required' }, { status: 400 })
   }
 
-  // Verify student belongs to HOD's department AND campus — never trust client IDs
-  const { data: student } = await supabaseAdmin
+  // Delete the student row — cascade handles student_registrations automatically
+  const { data, error } = await supabaseAdmin
     .from('students')
-    .select('id, department_id, campus_id')
+    .delete()
     .eq('id', student_id)
-    .single()
+    .eq('department_id', auth.department_id)
+    .eq('campus_id', auth.campus_id)
+    .select()
 
-  if (!student || student.department_id !== auth.department_id || student.campus_id !== auth.campus_id) {
+  if (error) {
+    logServerError('/api/hod/students/remove', error, { userId: auth.userId, targetStudentId: student_id })
+    return NextResponse.json({ error: 'Failed to delete student' }, { status: 500 })
+  }
+
+  if (!data || data.length === 0) {
     return NextResponse.json({ error: 'Student not found' }, { status: 404 })
   }
 
-  // 2. Delete the students row — cascade handles student_registrations automatically
-  await supabaseAdmin.from('students').delete().eq('id', student_id)
-
   // 3. Delete the Supabase auth user
-  await supabaseAdmin.auth.admin.deleteUser(student_id)
+  await deleteAuthUser(student_id)
 
   // 4. Return success
   return NextResponse.json({ success: true, message: 'Student removed successfully' })

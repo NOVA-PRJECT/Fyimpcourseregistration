@@ -1,6 +1,6 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { CampusSettingsInput } from '@/modules/admin/schemas/campusSettingsSchema'
+import { getSupabaseServerClient } from '@/core/database/supabaseClient'
+import { VerifiedDirector } from '@/core/auth/verifyRole'
 
 function getCurrentAcademicYear(): string {
   const now = new Date()
@@ -10,40 +10,15 @@ function getCurrentAcademicYear(): string {
   return `${year - 1}-${String(year).slice(2)}`
 }
 
-export async function updateSettings({
-  deadline,
-  min_credits = 18,
-  max_credits = 26,
-}: CampusSettingsInput) {
-
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, error: 'Unauthorized', status: 401 }
-
-  const { data: director } = await supabase
-    .from('faculty')
-    .select('role, campus_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!director || director.role !== 'campus_director') {
-    return { success: false, error: 'Unauthorized', status: 403 }
-  }
+export async function updateSettings(
+  auth: VerifiedDirector,
+  {
+    deadline,
+    min_credits = 18,
+    max_credits = 26,
+  }: CampusSettingsInput
+) {
+  const supabase = await getSupabaseServerClient()
 
   const deadlineDate = new Date(deadline)
   if (isNaN(deadlineDate.getTime())) {
@@ -55,7 +30,7 @@ export async function updateSettings({
   const { error } = await supabase
     .from('campus_settings')
     .upsert({
-      campus_id: director.campus_id,
+      campus_id: auth.campus_id,
       deadline: deadlineDate.toISOString(),
       min_credits,
       max_credits,

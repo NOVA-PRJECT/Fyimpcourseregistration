@@ -1,0 +1,121 @@
+'use client'
+
+import { useState } from 'react'
+import Image from 'next/image'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { createBrowserClient } from '@supabase/ssr'
+import styles from './student-dashboard.module.css'
+
+interface StudentInfo {
+  full_name: string
+  roll_number: string
+  current_semester: number
+  academic_year_joined: string
+  department_name: string
+  campus_name: string
+}
+
+interface StudentDashboardClientProps {
+  studentInfo: StudentInfo
+  hasSubmission: boolean
+}
+
+export default function StudentDashboardClient({ studentInfo, hasSubmission }: StudentDashboardClientProps) {
+  const router = useRouter()
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  async function handleLogout() {
+    setLoggingOut(true)
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  return (
+    <div className={styles.pageWrapper}>
+
+      {/* Top Bar */}
+      <div className={styles.topBar}>
+        <div className={styles.topBarLeft}>
+          <div className={styles.logoSmall}>
+            <Image src="/logo.png" alt="KU" width={28} height={28} />
+          </div>
+          <div>
+            <p className={styles.topBarTitle}>FYIMP Portal</p>
+            <p className={styles.topBarSubtitle}>Student Dashboard</p>
+          </div>
+        </div>
+        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Logging out...' : 'Logout'}
+        </button>
+      </div>
+
+      {/* Full-width Profile Section */}
+      <div className={styles.profileSection}>
+        {studentInfo ? (
+          <>
+            {/* Avatar + Name */}
+            <div className={styles.profileTop}>
+              <div className={styles.profileAvatar}>
+                {studentInfo.full_name.charAt(0).toUpperCase()}
+              </div>
+              <div className={styles.profileMeta}>
+                <h1 className={styles.profileName}>{studentInfo.full_name}</h1>
+                <p className={styles.profileRole}>FYIMP Student</p>
+              </div>
+            </div>
+
+            {/* Detail Grid */}
+            <div className={styles.profileGrid}>
+              <div className={styles.profileField}>
+                <span className={styles.profileFieldLabel}>Roll Number</span>
+                <span className={styles.profileFieldValue}>{studentInfo.roll_number || '—'}</span>
+              </div>
+              <div className={styles.profileField}>
+                <span className={styles.profileFieldLabel}>Department</span>
+                <span className={styles.profileFieldValue}>{studentInfo.department_name}</span>
+              </div>
+              <div className={styles.profileField}>
+                <span className={styles.profileFieldLabel}>Campus</span>
+                <span className={styles.profileFieldValue}>{studentInfo.campus_name}</span>
+              </div>
+              <div className={styles.profileField}>
+                <span className={styles.profileFieldLabel}>Current Semester</span>
+                <span className={styles.profileFieldValue}>
+                  <span className={styles.semBadge}>Semester {studentInfo.current_semester}</span>
+                </span>
+              </div>
+              <div className={styles.profileField}>
+                <span className={styles.profileFieldLabel}>Academic Year Joined</span>
+                <span className={styles.profileFieldValue}>{studentInfo.academic_year_joined}</span>
+              </div>
+            </div>
+
+            {/* Register / Update Button */}
+            <div className={styles.profileAction}>
+              <Link
+                href="/dashboard/student/register"
+                className={styles.registerLink}
+              >
+                {hasSubmission ? 'Update Registration →' : 'Register Courses →'}
+              </Link>
+              <p className={styles.registerHint}>
+                {hasSubmission
+                  ? 'You have already submitted. Click to update your selection.'
+                  : 'Select your courses for this semester.'}
+              </p>
+            </div>
+          </>
+        ) : (
+          <p className={styles.profileError}>Unable to load profile. Please refresh.</p>
+        )}
+      </div>
+
+    </div>
+  )
+}

@@ -4,7 +4,6 @@ import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
 import styles from './login.module.css'
 
 export default function LoginPage() {
@@ -15,11 +14,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
 
   function validate() {
     const errors: { email?: string; password?: string } = {}
@@ -37,34 +31,22 @@ export default function LoginPage() {
     setError('')
 
     try {
-      // Step 1 — Sign in with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (authError || !authData.user) {
-        setError('Invalid email or password. Please try again.')
-        setLoading(false)
-        return
-      }
-
-      // Step 2 — Call route-user API to determine role and get redirect
-      const response = await fetch('/api/auth/route-user', {
+      // Call single server-side login route (handles rate limiting, auth, metadata sync and cookies)
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ auth_user_id: authData.user.id }),
+        body: JSON.stringify({ email, password }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        setError('Account not recognized. Please contact your administrator.')
+        setError(data.error || 'Something went wrong. Please try again.')
         setLoading(false)
         return
       }
 
-      // Step 3 — Redirect to correct dashboard
+      // Redirect to correct dashboard
       window.location.href = data.redirectTo
 
     } catch {

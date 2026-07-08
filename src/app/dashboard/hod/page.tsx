@@ -43,7 +43,7 @@ interface UploadResult {
   results?: { row: number; email: string; status: string; issues?: string[] }[]
 }
 
-type Tab = 'defaulters' | 'upload' | 'students' | 'blueprint'
+type Tab = 'defaulters' | 'upload' | 'students' | 'blueprint' | 'courses'
 
 export default function HodDashboard() {
   const router = useRouter()
@@ -380,6 +380,9 @@ export default function HodDashboard() {
         <button className={`${styles.tabBtn} ${activeTab === 'blueprint' ? styles.tabActive : ''}`} onClick={() => setActiveTab('blueprint')}>
           📐 Blueprint
         </button>
+        <button className={`${styles.tabBtn} ${activeTab === 'courses' ? styles.tabActive : ''}`} onClick={() => setActiveTab('courses')}>
+          📚 Courses
+        </button>
       </div>
 
       {/* Main Content */}
@@ -616,7 +619,8 @@ export default function HodDashboard() {
           </>
         )}
 
-        {activeTab === 'blueprint' && <BlueprintTab />}
+        {activeTab === 'blueprint' && <BlueprintTab view="blueprint" />}
+        {activeTab === 'courses' && <BlueprintTab view="courses" />}
 
         {/* ══ DEFAULTERS TAB ══ */}
         {activeTab === 'defaulters' && (

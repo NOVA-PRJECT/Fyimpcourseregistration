@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifyHod } from '@/core/auth/verifyRole'
 import { z } from 'zod'
+import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
+import { logServerError } from '@/core/logging/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,8 +94,8 @@ export async function POST(request: NextRequest) {
 
   if (studentError) {
     // Rollback: remove orphaned auth user
-    await supabaseAdmin.auth.admin.deleteUser(authUserId)
-    console.error('hod/students/add POST — student insert failed:', studentError)
+    await deleteAuthUser(authUserId)
+    logServerError('/api/hod/students/add', studentError, { userId: auth.userId, newStudentEmail: email })
     return NextResponse.json({ error: 'Failed to create student record' }, { status: 500 })
   }
 

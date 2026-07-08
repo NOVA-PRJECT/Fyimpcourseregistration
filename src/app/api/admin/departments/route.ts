@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifySuperAdmin } from '@/core/auth/verifyRole'
+import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
+import { logServerError } from '@/core/logging/logger'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -24,7 +26,7 @@ export async function GET() {
     .order('name')
 
   if (error) {
-    console.error('admin/departments GET failed:', error)
+    logServerError('/api/admin/departments', error, { userId: auth.userId, method: 'GET' })
     return NextResponse.json({ error: 'Failed to fetch departments' }, { status: 500 })
   }
 
@@ -56,7 +58,7 @@ export async function POST(request: NextRequest) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Department name or code already exists' }, { status: 409 })
     }
-    console.error('admin/departments POST failed:', error)
+    logServerError('/api/admin/departments', error, { userId: auth.userId, method: 'POST', body: result.data })
     return NextResponse.json({ error: 'Failed to add department' }, { status: 500 })
   }
 
@@ -81,7 +83,7 @@ export async function PUT(request: NextRequest) {
     .eq('id', id)
 
   if (error) {
-    console.error('admin/departments PUT failed:', error)
+    logServerError('/api/admin/departments', error, { userId: auth.userId, method: 'PUT', body: { id, name, code } })
     return NextResponse.json({ error: 'Failed to update department' }, { status: 500 })
   }
 
@@ -117,16 +119,16 @@ export async function DELETE(request: NextRequest) {
   })
 
   if (error) {
-    console.error('admin/departments DELETE failed:', error)
+    logServerError('/api/admin/departments', error, { userId: auth.userId, method: 'DELETE', departmentId: department_id })
     return NextResponse.json({ error: 'Failed to delete department' }, { status: 500 })
   }
 
   // Delete auth accounts after DB rows are gone
   for (const s of students ?? []) {
-    await supabaseAdmin.auth.admin.deleteUser(s.id)
+    await deleteAuthUser(s.id)
   }
   for (const f of faculty ?? []) {
-    await supabaseAdmin.auth.admin.deleteUser(f.id)
+    await deleteAuthUser(f.id)
   }
 
   return NextResponse.json({ success: true, message: 'Department deleted successfully' })

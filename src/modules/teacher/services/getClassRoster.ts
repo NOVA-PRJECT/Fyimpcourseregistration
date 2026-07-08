@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
+import { logServerError } from '@/core/logging/logger'
 
 export async function getClassRoster(courseId: string, campus_id: string) {
 
@@ -53,7 +54,7 @@ export async function getClassRoster(courseId: string, campus_id: string) {
     )
 
   if (regError) {
-    console.error('getClassRoster — registrations fetch failed:', regError)
+    logServerError('getClassRoster', regError, { courseId, campus_id, step: 'registrations_fetch' })
     return { success: false, error: 'Failed to fetch registrations', status: 500 }
   }
 
@@ -85,7 +86,7 @@ export async function getClassRoster(courseId: string, campus_id: string) {
     .in('id', studentIds)
 
   if (studentError || !students) {
-    console.error('getClassRoster — student details fetch failed:', studentError)
+    logServerError('getClassRoster', studentError, { courseId, campus_id, step: 'student_details_fetch' })
     return { success: false, error: 'Failed to fetch student details', status: 500 }
   }
 

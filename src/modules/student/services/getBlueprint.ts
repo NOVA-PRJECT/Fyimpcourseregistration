@@ -1,42 +1,13 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { SLOT_RULES } from '@/core/constants/courseCategories'
 import { BlueprintSlot, BlueprintResponse } from '@/core/types/course.types'
+import { getSupabaseServerClient } from '@/core/database/supabaseClient'
+import { VerifiedStudent } from '@/core/auth/verifyRole'
+import { isCourseEligibleForSlot } from '@/core/utils/slotRules'
 
-export async function getBlueprint() {
-  const cookieStore = await cookies()
+export async function getBlueprint(auth: VerifiedStudent) {
+  const supabase = await getSupabaseServerClient()
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (cookiesToSet) => {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  // 1. Get logged in student
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, error: 'Unauthorized', status: 401 }
-
-  // 2. Get student details
-  const { data: student, error: studentError } = await supabase
-    .from('students')
-    .select('department_id, campus_id, current_semester')
-    .eq('id', user.id)
-    .single()
-
-  if (studentError || !student) {
-    return { success: false, error: 'Student not found', status: 404 }
-  }
-
-  // 3. PARALLEL FETCH: Settings, Blueprint, and all Departments
+  // Parallel fetch: Settings, Blueprint, and all Departments
   const [
     { data: settings, error: settingsError },
     { data: blueprint, error: blueprintError },
@@ -45,13 +16,13 @@ export async function getBlueprint() {
     supabase
       .from('campus_settings')
       .select('deadline, min_credits, max_credits, academic_year')
-      .eq('campus_id', student.campus_id)
+      .eq('campus_id', auth.campus_id)
       .single(),
     supabase
       .from('semester_blueprints')
       .select('*')
-      .eq('department_id', student.department_id)
-      .eq('semester', student.current_semester)
+      .eq('department_id', auth.department_id)
+      .eq('semester', auth.current_semester)
       .single(),
     supabase
       .from('departments')
@@ -66,16 +37,15 @@ export async function getBlueprint() {
     return { success: false, error: 'Blueprint not found for this semester', status: 404 }
   }
 
-  // 4. Check registration window — do NOT return early here
-  // Always return full blueprint with window_status so frontend can handle it
+  // Check registration window
   const now = new Date()
   const deadline = settings.deadline ? new Date(settings.deadline) : null
   const windowOpen = deadline !== null && now < deadline
 
-  // 5. Build department code → id map for O(1) lookup
+  // Build department code → id map for O(1) lookup
   const deptMap = new Map(departmentsData?.map(d => [d.code, d.id]) || [])
 
-  // 6. PRE-FLIGHT: Identify all slots and batch-fetch FIXED courses
+  // PRE-FLIGHT: Identify all slots and batch-fetch FIXED courses
   const slotsInfo = Array.from({ length: 6 }).map((_, i) => ({
     slot: i + 1,
     rule: blueprint[`slot_${i + 1}_rule`],
@@ -83,7 +53,6 @@ export async function getBlueprint() {
     name: blueprint[`slot_${i + 1}_name`] ?? `Paper ${i + 1}`
   })).filter(s => s.rule && s.target)
 
-  // L4 fix: Return error if blueprint has no configured slots
   if (slotsInfo.length === 0) {
     return { success: false, error: 'Blueprint has no configured course slots for this semester', status: 400 }
   }
@@ -107,21 +76,19 @@ export async function getBlueprint() {
     }
   }
 
-  // 7. FINAL PARALLEL PASS: existing registration + all slot queries simultaneously
+  // FINAL PARALLEL PASS: existing registration + all slot queries simultaneously
   const [existingRegistrationRes, ...resolvedSlots] = await Promise.all([
-
     // Check if student already submitted this semester
     supabase
       .from('student_registrations')
       .select('slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
-      .eq('student_id', user.id)
-      .eq('semester', student.current_semester)
+      .eq('student_id', auth.userId)
+      .eq('semester', auth.current_semester)
       .eq('academic_year', settings.academic_year)
       .single(),
 
     // Resolve each slot in parallel
     ...slotsInfo.map(async ({ slot, rule, target, name }) => {
-
       // FIXED — already resolved from batch fetch
       if (rule === SLOT_RULES.FIXED) {
         return {
@@ -147,9 +114,11 @@ export async function getBlueprint() {
         if (!deptId) return { slot, rule, name, options: [] }
         const { data: options } = await query
           .eq('department_id', deptId)
-          .eq('semester', student.current_semester)
+          .eq('semester', auth.current_semester)
           .in('category', ['DSC', 'DSE'])
-        return { slot, rule, name, options: options ?? [] }
+
+        const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
+        return { slot, rule, name, options: filtered }
       }
 
       // EXCLUDE_DEPT
@@ -158,28 +127,32 @@ export async function getBlueprint() {
         if (!deptId) return { slot, rule, name, options: [] }
         const { data: options } = await query
           .neq('department_id', deptId)
-          .eq('semester', student.current_semester)
+          .eq('semester', auth.current_semester)
           .in('category', ['DSC', 'DSE'])
-        return { slot, rule, name, options: options ?? [] }
+
+        const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
+        return { slot, rule, name, options: filtered }
       }
 
       // POOL_RESTRICTED — own department by tag
       if (rule === SLOT_RULES.POOL_RESTRICTED) {
         const { data: options } = await query
-          .eq('department_id', student.department_id)
+          .eq('department_id', auth.department_id)
           .eq('tag', target)
-        return { slot, rule, name, options: options ?? [] }
+
+        const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
+        return { slot, rule, name, options: filtered }
       }
 
       // GLOBAL_BASKET — other departments by tag
-      // Only exclude own department if tag contains MDC
       if (rule === SLOT_RULES.GLOBAL_BASKET) {
         let q = query.eq('tag', target)
         if (target.includes('MDC')) {
-          q = q.neq('department_id', student.department_id)
+          q = q.neq('department_id', auth.department_id)
         }
         const { data: options } = await q
-        return { slot, rule, name, options: options ?? [] }
+        const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
+        return { slot, rule, name, options: filtered }
       }
 
       // Unknown rule — return empty safely
@@ -187,7 +160,7 @@ export async function getBlueprint() {
     })
   ])
 
-  // 8. Build and return the full response — always includes window_status
+  // Build and return the full response
   const response: BlueprintResponse = {
     window_status: windowOpen ? 'OPEN' : 'CLOSED',
     deadline: settings.deadline ?? '',

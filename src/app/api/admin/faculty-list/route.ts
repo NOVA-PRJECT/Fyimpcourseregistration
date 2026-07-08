@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifySuperAdmin } from '@/core/auth/verifyRole'
+import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
+import { logServerError } from '@/core/logging/logger'
 import { AddFacultySchema } from '@/modules/admin/schemas/addFacultySchema'
 import { createFacultyUser } from '@/modules/admin/services/createFacultyUser'
 import { z } from 'zod'
@@ -24,7 +26,7 @@ export async function GET() {
     .order('role')
 
   if (error) {
-    console.error('admin/faculty-list GET failed:', error)
+    logServerError('/api/admin/faculty-list', error, { userId: auth.userId, method: 'GET' })
     return NextResponse.json({ error: 'Failed to fetch faculty' }, { status: 500 })
   }
 
@@ -109,7 +111,7 @@ export async function PUT(request: NextRequest) {
     .eq('id', id)
 
   if (error) {
-    console.error('admin/faculty-list PUT failed:', error)
+    logServerError('/api/admin/faculty-list', error, { userId: auth.userId, method: 'PUT', targetFacultyId: id })
     return NextResponse.json({ error: 'Failed to update faculty' }, { status: 500 })
   }
 
@@ -129,9 +131,9 @@ export async function DELETE(request: NextRequest) {
   }
 
   // M5 fix: Delete auth account first (irreversible step)
-  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(faculty_id)
+  const { error: authDeleteError } = await deleteAuthUser(faculty_id)
   if (authDeleteError) {
-    console.error('admin/faculty-list DELETE — auth deletion failed:', authDeleteError)
+    logServerError('/api/admin/faculty-list', authDeleteError, { userId: auth.userId, method: 'DELETE', targetFacultyId: faculty_id })
     return NextResponse.json({ error: 'Failed to delete faculty account' }, { status: 500 })
   }
 
