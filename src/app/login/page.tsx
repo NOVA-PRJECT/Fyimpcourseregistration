@@ -10,7 +10,7 @@ import { Role } from '@/core/constants/roles'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [checking, setChecking] = useState(true)
+  const [checking, setChecking] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -18,7 +18,7 @@ export default function LoginPage() {
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
 
   useEffect(() => {
-    async function checkSession() {
+    async function checkSession(isBfcache: boolean) {
       try {
         const response = await fetch('/api/auth/profile')
         if (response.ok) {
@@ -26,7 +26,7 @@ export default function LoginPage() {
           if (data.role) {
             const target = ROLE_DASHBOARD_MAP[data.role as Role] || '/dashboard/student'
             router.replace(target)
-            return
+            return // Redirection triggered, leave checking as true to keep content hidden
           }
         }
       } catch (err) {
@@ -35,13 +35,14 @@ export default function LoginPage() {
       setChecking(false)
     }
 
-    // Check on mount (for normal reloads or disk cache restorations)
-    checkSession()
+    // Check on mount (lightweight background check, doesn't block mount rendering)
+    checkSession(false)
 
-    // Check on pageshow (for true bfcache restorations)
+    // Check on pageshow (specifically for true bfcache restorations)
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
-        checkSession()
+        setChecking(true) // Immediately hide stale content with spinner
+        checkSession(true)
       }
     }
 
