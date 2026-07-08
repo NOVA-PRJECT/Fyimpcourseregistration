@@ -51,7 +51,7 @@ async function verifyFacultyRole(
   expectedRole: 'hod' | 'campus_director' | 'teaching_staff'
 ): Promise<AuthSuccess<{ userId: string; department_id?: string; campus_id: string; role: typeof expectedRole }> | AuthError> {
   const supabase = await getSupabaseServerClient()
-  const { data, error: claimsError } = await (supabase.auth as any).getClaims()
+  const { data, error: claimsError } = await supabase.auth.getClaims()
   const claims = data?.claims
 
   if (claimsError || !claims) {
@@ -122,7 +122,7 @@ export const verifyDirector = cache(async (): Promise<AuthSuccess<VerifiedDirect
 
 export const verifySuperAdmin = cache(async (): Promise<AuthSuccess<VerifiedSuperAdmin> | AuthError> => {
   const supabase = await getSupabaseServerClient()
-  const { data, error: claimsError } = await (supabase.auth as any).getClaims()
+  const { data, error: claimsError } = await supabase.auth.getClaims()
   const claims = data?.claims
 
   if (claimsError || !claims) {
@@ -157,7 +157,7 @@ export const verifyTeacher = cache(async (): Promise<AuthSuccess<VerifiedTeacher
 
 export const verifyStudent = cache(async (options?: { allowMustChangePassword?: boolean }): Promise<AuthSuccess<VerifiedStudent> | AuthError> => {
   const supabase = await getSupabaseServerClient()
-  const { data, error: claimsError } = await (supabase.auth as any).getClaims()
+  const { data, error: claimsError } = await supabase.auth.getClaims()
   const claims = data?.claims
 
   if (claimsError || !claims) {
