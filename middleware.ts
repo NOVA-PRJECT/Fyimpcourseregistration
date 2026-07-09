@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { DASHBOARD_ROLE_MAP, ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
 import { Role } from '@/core/constants/roles'
+import { SUPABASE_COOKIE_OPTIONS } from '@/core/database/supabaseCookieOptions'
 
 
 
@@ -43,6 +44,7 @@ export async function middleware(request: NextRequest) {
           )
         },
       },
+      cookieOptions: SUPABASE_COOKIE_OPTIONS,
     }
   )
 

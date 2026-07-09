@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import styles from './reset-password.module.css'
 
 export default function ResetPasswordPage() {
@@ -14,10 +14,7 @@ export default function ResetPasswordPage() {
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabaseBrowserClient()
 
   async function handleReset() {
     if (!email) { setError('Please enter your email address'); return }

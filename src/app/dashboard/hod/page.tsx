@@ -5,7 +5,7 @@ import BlueprintTab from './BlueprintTab'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import Papa from 'papaparse'
 import styles from './hod-dashboard.module.css'
 
@@ -53,10 +53,7 @@ export default function HodDashboard() {
   const [hodInfo, setHodInfo] = useState<HodInfo | null>(null)
   const [loadingHod, setLoadingHod] = useState(true)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabaseBrowserClient()
 
   // ── Upload Tab State ──
   const [selectedFile, setSelectedFile] = useState<File | null>(null)

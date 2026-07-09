@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import styles from './superadmin-dashboard.module.css'
 
 type Tab = 'campuses' | 'departments' | 'faculty'
@@ -88,10 +88,7 @@ export default function SuperAdminDashboard() {
   const [updatingFaculty, setUpdatingFaculty] = useState(false)          // ← NEW
   const [loggingOut, setLoggingOut] = useState(false)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
     async function loadAdmin() {

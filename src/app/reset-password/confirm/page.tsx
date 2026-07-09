@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import styles from '../reset-password.module.css'
 
 function getPasswordStrength(password: string): 'weak' | 'medium' | 'strong' | null {
@@ -46,10 +46,7 @@ export default function ConfirmResetPage() {
     confirmPassword?: string
   }>({})
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabaseBrowserClient()
 
   // Supabase handles the token from the URL hash automatically
   // We just need to verify a session exists

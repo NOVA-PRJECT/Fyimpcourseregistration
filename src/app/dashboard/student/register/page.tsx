@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import styles from '../student-dashboard.module.css'
 import ResourceBanner from '@/component/ResourceBanner'
 
@@ -48,10 +48,7 @@ export default function RegisterPage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
     async function loadBlueprint() {

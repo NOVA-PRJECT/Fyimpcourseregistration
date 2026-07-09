@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import styles from './teacher-dashboard.module.css'
 
 interface Course {
@@ -39,10 +39,7 @@ export default function TeacherDashboard() {
   const [error, setError] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
     async function loadData() {
