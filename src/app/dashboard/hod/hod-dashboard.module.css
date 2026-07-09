@@ -927,3 +927,10 @@
   .infoCard { padding: 1.25rem 1.5rem; }
   .mainContent { padding: 1.5rem; }
 }
+
+.comboboxItem {
+  transition: background-color 0.15s ease;
+}
+.comboboxItem:hover {
+  background-color: #f0f2f5 !important;
+}

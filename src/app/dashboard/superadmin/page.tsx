@@ -86,6 +86,7 @@ export default function SuperAdminDashboard() {
   const [editFacultyDeptId, setEditFacultyDeptId] = useState('')
   const [editFacultyCampusId, setEditFacultyCampusId] = useState('')
   const [updatingFaculty, setUpdatingFaculty] = useState(false)          // ← NEW
+  const [loggingOut, setLoggingOut] = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -320,6 +321,7 @@ export default function SuperAdminDashboard() {
   }
 
   async function handleLogout() {
+    setLoggingOut(true)
     await supabase.auth.signOut()
     router.push('/login')
   }
@@ -344,7 +346,9 @@ export default function SuperAdminDashboard() {
             <p className={styles.topBarSubtitle}>Super Admin</p>
           </div>
         </div>
-        <button className={styles.logoutBtn} onClick={handleLogout}>Logout</button>
+        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Logging out...' : 'Logout'}
+        </button>
       </div>
 
       {/* Info Card */}

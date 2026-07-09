@@ -33,6 +33,11 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     }))
   )
 
+  // New state variables for pickers
+  const [departments, setDepartments] = useState<{ id: string; name: string; code: string }[]>([])
+  const [fixedSearch, setFixedSearch] = useState<Record<number, string>>({})
+  const [fixedOpen, setFixedOpen] = useState<Record<number, boolean>>({})
+
   // Courses state
   const [courses, setCourses] = useState<any[]>([])
   const [loadingCourses, setLoadingCourses] = useState(false)
@@ -50,7 +55,20 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   // Fetch on mount
   useEffect(() => {
     fetchBlueprint(1)
+    fetchDepartmentsList()
   }, [])
+
+  async function fetchDepartmentsList() {
+    try {
+      const res = await fetch('/api/hod/departments')
+      const data = await res.json()
+      if (res.ok) {
+        setDepartments(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch departments:', err)
+    }
+  }
 
   async function fetchBlueprint(sem: number = semester) {
     setLoading(true)
@@ -178,7 +196,12 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
         </select>
       </div>
 
-      {!loading && (
+      {loading ? (
+        <div className={styles.loadingState}>
+          <div className={styles.spinner} />
+          <p className={styles.loadingText}>Loading Semester {semester} data...</p>
+        </div>
+      ) : (
         <>
           {/* ── BLUEPRINT EDITOR ── */}
           {view === 'blueprint' && (
@@ -223,20 +246,104 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                         </select>
                       </div>
                       {slot.rule && (
-                        <div className={styles.field}>
+                        <div className={styles.field} style={{ position: 'relative' }}>
                           <label className={styles.label}>
                             Target {slot.rule === 'FIXED' ? '(Course Code)' :
-                              slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? '(Department Name)' :
+                              slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? '(Department)' :
                                 '(Tag e.g. POOL-A, MDC-1)'}
                           </label>
-                          <input type="text" className={styles.input}
-                            placeholder={
-                              slot.rule === 'FIXED' ? 'e.g. KU01DSCMAT101' :
-                                slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? 'e.g. Mathematical Sciences' :
-                                  'e.g. POOL-A or MDC-1'
-                            }
-                            value={slot.target}
-                            onChange={e => updateSlot(slot.slot, 'target', e.target.value)} />
+                          {slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? (
+                            <select className={styles.input} value={slot.target}
+                              onChange={e => updateSlot(slot.slot, 'target', e.target.value)}>
+                              <option value="">— Select department —</option>
+                              {departments.map(d => (
+                                <option key={d.id} value={d.code}>{d.name} ({d.code})</option>
+                              ))}
+                            </select>
+                          ) : slot.rule === 'FIXED' ? (
+                            <div style={{ position: 'relative' }}>
+                              <input type="text" className={styles.input}
+                                placeholder="Search & select course..."
+                                value={
+                                  fixedOpen[slot.slot]
+                                    ? (fixedSearch[slot.slot] ?? '')
+                                    : (() => {
+                                        const course = courses.find(c => c.course_code === slot.target)
+                                        return course ? `${course.course_code} — ${course.title}` : slot.target
+                                      })()
+                                }
+                                onFocus={() => {
+                                  setFixedOpen(prev => ({ ...prev, [slot.slot]: true }))
+                                  setFixedSearch(prev => ({ ...prev, [slot.slot]: '' }))
+                                }}
+                                onBlur={() => {
+                                  setTimeout(() => {
+                                    setFixedOpen(prev => ({ ...prev, [slot.slot]: false }))
+                                  }, 150)
+                                }}
+                                onChange={e => {
+                                  const val = e.target.value
+                                  setFixedSearch(prev => ({ ...prev, [slot.slot]: val }))
+                                }} />
+                              {fixedOpen[slot.slot] && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '100%',
+                                  left: 0,
+                                  right: 0,
+                                  backgroundColor: '#ffffff',
+                                  border: '1px solid #dde1e7',
+                                  borderRadius: '0.4rem',
+                                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                  maxHeight: '180px',
+                                  overflowY: 'auto',
+                                  zIndex: 200,
+                                }}>
+                                  {courses.length === 0 ? (
+                                    <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: '#9ba1ab' }}>
+                                      No courses found for Semester {semester}. Add courses first.
+                                    </div>
+                                  ) : (() => {
+                                    const searchStr = (fixedSearch[slot.slot] ?? '').toLowerCase()
+                                    const filtered = courses.filter(c =>
+                                      c.course_code.toLowerCase().includes(searchStr) ||
+                                      c.title.toLowerCase().includes(searchStr)
+                                    )
+                                    if (filtered.length === 0) {
+                                      return (
+                                        <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: '#9ba1ab' }}>
+                                          No matching courses
+                                        </div>
+                                      )
+                                    }
+                                    return filtered.map(c => (
+                                      <div key={c.id}
+                                        onMouseDown={e => e.preventDefault()}
+                                        onClick={() => {
+                                          updateSlot(slot.slot, 'target', c.course_code)
+                                          setFixedOpen(prev => ({ ...prev, [slot.slot]: false }))
+                                        }}
+                                        style={{
+                                          padding: '0.5rem 0.75rem',
+                                          fontSize: '0.75rem',
+                                          cursor: 'pointer',
+                                          borderBottom: '1px solid #f0f2f5',
+                                          color: '#002147'
+                                        }}
+                                        className={styles.comboboxItem}>
+                                        <strong style={{ fontFamily: 'monospace' }}>{c.course_code}</strong> — {c.title}
+                                      </div>
+                                    ))
+                                  })()}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <input type="text" className={styles.input}
+                              placeholder="e.g. POOL-A or MDC-1"
+                              value={slot.target}
+                              onChange={e => updateSlot(slot.slot, 'target', e.target.value)} />
+                          )}
                         </div>
                       )}
                     </div>

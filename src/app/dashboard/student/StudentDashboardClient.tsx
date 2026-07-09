@@ -110,6 +110,27 @@ export default function StudentDashboardClient({ studentInfo, hasSubmission }: S
                   : 'Select your courses for this semester.'}
               </p>
             </div>
+
+            {/* Resource Hub Ad-Style Premium Card */}
+            <div className={styles.resourceAdCard}>
+              <div className={styles.adBadge}>STUDENT RESOURCE</div>
+              <div className={styles.adContent}>
+                <div className={styles.adTextGroup}>
+                  <h3 className={styles.adTitle}>FYIMP HUB</h3>
+                  <p className={styles.adDescription}>
+                    Unlock free access to study materials, syllabus copies, notes, and semester-wise question pools curated by KUC MANGATTUPARAMBA FYIMP students
+                  </p>
+                </div>
+                <a
+                  href="https://fyimphub.vercel.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.adButton}
+                >
+                  Explore Hub →
+                </a>
+              </div>
+            </div>
           </>
         ) : (
           <p className={styles.profileError}>Unable to load profile. Please refresh.</p>

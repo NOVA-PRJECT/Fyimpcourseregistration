@@ -28,6 +28,7 @@ export default function DirectorDashboard() {
   const [promoteSuccess, setPromoteSuccess] = useState('')
   const [promoteError, setPromoteError] = useState('')
   const [promoteStep, setPromoteStep] = useState<0 | 1 | 2>(0) // 0=hidden 1=step1 2=step2
+  const [loggingOut, setLoggingOut] = useState(false)
   const [lastPromotedAt, setLastPromotedAt] = useState<string | null>(null)
 
   const supabase = createBrowserClient(
@@ -142,6 +143,7 @@ export default function DirectorDashboard() {
 
 
   async function handleLogout() {
+    setLoggingOut(true)
     await supabase.auth.signOut()
     router.push('/login')
   }
@@ -160,7 +162,9 @@ export default function DirectorDashboard() {
             <p className={styles.topBarSubtitle}>Campus Director</p>
           </div>
         </div>
-        <button className={styles.logoutBtn} onClick={handleLogout}>Logout</button>
+        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Logging out...' : 'Logout'}
+        </button>
       </div>
 
       {/* Director Info Card */}

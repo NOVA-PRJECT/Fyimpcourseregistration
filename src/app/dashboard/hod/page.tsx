@@ -100,6 +100,7 @@ export default function HodDashboard() {
   const [deptData, setDeptData] = useState<DeptData | null>(null)
   const [defaulterError, setDefaulterError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
     async function loadHodInfo() {
@@ -307,14 +308,13 @@ export default function HodDashboard() {
     const notSubmitted = deptData.students.filter(s => !s.submitted)
     if (notSubmitted.length === 0) return
     const lines = [
-      `📋 *FYIMP Course Registration — Defaulters*`,
-      `🏛️ Department: ${hodInfo?.department_name}`,
+      `📋 FYIMP Course Registration`,
+      `Department: ${hodInfo?.department_name}`,
       ``,
       `The following students have *not yet submitted* their course registration:`,
       ``,
       ...notSubmitted.map((s, i) => `${i + 1}. ${s.full_name} (Sem ${s.current_semester})`),
       ``,
-      `Total defaulters: ${notSubmitted.length} / ${deptData.total_students}`,
       ``,
       `Please complete your registration immediately.`,
     ]
@@ -325,6 +325,7 @@ export default function HodDashboard() {
   }
 
   async function handleLogout() {
+    setLoggingOut(true)
     await supabase.auth.signOut()
     router.push('/login')
   }
@@ -345,7 +346,9 @@ export default function HodDashboard() {
             <p className={styles.topBarSubtitle}>HOD Dashboard</p>
           </div>
         </div>
-        <button className={styles.logoutBtn} onClick={handleLogout}>Logout</button>
+        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Logging out...' : 'Logout'}
+        </button>
       </div>
 
       {/* HOD Info Card */}

@@ -37,6 +37,7 @@ export default function TeacherDashboard() {
   const [loading, setLoading] = useState(false)
   const [rosterData, setRosterData] = useState<RosterData | null>(null)
   const [error, setError] = useState('')
+  const [loggingOut, setLoggingOut] = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -94,6 +95,7 @@ export default function TeacherDashboard() {
   }
 
   async function handleLogout() {
+    setLoggingOut(true)
     await supabase.auth.signOut()
     router.push('/login')
   }
@@ -112,7 +114,9 @@ export default function TeacherDashboard() {
             <p className={styles.topBarSubtitle}>Teacher Dashboard</p>
           </div>
         </div>
-        <button className={styles.logoutBtn} onClick={handleLogout}>Logout</button>
+        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Logging out...' : 'Logout'}
+        </button>
       </div>
 
       {/* Teacher Info Card */}
