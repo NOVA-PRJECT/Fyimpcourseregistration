@@ -172,8 +172,9 @@ export default function HodDashboard() {
             setUploading(false)
             return
           }
-          setUploadResult(result)
+           setUploadResult(result)
           setUploadSuccess(`Upload complete — ${result.inserted_count} students created.`)
+          setTimeout(() => setUploadSuccess(''), 1000)
           setSelectedFile(null)
           setBatchPassword('')
           if (fileInputRef.current) fileInputRef.current.value = ''
@@ -233,6 +234,7 @@ export default function HodDashboard() {
       setStudentError(result.error ?? 'Failed to add student')
     } else {
       setStudentSuccess('Student created successfully')
+      setTimeout(() => setStudentSuccess(''), 1000)
       setShowAddModal(false)
       setAddName(''); setAddCap(''); setAddRoll(''); setAddEmail(''); setAddPassword(''); setAddYearJoined(''); setAddSemester(1)
       fetchStudents()
@@ -258,6 +260,7 @@ export default function HodDashboard() {
       setStudentError(result.error ?? 'Failed to update student')
     } else {
       setStudentSuccess('Student updated successfully')
+      setTimeout(() => setStudentSuccess(''), 1000)
       setEditStudent(null)
       fetchStudents()
     }
@@ -277,6 +280,7 @@ export default function HodDashboard() {
       setStudentError(result.error ?? 'Failed to delete student')
     } else {
       setStudentSuccess('Student removed successfully')
+      setTimeout(() => setStudentSuccess(''), 1000)
       setDeleteStudent(null)
       fetchStudents()
     }
@@ -388,9 +392,6 @@ export default function HodDashboard() {
           <>
             <p className={styles.sectionTitle}>Bulk Upload Students</p>
 
-            {uploadError && <div className={styles.errorBanner}>{uploadError}</div>}
-            {uploadSuccess && <div className={styles.successBanner}>✓ {uploadSuccess}</div>}
-
             <div className={styles.uploadCard}>
               <p className={styles.uploadDescription}>
                 Upload a CSV to create student accounts directly. Each student will receive a temporary password you set below and must change it on first login.
@@ -445,6 +446,7 @@ export default function HodDashboard() {
                 )}
               </div>
 
+              {uploadError && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{uploadError}</div>}
               <button className={styles.uploadBtn} onClick={handleUpload} disabled={uploading || !selectedFile || !batchPassword}>
                 {uploading ? <><span className={styles.spinner} /> Uploading...</> : 'Upload Students →'}
               </button>
@@ -483,8 +485,6 @@ export default function HodDashboard() {
         {/* ══ STUDENTS CRUD TAB ══ */}
         {activeTab === 'students' && (
           <>
-            {studentError && <div className={styles.errorBanner}>{studentError}</div>}
-            {studentSuccess && <div className={styles.successBanner}>✓ {studentSuccess}</div>}
 
             <div className={styles.semesterRow}>
               <span className={styles.semesterLabel}>Semester:</span>
@@ -496,7 +496,7 @@ export default function HodDashboard() {
                 {[1,2,3,4,5,6,7,8,9,10].map(s => <option key={s} value={s}>Semester {s}</option>)}
               </select>
               <button className={styles.addBtn} onClick={() => { setShowAddModal(true); setStudentError(''); setStudentSuccess('') }}>
-                + Add
+                + Add Student
               </button>
             </div>
 
@@ -558,8 +558,9 @@ export default function HodDashboard() {
                       </select>
                     </div>
                   </div>
+                  {studentError && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{studentError}</div>}
                   <div className={styles.modalActions}>
-                    <button className={styles.modalCancelBtn} onClick={() => { setShowAddModal(false); setAddName(''); setAddCap(''); setAddRoll(''); setAddEmail(''); setAddPassword(''); setAddYearJoined(''); setAddSemester(1) }} disabled={adding}>Cancel</button>
+                    <button className={styles.modalCancelBtn} onClick={() => { setShowAddModal(false); setAddName(''); setAddCap(''); setAddRoll(''); setAddEmail(''); setAddPassword(''); setAddYearJoined(''); setAddSemester(1); setStudentError('') }} disabled={adding}>Cancel</button>
                     <button className={styles.modalConfirmBtn} onClick={handleAddStudent} disabled={adding}>{adding ? 'Creating...' : 'Create Student →'}</button>
                   </div>
                 </div>
@@ -587,8 +588,9 @@ export default function HodDashboard() {
                       </select>
                     </div>
                   </div>
+                  {studentError && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{studentError}</div>}
                   <div className={styles.modalActions}>
-                    <button className={styles.modalCancelBtn} onClick={() => setEditStudent(null)} disabled={updating}>Cancel</button>
+                    <button className={styles.modalCancelBtn} onClick={() => { setEditStudent(null); setStudentError('') }} disabled={updating}>Cancel</button>
                     <button className={styles.modalConfirmBtn} onClick={handleUpdateStudent} disabled={updating}>{updating ? 'Saving...' : 'Save Changes →'}</button>
                   </div>
                 </div>
@@ -604,8 +606,9 @@ export default function HodDashboard() {
                     Are you sure you want to permanently remove <strong>{deleteStudent.full_name}</strong>?
                     This will delete their account, all registration history, and attendance records. This cannot be undone.
                   </p>
+                  {studentError && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{studentError}</div>}
                   <div className={styles.modalActions}>
-                    <button className={styles.modalCancelBtn} onClick={() => setDeleteStudent(null)} disabled={deleting}>Cancel</button>
+                    <button className={styles.modalCancelBtn} onClick={() => { setDeleteStudent(null); setStudentError('') }} disabled={deleting}>Cancel</button>
                     <button className={styles.modalDeleteBtn} onClick={handleDeleteStudent} disabled={deleting}>{deleting ? 'Removing...' : 'Yes, Remove'}</button>
                   </div>
                 </div>
@@ -716,6 +719,17 @@ export default function HodDashboard() {
         )}
 
       </div>
+
+      {/* Unified Success Modal Overlay */}
+      {(uploadSuccess || studentSuccess) && (
+        <div className={styles.successModalOverlay} onClick={() => { setUploadSuccess(''); setStudentSuccess('') }}>
+          <div className={styles.successModalContent} onClick={e => e.stopPropagation()}>
+            <div className={styles.successModalIcon}>✓</div>
+            <p className={styles.successModalText}>{uploadSuccess || studentSuccess}</p>
+            <button className={styles.successModalClose} onClick={() => { setUploadSuccess(''); setStudentSuccess('') }}>✕</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -152,6 +152,7 @@ export default function RegisterPage() {
     setSuccessMsg(`Courses submitted! Total credits: ${data.total_credits}`)
     setExistingSubmission({})
     setPageState('submitted')
+    setTimeout(() => setSuccessMsg(''), 1000)
   }
 
   async function handleLogout() {
@@ -304,7 +305,15 @@ export default function RegisterPage() {
             </div>
 
             {error && <div className={styles.errorBanner}>{error}</div>}
-            {successMsg && <div className={styles.successBanner}>✓ {successMsg}</div>}
+            {successMsg && (
+              <div className={styles.successModalOverlay} onClick={() => setSuccessMsg('')}>
+                <div className={styles.successModalContent} onClick={e => e.stopPropagation()}>
+                  <div className={styles.successModalIcon}>✓</div>
+                  <p className={styles.successModalText}>{successMsg}</p>
+                  <button className={styles.successModalClose} onClick={() => setSuccessMsg('')}>✕</button>
+                </div>
+              </div>
+            )}
 
             {(pageState === 'ready' || pageState === 'submitting') && blueprint.window_status === 'OPEN' && (
               <button

@@ -131,7 +131,10 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     const data = await res.json()
 
     if (!res.ok) { setError(data.error ?? 'Failed to save blueprint') }
-    else { setSuccess(data.message) }
+    else {
+      setSuccess(data.message)
+      setTimeout(() => setSuccess(''), 1000)
+    }
     setSaving(false)
   }
 
@@ -154,6 +157,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     if (!res.ok) { setError(data.error ?? 'Failed to save course') }
     else {
       setSuccess(data.message)
+      setTimeout(() => setSuccess(''), 1000)
       setShowAddCourse(false)
       setEditCourse(null)
       setCourseCode(''); setCourseTitle(''); setCourseCredits(4); setCourseCategory('DSC'); setCourseTag('')
@@ -172,14 +176,26 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error ?? 'Failed to delete course') }
-    else { setSuccess(data.message); setDeleteCourse(null); fetchCourses() }
+    else {
+      setSuccess(data.message)
+      setTimeout(() => setSuccess(''), 1000)
+      setDeleteCourse(null)
+      fetchCourses()
+    }
     setDeletingCourse(false)
   }
 
   return (
     <>
-      {error && <div className={styles.errorBanner}>{error}</div>}
-      {success && <div className={styles.successBanner}>✓ {success}</div>}
+      {success && (
+        <div className={styles.successModalOverlay} onClick={() => setSuccess('')}>
+          <div className={styles.successModalContent} onClick={e => e.stopPropagation()}>
+            <div className={styles.successModalIcon}>✓</div>
+            <p className={styles.successModalText}>{success}</p>
+            <button className={styles.successModalClose} onClick={() => setSuccess('')}>✕</button>
+          </div>
+        </div>
+      )}
 
       {/* Semester Selector */}
       <div className={styles.semesterRow}>
@@ -351,6 +367,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                 ))}
               </div>
 
+              {error && <div className={styles.errorBanner} style={{ marginTop: '1rem', marginBottom: '1rem' }}>{error}</div>}
               <button className={styles.saveBtn} onClick={handleSaveBlueprint} disabled={saving}>
                 {saving ? 'Saving...' : 'Save Blueprint →'}
               </button>
@@ -458,9 +475,10 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                       value={courseTag} onChange={e => setCourseTag(e.target.value)} />
                   </div>
                 </div>
+                {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{error}</div>}
                 <div className={styles.modalActions}>
                   <button className={styles.modalCancelBtn}
-                    onClick={() => { setShowAddCourse(false); setEditCourse(null); setCourseCode(''); setCourseTitle(''); setCourseCredits(4); setCourseCategory('DSC'); setCourseTag('') }}
+                    onClick={() => { setShowAddCourse(false); setEditCourse(null); setCourseCode(''); setCourseTitle(''); setCourseCredits(4); setCourseCategory('DSC'); setCourseTag(''); setError('') }}
                     disabled={savingCourse}>Cancel</button>
                   <button className={styles.modalConfirmBtn} onClick={handleSaveCourse} disabled={savingCourse}>
                     {savingCourse ? 'Saving...' : editCourse ? 'Save Changes →' : 'Add Course →'}
@@ -478,8 +496,9 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                 <p className={styles.modalSubtitle}>
                   Are you sure you want to delete <strong>{deleteCourse.title}</strong>?
                 </p>
+                {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{error}</div>}
                 <div className={styles.modalActions}>
-                  <button className={styles.modalCancelBtn} onClick={() => setDeleteCourse(null)} disabled={deletingCourse}>Cancel</button>
+                  <button className={styles.modalCancelBtn} onClick={() => { setDeleteCourse(null); setError('') }} disabled={deletingCourse}>Cancel</button>
                   <button className={styles.modalDeleteBtn} onClick={handleDeleteCourse} disabled={deletingCourse}>
                     {deletingCourse ? 'Deleting...' : 'Yes, Delete'}
                   </button>
