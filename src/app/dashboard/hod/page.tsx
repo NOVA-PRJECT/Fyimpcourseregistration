@@ -5,7 +5,6 @@ import BlueprintTab from './BlueprintTab'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import Papa from 'papaparse'
 import styles from './hod-dashboard.module.css'
 
@@ -53,7 +52,6 @@ export default function HodDashboard() {
   const [hodInfo, setHodInfo] = useState<HodInfo | null>(null)
   const [loadingHod, setLoadingHod] = useState(true)
 
-  const supabase = getSupabaseBrowserClient()
 
   // ── Upload Tab State ──
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -327,8 +325,8 @@ export default function HodDashboard() {
 
   async function handleLogout() {
     setLoggingOut(true)
-    await supabase.auth.signOut()
-    router.push('/login')
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.href = '/login'
   }
 
   const notSubmittedStudents = deptData?.students.filter(s => !s.submitted) ?? []

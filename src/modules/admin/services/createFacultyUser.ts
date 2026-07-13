@@ -69,6 +69,7 @@ export async function createFacultyUser({
 
   return {
     success: true,
+    id: authUserId,
     message: `${role === 'hod' ? 'HOD' : role === 'campus_director' ? 'Campus Director' : 'Teacher'} account created successfully`,
   }
 }

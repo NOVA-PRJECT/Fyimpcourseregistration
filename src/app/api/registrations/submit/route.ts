@@ -3,6 +3,7 @@ import { SubmitCoursesSchema } from '@/modules/student/schemas/submitSchema'
 import { submitCourses } from '@/modules/student/services/submitCourses'
 import { verifyStudent, handleAuthError } from '@/core/auth/verifyRole'
 import { submitLimiter } from '@/core/security/rateLimiter'
+import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export async function POST(request: NextRequest) {
   // Auth guard — verify the caller is a valid student
@@ -18,7 +19,13 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const body = await request.json()
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
   const result = SubmitCoursesSchema.safeParse(body)
 
   if (!result.success) {
@@ -43,6 +50,18 @@ export async function POST(request: NextRequest) {
       { status: response.status }
     )
   }
+
+  await logAuditEvent({
+    eventType: AuditEvents.COURSE_SUBMITTED,
+    userId: auth.userId,
+    userRole: auth.role,
+    action: 'submitted course registrations',
+    resourceType: 'registration',
+    status: 'success',
+    metadata: {
+      total_credits: response.total_credits,
+    }
+  })
 
   return NextResponse.json({
     success: true,

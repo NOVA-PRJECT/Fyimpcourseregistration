@@ -5,6 +5,7 @@ import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 import { logServerError } from '@/core/logging/logger'
 import { adminCrudLimiter } from '@/core/security/rateLimiter'
+import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,11 +38,18 @@ export async function POST() {
     return NextResponse.json({ error: 'Failed to promote students' }, { status: 500 })
   }
 
-  // Update last_promoted_at on campus_settings
-  await supabaseAdmin
+  const { error: settingsError } = await supabaseAdmin
     .from('campus_settings')
     .update({ last_promoted_at: new Date().toISOString() })
     .eq('campus_id', auth.campus_id)
+
+  if (settingsError) {
+    logServerError('/api/admin/campus/promote-students', settingsError, {
+      userId: auth.userId,
+      campusId: auth.campus_id,
+      step: 'settings_timestamp_update',
+    })
+  }
 
   // Delete auth users for graduated students (semester was 10, trigger deleted their DB rows)
   if (nearMaxStudents && nearMaxStudents.length > 0) {
@@ -58,6 +66,20 @@ export async function POST() {
       })
     )
   }
+
+  await logAuditEvent({
+    eventType: AuditEvents.STUDENTS_PROMOTED,
+    userId: auth.userId,
+    userRole: auth.role,
+    action: `promoted students for campus ${auth.campus_id}`,
+    resourceType: 'campus',
+    resourceId: auth.campus_id,
+    status: 'success',
+    metadata: {
+      promoted_count: promotedCount,
+      graduated_count: nearMaxStudents?.length ?? 0,
+    }
+  })
 
   return NextResponse.json({
     success: true,

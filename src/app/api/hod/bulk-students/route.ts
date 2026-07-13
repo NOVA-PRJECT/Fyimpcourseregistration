@@ -3,11 +3,12 @@ import { bulkCreateStudents } from '@/modules/hod/services/bulkCreateStudents'
 import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { bulkUploadLimiter } from '@/core/security/rateLimiter'
 import { z } from 'zod'
+import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export const dynamic = 'force-dynamic'
 
 const BulkStudentsBodySchema = z.object({
-  rows: z.array(z.unknown()).min(1, 'At least one row is required'),
+  rows: z.array(z.unknown()).min(1, 'At least one row is required').max(500, 'Maximum 500 students per upload'),
   batch_default_password: z
     .string()
     .min(8, 'Batch password must be at least 8 characters'),
@@ -62,6 +63,20 @@ export async function POST(request: NextRequest) {
   const results = response.results ?? []
   const successRows = results.filter(r => r.status === 'success')
   const errorRows = results.filter(r => r.status === 'error')
+
+  await logAuditEvent({
+    eventType: AuditEvents.STUDENT_BULK_CREATED,
+    userId: auth.userId,
+    userRole: auth.role,
+    action: `bulk created students for department ${auth.department_id}`,
+    resourceType: 'department',
+    resourceId: auth.department_id,
+    status: 'success',
+    metadata: {
+      inserted_count: successRows.length,
+      error_count: errorRows.length,
+    }
+  })
 
   return NextResponse.json({
     success: true,

@@ -15,9 +15,15 @@ export async function getSupabaseServerClient() {
           return cookieStore.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {
+            // The `setAll` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing
+            // user sessions.
+          }
         },
       },
       cookieOptions: SUPABASE_COOKIE_OPTIONS,
@@ -38,10 +44,14 @@ export async function createResponseTrackingClient() {
           return cookieStore.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options)
-            cookiesToSetAtEnd.push({ name, value, options })
-          })
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options)
+              cookiesToSetAtEnd.push({ name, value, options })
+            })
+          } catch {
+            // Can be ignored if called from a Server Component.
+          }
         },
       },
       cookieOptions: SUPABASE_COOKIE_OPTIONS,

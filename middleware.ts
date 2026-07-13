@@ -50,7 +50,6 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
   const role = user?.app_metadata?.role as Role | undefined
-  const cookieRole = request.cookies.get('user_role')?.value as Role | undefined
 
   const pathname = request.nextUrl.pathname
   const isLoginRoute = pathname.startsWith('/login')
@@ -71,7 +70,9 @@ export async function middleware(request: NextRequest) {
       redirectResponse.cookies.delete('user_role')
       return redirectResponse
     }
-    if (cookieRole) {
+    // Clear stale user_role cookie if present on non-dashboard routes
+    const hasStaleCookie = request.cookies.get('user_role')?.value
+    if (hasStaleCookie) {
       response.cookies.delete('user_role')
     }
   }
@@ -79,18 +80,16 @@ export async function middleware(request: NextRequest) {
   // Logged in user tries to access login or home page — send to their dashboard
   const isHomeRoute = pathname === '/'
   if (user && (isLoginRoute || isHomeRoute)) {
-    const targetRole = role || cookieRole
-    if (targetRole && ROLE_DASHBOARD_MAP[targetRole]) {
-      return NextResponse.redirect(new URL(ROLE_DASHBOARD_MAP[targetRole], request.url))
+    if (role && ROLE_DASHBOARD_MAP[role]) {
+      return NextResponse.redirect(new URL(ROLE_DASHBOARD_MAP[role], request.url))
     }
-    return NextResponse.redirect(new URL('/dashboard/student', request.url))
+    // Role not yet synced to app_metadata — redirect to login to re-authenticate
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Logged in user tries to access a dashboard — check their role
+  // Logged in user tries to access a dashboard — check their role (from JWT claims only)
   if (user && isDashboardRoute) {
-    const targetRole = role || cookieRole
-
-    if (!targetRole) {
+    if (!role) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
 
@@ -103,12 +102,10 @@ export async function middleware(request: NextRequest) {
     }
 
     const requiredRole = DASHBOARD_ROLE_MAP[matchedRoute]
-    if (targetRole !== requiredRole) {
-      const fallback = ROLE_DASHBOARD_MAP[targetRole] || '/dashboard/student'
+    if (role !== requiredRole) {
+      const fallback = ROLE_DASHBOARD_MAP[role] || '/login'
       return NextResponse.redirect(new URL(fallback, request.url))
     }
-
-
   }
 
   return response

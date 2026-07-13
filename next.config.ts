@@ -1,5 +1,14 @@
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV === 'development'
+
+// In production, remove 'unsafe-eval' (only needed for HMR/Turbopack in dev).
+// 'unsafe-inline' is kept for scripts because Next.js injects inline bootstrap
+// scripts for hydration; replace with nonce-based CSP for full hardening.
+const scriptSrc = isDev
+  ? "'self' 'unsafe-eval' 'unsafe-inline' https://*.supabase.co https://*.supabase.in"
+  : "'self' 'unsafe-inline' https://*.supabase.co https://*.supabase.in"
+
 const nextConfig: NextConfig = {
   async headers() {
     return [
@@ -30,7 +39,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.supabase.co https://*.supabase.in; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in wss://*.supabase.in; img-src 'self' data: https://*.supabase.co https://*.supabase.in; frame-ancestors 'none';",
+            value: `default-src 'self'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in wss://*.supabase.in; img-src 'self' data: https://*.supabase.co https://*.supabase.in; frame-ancestors 'none';`,
           },
           {
             key: 'Referrer-Policy',
@@ -55,3 +64,4 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+

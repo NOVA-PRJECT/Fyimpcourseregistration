@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import styles from './director-dashboard.module.css'
 
 export default function DirectorDashboard() {
@@ -31,7 +30,6 @@ export default function DirectorDashboard() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [lastPromotedAt, setLastPromotedAt] = useState<string | null>(null)
 
-  const supabase = getSupabaseBrowserClient()
 
   // Derived window status from deadline alone
   const windowIsOpen = currentDeadline !== null && new Date() < new Date(currentDeadline)
@@ -89,8 +87,8 @@ export default function DirectorDashboard() {
     setWindowError('')
     setWindowSuccess('')
 
-    const response = await fetch('/api/admin/campus/toggle', {
-      method: 'POST',
+    const response = await fetch('/api/director/settings', {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         deadline: deadlineDate.toISOString(),
@@ -141,8 +139,8 @@ export default function DirectorDashboard() {
 
   async function handleLogout() {
     setLoggingOut(true)
-    await supabase.auth.signOut()
-    router.push('/login')
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.href = '/login'
   }
 
   return (

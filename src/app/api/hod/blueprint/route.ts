@@ -4,6 +4,7 @@ import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { logServerError } from '@/core/logging/logger'
 import { BlueprintUpdateSchema } from '@/modules/hod/schemas/blueprintSchema'
 import { adminCrudLimiter } from '@/core/security/rateLimiter'
+import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,7 +45,13 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const body = await request.json()
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
   const result = BlueprintUpdateSchema.safeParse(body)
 
   if (!result.success) {
@@ -79,6 +86,21 @@ export async function PUT(request: NextRequest) {
     logServerError('/api/hod/blueprint', error, { userId: auth.userId, method: 'PUT', semester })
     return NextResponse.json({ error: 'Failed to save blueprint' }, { status: 500 })
   }
+
+  await logAuditEvent({
+    eventType: AuditEvents.BLUEPRINT_SAVED,
+    userId: auth.userId,
+    userRole: auth.role,
+    action: `saved blueprint for semester ${semester}`,
+    resourceType: 'blueprint',
+    status: 'success',
+    metadata: {
+      semester,
+      min_credits,
+      max_credits,
+      department_id: auth.department_id,
+    }
+  })
 
   return NextResponse.json({ success: true, message: 'Blueprint saved successfully' })
 }

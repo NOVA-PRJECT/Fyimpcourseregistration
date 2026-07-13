@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic'
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import styles from './reset-password.module.css'
 
 export default function ResetPasswordPage() {
@@ -14,7 +13,6 @@ export default function ResetPasswordPage() {
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
 
-  const supabase = getSupabaseBrowserClient()
 
   async function handleReset() {
     if (!email) { setError('Please enter your email address'); return }
@@ -23,12 +21,15 @@ export default function ResetPasswordPage() {
     setLoading(true)
     setError('')
 
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password/confirm`,
+    const response = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
     })
 
-    if (resetError) {
-      setError('Failed to send reset email. Please try again.')
+    if (!response.ok) {
+      const data = await response.json()
+      setError(data.error || 'Failed to send reset email. Please try again.')
       setLoading(false)
       return
     }

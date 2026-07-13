@@ -5,12 +5,23 @@ import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 import { logServerError } from '@/core/logging/logger'
 import { z } from 'zod'
 import { adminCrudLimiter } from '@/core/security/rateLimiter'
+import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export const dynamic = 'force-dynamic'
 
 const CampusSchema = z.object({
   name: z.string().min(1, 'Campus name is required'),
   code: z.string().min(1, 'Campus code is required'),
+})
+
+const CampusUpdateSchema = z.object({
+  id: z.string().uuid('Invalid campus ID'),
+  name: z.string().min(1, 'Campus name is required'),
+  code: z.string().min(1, 'Campus code is required'),
+})
+
+const DeleteCampusSchema = z.object({
+  campus_id: z.string().uuid('Invalid campus ID'),
 })
 
 // GET — list all campuses
@@ -41,15 +52,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const body = await request.json()
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
   const result = CampusSchema.safeParse(body)
   if (!result.success) {
     return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
   }
 
-  const { error } = await supabaseAdmin
+  const { data: createdCampus, error } = await supabaseAdmin
     .from('campuses')
     .insert({ name: result.data.name, code: result.data.code.toUpperCase() })
+    .select('id')
+    .single()
 
   if (error) {
     if (error.code === '23505') {
@@ -58,6 +77,16 @@ export async function POST(request: NextRequest) {
     logServerError('/api/admin/campuses', error, { userId: auth.userId, method: 'POST', body: result.data })
     return NextResponse.json({ error: 'Failed to add campus' }, { status: 500 })
   }
+
+  await logAuditEvent({
+    eventType: AuditEvents.CAMPUS_CREATED,
+    userId: auth.userId,
+    userRole: auth.role,
+    action: `created campus: ${result.data.name} (${result.data.code.toUpperCase()})`,
+    resourceType: 'campus',
+    resourceId: createdCampus?.id,
+    status: 'success',
+  })
 
   return NextResponse.json({ success: true, message: 'Campus added successfully' })
 }
@@ -72,10 +101,19 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const { id, name, code } = await request.json()
-  if (!id || !name || !code) {
-    return NextResponse.json({ error: 'ID, name and code are required' }, { status: 400 })
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
+
+  const result = CampusUpdateSchema.safeParse(body)
+  if (!result.success) {
+    return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
+  }
+
+  const { id, name, code } = result.data
 
   const { error } = await supabaseAdmin
     .from('campuses')
@@ -101,8 +139,19 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const { campus_id } = await request.json()
-  if (!campus_id) return NextResponse.json({ error: 'Campus ID required' }, { status: 400 })
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  const result = DeleteCampusSchema.safeParse(body)
+  if (!result.success) {
+    return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
+  }
+
+  const { campus_id } = result.data
 
   // Get all students and faculty auth IDs before deleting
   const { data: students } = await supabaseAdmin

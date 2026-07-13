@@ -5,6 +5,7 @@ import { verifyStudent, handleAuthError } from '@/core/auth/verifyRole'
 import { logServerError } from '@/core/logging/logger'
 import { changePasswordLimiter } from '@/core/security/rateLimiter'
 import { createResponseTrackingClient } from '@/core/database/supabaseClient'
+import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 
 export const dynamic = 'force-dynamic'
@@ -93,6 +94,16 @@ export async function POST(request: NextRequest) {
   // Forward all refreshed session cookies to the response
   cookiesToSetAtEnd.forEach(({ name, value, options }) => {
     response.cookies.set(name, value, options)
+  })
+
+  await logAuditEvent({
+    eventType: AuditEvents.PASSWORD_CHANGED,
+    userId: auth.userId,
+    userRole: auth.role,
+    action: 'changed password',
+    resourceType: 'user',
+    resourceId: auth.userId,
+    status: 'success',
   })
 
   return response

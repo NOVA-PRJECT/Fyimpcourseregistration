@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import styles from './teacher-dashboard.module.css'
 
 interface Course {
@@ -39,7 +38,6 @@ export default function TeacherDashboard() {
   const [error, setError] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
 
-  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
     async function loadData() {
@@ -93,8 +91,8 @@ export default function TeacherDashboard() {
 
   async function handleLogout() {
     setLoggingOut(true)
-    await supabase.auth.signOut()
-    router.push('/login')
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.href = '/login'
   }
 
   return (

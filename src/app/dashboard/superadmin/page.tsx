@@ -5,7 +5,6 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import styles from './superadmin-dashboard.module.css'
 
 type Tab = 'campuses' | 'departments' | 'faculty'
@@ -88,7 +87,6 @@ export default function SuperAdminDashboard() {
   const [updatingFaculty, setUpdatingFaculty] = useState(false)          // ← NEW
   const [loggingOut, setLoggingOut] = useState(false)
 
-  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
     async function loadAdmin() {
@@ -319,8 +317,8 @@ export default function SuperAdminDashboard() {
 
   async function handleLogout() {
     setLoggingOut(true)
-    await supabase.auth.signOut()
-    router.push('/login')
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.href = '/login'
   }
 
   const roleLabel = (role: string) => ({

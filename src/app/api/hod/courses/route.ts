@@ -16,6 +16,18 @@ const CourseSchema = z.object({
   tag: z.string().optional().or(z.literal('')),
 })
 
+const UpdateCourseSchema = z.object({
+  id: z.string().uuid('Invalid course ID'),
+  title: z.string().min(1, 'Title is required'),
+  credits: z.number().int().min(1),
+  category: z.enum(['INT','FWD','RPH','CIP','DSS','DSC','DSE','VAC','SEC','MDC','MOOC','AEC']),
+  tag: z.string().optional().or(z.literal('')),
+})
+
+const DeleteCourseSchema = z.object({
+  course_id: z.string().uuid('Invalid course ID'),
+})
+
 // GET — fetch courses for dept + semester
 export async function GET(request: NextRequest) {
   const auth = await verifyHod()
@@ -53,7 +65,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const body = await request.json()
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
   const parsed = CourseSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
@@ -93,12 +111,19 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const body = await request.json()
-  const { id, ...rest } = body
-
-  if (!id) {
-    return NextResponse.json({ error: 'Course ID required' }, { status: 400 })
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
+
+  const parsed = UpdateCourseSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  }
+
+  const { id, ...rest } = parsed.data
 
   const supabase = await getSupabaseServerClient()
 
@@ -136,10 +161,19 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const { course_id } = await request.json()
-  if (!course_id) {
-    return NextResponse.json({ error: 'Course ID required' }, { status: 400 })
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
+
+  const parsed = DeleteCourseSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  }
+
+  const { course_id } = parsed.data
 
   const supabase = await getSupabaseServerClient()
 

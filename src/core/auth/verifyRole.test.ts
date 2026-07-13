@@ -30,7 +30,9 @@ describe('verifyRole', () => {
 
     const result = await verifyStudent()
     expect(result.success).toBe(false)
-    expect(result.status).toBe(401)
+    if (!result.success) {
+      expect(result.status).toBe(401)
+    }
   })
 
   it('fails if role is mismatched', async () => {
@@ -46,7 +48,9 @@ describe('verifyRole', () => {
 
     const result = await verifyStudent()
     expect(result.success).toBe(false)
-    expect(result.status).toBe(403)
+    if (!result.success) {
+      expect(result.status).toBe(403)
+    }
   })
 
   it('succeeds for valid student', async () => {

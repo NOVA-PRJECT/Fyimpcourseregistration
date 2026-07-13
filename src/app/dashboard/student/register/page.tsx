@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
 import styles from '../student-dashboard.module.css'
 import ResourceBanner from '@/component/ResourceBanner'
 
@@ -48,7 +47,6 @@ export default function RegisterPage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
 
-  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
     async function loadBlueprint() {
@@ -157,8 +155,8 @@ export default function RegisterPage() {
 
   async function handleLogout() {
     setLoggingOut(true)
-    await supabase.auth.signOut()
-    router.push('/login')
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.href = '/login'
   }
 
   const totalCredits = calculateCredits()

@@ -7,6 +7,7 @@ import { AddFacultySchema } from '@/modules/admin/schemas/addFacultySchema'
 import { createFacultyUser } from '@/modules/admin/services/createFacultyUser'
 import { z } from 'zod'
 import { adminCrudLimiter } from '@/core/security/rateLimiter'
+import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,7 +47,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const body = await request.json()
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
   const result = SuperAdminAddFacultySchema.safeParse(body)
 
   if (!result.success) {
@@ -65,6 +72,16 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  await logAuditEvent({
+    eventType: AuditEvents.FACULTY_CREATED,
+    userId: auth.userId,
+    userRole: auth.role,
+    action: `created faculty: ${result.data.full_name} (${result.data.role})`,
+    resourceType: 'faculty',
+    resourceId: response.id,
+    status: 'success',
+  })
+
   return NextResponse.json({ success: true, message: response.message })
 }
 
@@ -76,6 +93,10 @@ const UpdateFacultySchema = z.object({
   department_id: z.string().uuid().nullable().optional(),
 })
 
+const DeleteFacultySchema = z.object({
+  faculty_id: z.string().uuid('Invalid faculty ID'),
+})
+
 export async function PUT(request: NextRequest) {
   const auth = await verifySuperAdmin()
   if (!auth.success) return handleAuthError(auth)
@@ -85,7 +106,13 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const body = await request.json()
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
   const result = UpdateFacultySchema.safeParse(body)
 
   if (!result.success) {
@@ -133,10 +160,19 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const { faculty_id } = await request.json()
-  if (!faculty_id) {
-    return NextResponse.json({ error: 'Faculty ID required' }, { status: 400 })
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
+
+  const parsed = DeleteFacultySchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+  }
+
+  const { faculty_id } = parsed.data
 
   // M5 fix: Delete auth account first (irreversible step)
   const { error: authDeleteError } = await deleteAuthUser(faculty_id)
@@ -147,6 +183,16 @@ export async function DELETE(request: NextRequest) {
 
   // Then delete DB row (recoverable)
   await supabaseAdmin.from('faculty').delete().eq('id', faculty_id)
+
+  await logAuditEvent({
+    eventType: AuditEvents.FACULTY_DELETED,
+    userId: auth.userId,
+    userRole: auth.role,
+    action: `deleted faculty: ${faculty_id}`,
+    resourceType: 'faculty',
+    resourceId: faculty_id,
+    status: 'success',
+  })
 
   return NextResponse.json({ success: true, message: 'Faculty removed successfully' })
 }

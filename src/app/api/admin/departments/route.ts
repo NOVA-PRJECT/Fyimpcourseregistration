@@ -5,6 +5,7 @@ import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 import { logServerError } from '@/core/logging/logger'
 import { z } from 'zod'
 import { adminCrudLimiter } from '@/core/security/rateLimiter'
+import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +13,16 @@ const DepartmentSchema = z.object({
   name: z.string().min(1, 'Department name is required'),
   code: z.string().min(1, 'Department code is required'),
   campus_id: z.string().uuid('Invalid campus ID'),
+})
+
+const DeptUpdateSchema = z.object({
+  id: z.string().uuid('Invalid department ID'),
+  name: z.string().min(1, 'Department name is required'),
+  code: z.string().min(1, 'Department code is required'),
+})
+
+const DeleteDeptSchema = z.object({
+  department_id: z.string().uuid('Invalid department ID'),
 })
 
 // GET — list all departments
@@ -42,20 +53,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const body = await request.json()
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
   const result = DepartmentSchema.safeParse(body)
   if (!result.success) {
     return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
   }
 
-  const { error } = await supabaseAdmin
+  const { data: createdDept, error } = await supabaseAdmin
     .from('departments')
     .insert({
       name: result.data.name,
       code: result.data.code.toUpperCase(),
       campus_id: result.data.campus_id,
     })
-
+    .select('id')
+    .single()
+ 
   if (error) {
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Department name or code already exists' }, { status: 409 })
@@ -64,6 +83,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to add department' }, { status: 500 })
   }
 
+  await logAuditEvent({
+    eventType: AuditEvents.DEPARTMENT_CREATED,
+    userId: auth.userId,
+    userRole: auth.role,
+    action: `created department: ${result.data.name} (${result.data.code.toUpperCase()})`,
+    resourceType: 'department',
+    resourceId: createdDept?.id,
+    status: 'success',
+    metadata: {
+      campus_id: result.data.campus_id,
+    }
+  })
+ 
   return NextResponse.json({ success: true, message: 'Department added successfully' })
 }
 
@@ -77,10 +109,19 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const { id, name, code } = await request.json()
-  if (!id || !name || !code) {
-    return NextResponse.json({ error: 'ID, name and code are required' }, { status: 400 })
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
+
+  const result = DeptUpdateSchema.safeParse(body)
+  if (!result.success) {
+    return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
+  }
+
+  const { id, name, code } = result.data
 
   const { error } = await supabaseAdmin
     .from('departments')
@@ -105,10 +146,19 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const { department_id } = await request.json()
-  if (!department_id) {
-    return NextResponse.json({ error: 'Department ID required' }, { status: 400 })
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
+
+  const result = DeleteDeptSchema.safeParse(body)
+  if (!result.success) {
+    return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
+  }
+
+  const { department_id } = result.data
 
   // Collect auth IDs before deleting
   const { data: students } = await supabaseAdmin

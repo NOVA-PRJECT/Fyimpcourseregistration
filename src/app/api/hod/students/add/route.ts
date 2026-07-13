@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 import { logServerError } from '@/core/logging/logger'
 import { adminCrudLimiter } from '@/core/security/rateLimiter'
+import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +33,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
   }
 
-  const body = await request.json()
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
   const result = AddStudentSchema.safeParse(body)
 
   if (!result.success) {
@@ -102,6 +109,22 @@ export async function POST(request: NextRequest) {
     logServerError('/api/hod/students/add', studentError, { userId: auth.userId, newStudentEmail: email })
     return NextResponse.json({ error: 'Failed to create student record' }, { status: 500 })
   }
+
+  await logAuditEvent({
+    eventType: AuditEvents.STUDENT_CREATED,
+    userId: auth.userId,
+    userRole: auth.role,
+    action: `created student: ${roll_number}`,
+    resourceType: 'student',
+    resourceId: authUserId,
+    status: 'success',
+    metadata: {
+      roll_number,
+      cap_application_number,
+      department_id: auth.department_id,
+      campus_id: auth.campus_id,
+    }
+  })
 
   return NextResponse.json({ success: true, message: 'Student created successfully' })
 }

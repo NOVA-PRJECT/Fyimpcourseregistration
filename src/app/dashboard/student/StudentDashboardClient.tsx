@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { getSupabaseBrowserClient } from '@/core/database/supabaseBrowserClient'
+
 import styles from './student-dashboard.module.css'
 
 interface StudentInfo {
@@ -25,12 +25,12 @@ export default function StudentDashboardClient({ studentInfo, hasSubmission }: S
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
 
-  const supabase = getSupabaseBrowserClient()
+
 
   async function handleLogout() {
     setLoggingOut(true)
-    await supabase.auth.signOut()
-    router.push('/login')
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.href = '/login'
   }
 
   return (

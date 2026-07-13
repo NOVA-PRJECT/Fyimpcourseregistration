@@ -3,6 +3,8 @@ import { determineUserRoute } from '@/modules/auth/services/routeUser'
 import { loginLimiter } from '@/core/security/rateLimiter'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { createResponseTrackingClient } from '@/core/database/supabaseClient'
+import { LoginSchema } from '@/modules/auth/schemas/loginSchema'
+import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export async function POST(request: NextRequest) {
   // 1. Rate Limiting (prevent brute force logins from the same IP)
@@ -16,20 +18,20 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // 2. Parse request body
-  let email = ''
-  let password = ''
+  // 2. Parse request body & validate
+  let body
   try {
-    const body = await request.json()
-    email = body.email
-    password = body.password
+    body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  if (!email || !password) {
-    return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
+  const result = LoginSchema.safeParse(body)
+  if (!result.success) {
+    return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 })
   }
+
+  const { email, password } = result.data
 
   const { client: supabase, cookiesToSetAtEnd } = await createResponseTrackingClient()
 
@@ -82,10 +84,21 @@ export async function POST(request: NextRequest) {
 
   response.cookies.set('user_role', role, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: true,
     sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 24 * 7
+  })
+
+  await logAuditEvent({
+    eventType: AuditEvents.USER_LOGIN,
+    userId: authData.user.id,
+    userRole: role,
+    action: 'user logged in',
+    resourceType: 'user',
+    resourceId: authData.user.id,
+    status: 'success',
+    ipAddress: ip,
   })
 
   return response
