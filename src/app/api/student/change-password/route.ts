@@ -80,18 +80,45 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to update user flags' }, { status: 500 })
   }
 
-  // 3. Initialize cookie-tracking client to refresh the active session and write updated JWT claims
+  // 3. Re-authenticate with the new password to establish a fresh valid session.
+  // updateUserById() revokes the existing refresh token as a side effect —
+  // refreshSession() on the now-dead session always fails, clearing cookies instead
+  // of renewing them. signInWithPassword with the new password creates a genuine
+  // new session and correctly writes fresh cookies.
+  const { data: userData, error: userLookupError } = await supabaseAdmin.auth.admin.getUserById(auth.userId)
+
+  if (userLookupError || !userData.user?.email) {
+    logServerError('/api/student/change-password', userLookupError, {
+      userId: auth.userId,
+      step: 'user_lookup',
+    })
+    return NextResponse.json(
+      { error: 'Password updated but re-login failed. Please sign in again with your new password.' },
+      { status: 500 }
+    )
+  }
+
   const { client: supabase, cookiesToSetAtEnd } = await createResponseTrackingClient()
 
-  // Get active session and refresh it to update cookies with must_change_password = false
-  const { data: { session } } = await supabase.auth.getSession()
-  if (session) {
-    await supabase.auth.refreshSession(session)
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: userData.user.email,
+    password: result.data.new_password,
+  })
+
+  if (signInError) {
+    logServerError('/api/student/change-password', signInError, {
+      userId: auth.userId,
+      step: 'reauth',
+    })
+    return NextResponse.json(
+      { error: 'Password updated but re-login failed. Please sign in again with your new password.' },
+      { status: 500 }
+    )
   }
 
   const response = NextResponse.json({ success: true, message: 'Password changed successfully' })
 
-  // Forward all refreshed session cookies to the response
+  // Forward the new session cookies to the response
   cookiesToSetAtEnd.forEach(({ name, value, options }) => {
     response.cookies.set(name, value, options)
   })
