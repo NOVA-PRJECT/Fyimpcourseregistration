@@ -451,6 +451,37 @@ export default function HodDashboard() {
                 )}
               </div>
 
+              {selectedFile && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedFile(null)
+                    setUploadError('')
+                    setUploadSuccess('')
+                    setUploadResult(null)
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = ''
+                    }
+                  }}
+                  style={{
+                    backgroundColor: '#fee2e2',
+                    color: '#dc2626',
+                    border: '1px solid #fca5a5',
+                    borderRadius: '0.4rem',
+                    padding: '0.4rem 0.8rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontSize: '0.75rem',
+                    marginBottom: '0.85rem',
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'center',
+                  }}
+                >
+                  ❌ Remove Selected File
+                </button>
+              )}
+
               {uploadError && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{uploadError}</div>}
               <button className={styles.uploadBtn} onClick={handleUpload} disabled={uploading || !selectedFile || !batchPassword}>
                 {uploading ? <><span className={styles.spinner} /> Uploading...</> : 'Upload Students →'}
