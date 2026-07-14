@@ -158,6 +158,11 @@ export default function HodDashboard() {
           setUploading(false)
           return
         }
+        if (rows.length > 120) {
+          setUploadError('Maximum 120 students per upload. Please split larger files.')
+          setUploading(false)
+          return
+        }
         try {
           const response = await fetch('/api/hod/bulk-students', {
             method: 'POST',
@@ -306,11 +311,13 @@ export default function HodDashboard() {
     if (!deptData || deptData.students.length === 0) return
     const notSubmitted = deptData.students.filter(s => !s.submitted)
     if (notSubmitted.length === 0) return
+    const semesterTitle = defaulterSemester === 'all' ? '' : ` - Semester ${defaulterSemester}`
+    const semesterBody = defaulterSemester === 'all' ? '' : ` of Semester ${defaulterSemester}`
     const lines = [
-      `📋 FYIMP Course Registration`,
+      `📋 FYIMP Course Registration${semesterTitle}`,
       `Department: ${hodInfo?.department_name}`,
       ``,
-      `The following students have *not yet submitted* their course registration:`,
+      `The following students${semesterBody} have *not yet submitted* their course registration:`,
       ``,
       ...notSubmitted.map((s, i) => `${i + 1}. ${s.full_name} (Sem ${s.current_semester})`),
       ``,

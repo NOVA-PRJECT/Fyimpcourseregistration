@@ -12,15 +12,16 @@ const CourseSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   semester: z.number().int().min(1).max(10),
   credits: z.number().int().min(1),
-  category: z.enum(['INT','FWD','RPH','CIP','DSS','DSC','DSE','VAC','SEC','MDC','MOOC','AEC']),
+  category: z.enum(['DSC','DSE','MDC','VAC','SEC','AEC','MOC','MOOC','INT','RPH','FWD','DSS','DMP','CIP']),
   tag: z.string().optional().or(z.literal('')),
 })
 
 const UpdateCourseSchema = z.object({
   id: z.string().uuid('Invalid course ID'),
+  course_code: z.string().min(1, 'Course code is required'),
   title: z.string().min(1, 'Title is required'),
   credits: z.number().int().min(1),
-  category: z.enum(['INT','FWD','RPH','CIP','DSS','DSC','DSE','VAC','SEC','MDC','MOOC','AEC']),
+  category: z.enum(['DSC','DSE','MDC','VAC','SEC','AEC','MOC','MOOC','INT','RPH','FWD','DSS','DMP','CIP']),
   tag: z.string().optional().or(z.literal('')),
 })
 
@@ -130,6 +131,7 @@ export async function PUT(request: NextRequest) {
   const { data, error } = await supabase
     .from('courses')
     .update({
+      course_code: rest.course_code,
       title: rest.title,
       credits: rest.credits,
       category: rest.category,
@@ -140,6 +142,9 @@ export async function PUT(request: NextRequest) {
     .select()
 
   if (error) {
+    if (error.code === '23505') {
+      return NextResponse.json({ error: 'Course code already exists' }, { status: 409 })
+    }
     logServerError('/api/hod/courses', error, { userId: auth.userId, method: 'PUT', courseId: id })
     return NextResponse.json({ error: 'Failed to update course' }, { status: 500 })
   }

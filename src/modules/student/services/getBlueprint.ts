@@ -110,10 +110,11 @@ export async function getBlueprint(auth: VerifiedStudent) {
 
       // DEPT_RESTRICTED
       if (rule === SLOT_RULES.DEPT_RESTRICTED) {
-        const deptId = deptMap.get(target)
-        if (!deptId) return { slot, rule, name, options: [] }
+        const deptCodes = ((target as string) ?? '').split(',').map((code: string) => code.trim())
+        const deptIds = deptCodes.map((code: string) => deptMap.get(code)).filter((id): id is string => id !== undefined)
+        if (deptIds.length === 0) return { slot, rule, name, options: [] }
         const { data: options } = await query
-          .eq('department_id', deptId)
+          .in('department_id', deptIds)
           .eq('semester', auth.current_semester)
           .in('category', ['DSC', 'DSE'])
 
@@ -123,10 +124,11 @@ export async function getBlueprint(auth: VerifiedStudent) {
 
       // EXCLUDE_DEPT
       if (rule === SLOT_RULES.EXCLUDE_DEPT) {
-        const deptId = deptMap.get(target)
-        if (!deptId) return { slot, rule, name, options: [] }
+        const deptCodes = ((target as string) ?? '').split(',').map((code: string) => code.trim())
+        const deptIds = deptCodes.map((code: string) => deptMap.get(code)).filter((id): id is string => id !== undefined)
+        if (deptIds.length === 0) return { slot, rule, name, options: [] }
         const { data: options } = await query
-          .neq('department_id', deptId)
+          .not('department_id', 'in', `(${deptIds.join(',')})`)
           .eq('semester', auth.current_semester)
           .in('category', ['DSC', 'DSE'])
 
@@ -147,10 +149,10 @@ export async function getBlueprint(auth: VerifiedStudent) {
 
       // GLOBAL_BASKET — other departments by tag
       if (rule === SLOT_RULES.GLOBAL_BASKET) {
-        let q = query.eq('tag', target).eq('semester', auth.current_semester)
-        if (target.includes('MDC')) {
-          q = q.neq('department_id', auth.department_id)
-        }
+        let q = query
+          .eq('tag', target)
+          .eq('semester', auth.current_semester)
+          .neq('department_id', auth.department_id)
         const { data: options } = await q
         const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
         return { slot, rule, name, options: filtered }

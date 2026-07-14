@@ -8,7 +8,7 @@ import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 export const dynamic = 'force-dynamic'
 
 const BulkStudentsBodySchema = z.object({
-  rows: z.array(z.unknown()).min(1, 'At least one row is required').max(500, 'Maximum 500 students per upload'),
+  rows: z.array(z.unknown()).min(1, 'At least one row is required').max(120, 'Maximum 120 students per upload'),
   batch_default_password: z
     .string()
     .min(8, 'Batch password must be at least 8 characters'),

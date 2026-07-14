@@ -29,7 +29,7 @@ graph TD
 | Threat Vector | Mitigation Strategy | Implementation Details |
 | :--- | :--- | :--- |
 | **Cross-Tenant Data Disclosures** | Campus-scoped lookup constraints | `/api/faculty/courses` dynamically queries the faculty member's campus ID and only returns departments/courses belonging to that campus. |
-| **Brute Force & Mutation Abuse** | Adaptive rate-limiting layers | Rate limiters configured in `rateLimiter.ts`: `loginLimiter` (5 req/min), `changePasswordLimiter` (10 req/min), and `adminCrudLimiter` (60 req/min) for HOD/Admin write operations. |
+| **Brute Force & Mutation Abuse** | Adaptive rate-limiting layers | Rate limiters configured in `rateLimiter.ts`: `loginLimiter` (10 req/15 min IP-based), `emailLoginLimiter` (5 req/15 min email-based), `changePasswordLimiter` (5 req/hour), and `adminCrudLimiter` (60 req/min) for HOD/Admin write operations. |
 | **XSS & Clickjacking** | Cryptographic security headers | `next.config.ts` injects a Content Security Policy (CSP), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and HSTS. |
 | **Stale Authentication Access** | Caching rules & pageshow listeners | `Cache-Control: no-store, must-revalidate` applied in next config for root/login routes, backed by client-side event listeners checking session status. |
 | **Course Schedule Tampering** | Server-side semester assertions | `submitCourses.ts` validates that all submitted elective/slot options belong to the student's database-enforced `current_semester` before enrollment write. |

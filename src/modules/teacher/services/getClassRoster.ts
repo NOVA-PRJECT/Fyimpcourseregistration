@@ -1,7 +1,11 @@
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { logServerError } from '@/core/logging/logger'
+import { z } from 'zod'
 
 export async function getClassRoster(courseId: string, campus_id: string) {
+  if (!z.string().uuid().safeParse(courseId).success) {
+    return { success: false, error: 'Invalid course ID format', status: 400 }
+  }
 
   const { data: campusSettings } = await supabaseAdmin
     .from('campus_settings')

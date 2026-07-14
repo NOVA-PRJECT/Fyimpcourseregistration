@@ -1,10 +1,18 @@
 export const COURSE_CATEGORIES = {
   DSC: 'DSC',
-  MDC: 'MDC',
   DSE: 'DSE',
-  SEC: 'SEC',
+  MDC: 'MDC',
   VAC: 'VAC',
+  SEC: 'SEC',
+  AEC: 'AEC',
+  MOC: 'MOC',
   MOOC: 'MOOC',
+  INT: 'INT',
+  RPH: 'RPH',
+  FWD: 'FWD',
+  DSS: 'DSS',
+  DMP: 'DMP',
+  CIP: 'CIP',
 } as const
 
 export type CourseCategory = typeof COURSE_CATEGORIES[keyof typeof COURSE_CATEGORIES]

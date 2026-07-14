@@ -18,6 +18,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'course_id parameter is required' }, { status: 400 })
   }
 
+  if (!z.string().uuid().safeParse(courseId).success) {
+    return NextResponse.json({ error: 'Invalid course_id format' }, { status: 400 })
+  }
+
   const response = await getClassRoster(courseId, auth.campus_id)
 
   if (!response.success) {

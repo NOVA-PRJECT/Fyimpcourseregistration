@@ -33,7 +33,7 @@ export async function GET() {
   // 3. Get campus settings
   const { data: settings } = await supabaseAdmin
     .from('campus_settings')
-    .select('deadline, min_credits, max_credits, last_promoted_at')
+    .select('deadline, last_promoted_at')
     .eq('campus_id', faculty.campus_id)
     .single()
 
@@ -81,8 +81,6 @@ export async function PUT(request: NextRequest) {
     status: 'success',
     metadata: {
       deadline: result.data.deadline,
-      min_credits: result.data.min_credits,
-      max_credits: result.data.max_credits,
     }
   })
 

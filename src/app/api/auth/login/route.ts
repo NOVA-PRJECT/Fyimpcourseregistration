@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { determineUserRoute } from '@/modules/auth/services/routeUser'
-import { loginLimiter } from '@/core/security/rateLimiter'
+import { loginLimiter, emailLoginLimiter } from '@/core/security/rateLimiter'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { createResponseTrackingClient } from '@/core/database/supabaseClient'
 import { LoginSchema } from '@/modules/auth/schemas/loginSchema'
@@ -8,7 +8,10 @@ import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export async function POST(request: NextRequest) {
   // 1. Rate Limiting (prevent brute force logins from the same IP)
-  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  let ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  if (ip && ip !== 'unknown') {
+    ip = ip.split(',')[0].trim()
+  }
   const { success } = await loginLimiter.limit(ip)
 
   if (!success) {
@@ -32,6 +35,15 @@ export async function POST(request: NextRequest) {
   }
 
   const { email, password } = result.data
+
+  // 1b. Rate Limiting (prevent brute force logins per account/email)
+  const { success: emailWithinLimit } = await emailLoginLimiter.limit(email.toLowerCase())
+  if (!emailWithinLimit) {
+    return NextResponse.json(
+      { error: 'Too many attempts for this account. Please try again later.' },
+      { status: 429 }
+    )
+  }
 
   const { client: supabase, cookiesToSetAtEnd } = await createResponseTrackingClient()
 

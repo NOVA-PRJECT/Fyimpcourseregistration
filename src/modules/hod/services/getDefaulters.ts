@@ -1,58 +1,7 @@
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { logServerError } from '@/core/logging/logger'
 
-// ── getDefaulters: single-semester (kept for backwards compat) ──
-export async function getDefaulters(
-  semester: number,
-  department_id: string,
-  campus_id: string
-) {
-  // Parallel fetch: campus settings and students
-  const [settingsRes, studentsRes] = await Promise.all([
-    supabaseAdmin
-      .from('campus_settings')
-      .select('academic_year')
-      .eq('campus_id', campus_id)
-      .single(),
-    supabaseAdmin
-      .from('students')
-      .select('id, full_name, roll_number')
-      .eq('department_id', department_id)
-      .eq('campus_id', campus_id)
-      .eq('current_semester', semester)
-  ])
 
-  const academicYear = settingsRes.data?.academic_year ?? ''
-  const { data: allStudents, error: allError } = studentsRes
-
-  if (allError) {
-    return { success: false, error: 'Failed to fetch students', status: 500 }
-  }
-
-  if (!allStudents || allStudents.length === 0) {
-    return { success: true, data: { total_students: 0, submitted_count: 0, defaulter_count: 0, defaulters: [] } }
-  }
-
-  const { data: submitted } = await supabaseAdmin
-    .from('student_registrations')
-    .select('student_id')
-    .eq('semester', semester)
-    .eq('academic_year', academicYear)
-    .in('student_id', allStudents.map((s: any) => s.id))
-
-  const submittedIds = new Set(submitted?.map((r: any) => r.student_id) ?? [])
-  const defaulters = allStudents.filter((s: any) => !submittedIds.has(s.id))
-
-  return {
-    success: true,
-    data: {
-      total_students: allStudents.length,
-      submitted_count: submitted?.length ?? 0,
-      defaulter_count: defaulters.length,
-      defaulters,
-    },
-  }
-}
 
 // ── getAllDepartmentStudents: full department across ALL semesters ──
 // Each student is tagged with their registration status for their own current_semester

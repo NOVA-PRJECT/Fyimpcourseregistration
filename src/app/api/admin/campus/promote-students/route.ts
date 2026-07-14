@@ -22,6 +22,30 @@ export async function POST() {
 
   const supabase = await getSupabaseServerClient()
 
+  // Idempotency check: Get the last_promoted_at timestamp
+  const { data: settings, error: settingsFetchError } = await supabaseAdmin
+    .from('campus_settings')
+    .select('last_promoted_at')
+    .eq('campus_id', auth.campus_id)
+    .single()
+
+  if (settingsFetchError) {
+    logServerError('/api/admin/campus/promote-students', settingsFetchError, { userId: auth.userId, step: 'settings_idempotency_fetch' })
+    return NextResponse.json({ error: 'Failed to retrieve campus settings' }, { status: 500 })
+  }
+
+  if (settings?.last_promoted_at) {
+    const lastPromoted = new Date(settings.last_promoted_at)
+    const ninetyDaysAgo = new Date()
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+    if (lastPromoted > ninetyDaysAgo) {
+      return NextResponse.json(
+        { error: 'Accidental double-promotion blocked: students have already been promoted within the last 90 days.' },
+        { status: 400 }
+      )
+    }
+  }
+
   // Get the list of students whose semester will become > 10 (so we can clean up their auth users)
   const { data: nearMaxStudents } = await supabaseAdmin
     .from('students')

@@ -92,8 +92,6 @@ export default function DirectorDashboard() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         deadline: deadlineDate.toISOString(),
-        min_credits: minCredits,
-        max_credits: maxCredits,
       }),
     })
 
@@ -228,26 +226,7 @@ export default function DirectorDashboard() {
               </div>
             </div>
 
-            <div className={styles.inputRow}>
-              <div className={styles.field}>
-                <label className={styles.label}>Min Credits</label>
-                <input
-                  type="number"
-                  className={styles.input}
-                  value={minCredits}
-                  onChange={e => setMinCredits(Number(e.target.value))}
-                />
-              </div>
-              <div className={styles.field}>
-                <label className={styles.label}>Max Credits</label>
-                <input
-                  type="number"
-                  className={styles.input}
-                  value={maxCredits}
-                  onChange={e => setMaxCredits(Number(e.target.value))}
-                />
-              </div>
-            </div>
+
 
           </div>
 

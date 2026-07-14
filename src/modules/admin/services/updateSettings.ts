@@ -14,8 +14,6 @@ export async function updateSettings(
   auth: VerifiedDirector,
   {
     deadline,
-    min_credits = 18,
-    max_credits = 26,
   }: CampusSettingsInput
 ) {
   const supabase = await getSupabaseServerClient()
@@ -32,8 +30,6 @@ export async function updateSettings(
     .upsert({
       campus_id: auth.campus_id,
       deadline: deadlineDate.toISOString(),
-      min_credits,
-      max_credits,
       academic_year,
     }, { onConflict: 'campus_id' })
 

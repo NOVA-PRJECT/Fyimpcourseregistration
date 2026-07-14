@@ -6,11 +6,18 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
-// 10 attempts per 15 minutes for login
+// 10 attempts per 15 minutes for login (IP based)
 export const loginLimiter = new Ratelimit({
   redis,
   limiter: Ratelimit.slidingWindow(10, '15 m'),
   prefix: 'fyimp:login',
+})
+
+// 5 attempts per 15 minutes per email for login
+export const emailLoginLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '15 m'),
+  prefix: 'fyimp:login-email',
 })
 
 // 10 submissions per hour per student (keyed by user ID)

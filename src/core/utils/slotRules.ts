@@ -17,13 +17,21 @@ export function isCourseEligibleForSlot(
   }
 
   if (rule === SLOT_RULES.DEPT_RESTRICTED) {
-    const requiredDeptId = deptMap.get(target)
-    return course.department_id === requiredDeptId && ['DSC', 'DSE'].includes(course.category)
+    if (!target) return false
+    const allowedDeptCodes = target.split(',').map(code => code.trim())
+    const allowedDeptIds = allowedDeptCodes
+      .map(code => deptMap.get(code))
+      .filter(id => id !== undefined)
+    return allowedDeptIds.includes(course.department_id) && ['DSC', 'DSE'].includes(course.category)
   }
 
   if (rule === SLOT_RULES.EXCLUDE_DEPT) {
-    const excludedDeptId = deptMap.get(target)
-    return course.department_id !== excludedDeptId && ['DSC', 'DSE'].includes(course.category)
+    if (!target) return false
+    const excludedDeptCodes = target.split(',').map(code => code.trim())
+    const excludedDeptIds = excludedDeptCodes
+      .map(code => deptMap.get(code))
+      .filter(id => id !== undefined)
+    return !excludedDeptIds.includes(course.department_id) && ['DSC', 'DSE'].includes(course.category)
   }
 
   if (rule === SLOT_RULES.POOL_RESTRICTED) {
@@ -32,7 +40,7 @@ export function isCourseEligibleForSlot(
 
   if (rule === SLOT_RULES.GLOBAL_BASKET) {
     if (course.tag !== target) return false
-    if (target?.includes('MDC') && course.department_id === studentDepartmentId) return false
+    if (course.department_id === studentDepartmentId) return false
     return true
   }
 

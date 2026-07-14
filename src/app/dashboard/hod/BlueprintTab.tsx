@@ -148,7 +148,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       method: isEdit ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(isEdit
-        ? { id: editCourse.id, title: courseTitle, credits: courseCredits, category: courseCategory, tag: courseTag }
+        ? { id: editCourse.id, course_code: courseCode, title: courseTitle, credits: courseCredits, category: courseCategory, tag: courseTag }
         : { course_code: courseCode, title: courseTitle, semester, credits: courseCredits, category: courseCategory, tag: courseTag }
       ),
     })
@@ -255,7 +255,15 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                       <div className={styles.field}>
                         <label className={styles.label}>Rule</label>
                         <select className={styles.input} value={slot.rule}
-                          onChange={e => updateSlot(slot.slot, 'rule', e.target.value)}>
+                          onChange={e => {
+                            const newRule = e.target.value
+                            let newTarget = ''
+                            if (newRule === 'POOL_RESTRICTED') {
+                              newTarget = 'POOL-'
+                            }
+                            updateSlot(slot.slot, 'rule', newRule)
+                            updateSlot(slot.slot, 'target', newTarget)
+                          }}>
                           {RULES.map(r => (
                             <option key={r.value} value={r.value}>{r.label}</option>
                           ))}
@@ -265,17 +273,54 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                         <div className={styles.field} style={{ position: 'relative' }}>
                           <label className={styles.label}>
                             Target {slot.rule === 'FIXED' ? '(Course Code)' :
-                              slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? '(Department)' :
+                              slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? '(Departments)' :
                                 '(Tag e.g. POOL-A, MDC-1)'}
                           </label>
                           {slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? (
-                            <select className={styles.input} value={slot.target}
-                              onChange={e => updateSlot(slot.slot, 'target', e.target.value)}>
-                              <option value="">— Select department —</option>
-                              {departments.map(d => (
-                                <option key={d.id} value={d.code}>{d.name} ({d.code})</option>
-                              ))}
-                            </select>
+                            <div className={styles.checkboxGroup} style={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: '0.5rem',
+                              padding: '0.5rem',
+                              border: '1px solid #dde1e7',
+                              borderRadius: '0.4rem',
+                              background: '#ffffff',
+                              maxHeight: '120px',
+                              overflowY: 'auto'
+                            }}>
+                              {departments.map(d => {
+                                const selectedCodes = slot.target ? slot.target.split(',').map(c => c.trim()) : [];
+                                const isChecked = selectedCodes.includes(d.code);
+                                return (
+                                  <label key={d.id} style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    fontSize: '0.75rem',
+                                    cursor: 'pointer',
+                                    padding: '0.25rem 0.5rem',
+                                    border: '1px solid #f0f2f5',
+                                    borderRadius: '3px',
+                                    background: isChecked ? '#e6f0fa' : '#fafafa'
+                                  }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={e => {
+                                        let newCodes;
+                                        if (e.target.checked) {
+                                          newCodes = [...selectedCodes, d.code];
+                                        } else {
+                                          newCodes = selectedCodes.filter(c => c !== d.code);
+                                        }
+                                        updateSlot(slot.slot, 'target', newCodes.join(','));
+                                      }}
+                                    />
+                                    {d.name} ({d.code})
+                                  </label>
+                                );
+                              })}
+                            </div>
                           ) : slot.rule === 'FIXED' ? (
                             <div style={{ position: 'relative' }}>
                               <input type="text" className={styles.input}
@@ -358,7 +403,15 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                             <input type="text" className={styles.input}
                               placeholder="e.g. POOL-A or MDC-1"
                               value={slot.target}
-                              onChange={e => updateSlot(slot.slot, 'target', e.target.value)} />
+                              onChange={e => {
+                                let val = e.target.value
+                                if (slot.rule === 'POOL_RESTRICTED') {
+                                  if (!val.startsWith('POOL-')) {
+                                    val = 'POOL-'
+                                  }
+                                }
+                                updateSlot(slot.slot, 'target', val)
+                              }} />
                           )}
                         </div>
                       )}
@@ -444,13 +497,11 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
               <div className={styles.modal}>
                 <h3 className={styles.modalTitle}>{editCourse ? 'Edit Course' : 'Add Course'}</h3>
                 <div className={styles.fieldGroup}>
-                  {!editCourse && (
-                    <div className={styles.field}>
-                      <label className={styles.label}>Course Code</label>
-                      <input type="text" className={styles.input} placeholder="e.g. KU01DSCMAT101"
-                        value={courseCode} onChange={e => setCourseCode(e.target.value)} />
-                    </div>
-                  )}
+                  <div className={styles.field}>
+                    <label className={styles.label}>Course Code</label>
+                    <input type="text" className={styles.input} placeholder="e.g. KU01DSCMAT101"
+                      value={courseCode} onChange={e => setCourseCode(e.target.value)} />
+                  </div>
                   <div className={styles.field}>
                     <label className={styles.label}>Title</label>
                     <input type="text" className={styles.input} placeholder="e.g. Differential Calculus"

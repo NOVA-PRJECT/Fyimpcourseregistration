@@ -136,11 +136,12 @@ export async function submitCourses(auth: VerifiedStudent, { semester, courses }
         }
       }
       if (rule === SLOT_RULES.DEPT_RESTRICTED) {
-        const requiredDeptId = deptMap.get(target)
-        if (course.department_id !== requiredDeptId) {
+        const requiredCodes = (target ?? '').split(',').map(code => code.trim())
+        const requiredDeptIds = requiredCodes.map(code => deptMap.get(code)).filter(id => id !== undefined)
+        if (!requiredDeptIds.includes(course.department_id)) {
           return {
             success: false,
-            error: `Slot ${slot} requires a course from a specific department`,
+            error: `Slot ${slot} requires a course from one of the allowed departments (${requiredCodes.join(', ')})`,
             status: 400,
           }
         }
@@ -151,11 +152,12 @@ export async function submitCourses(auth: VerifiedStudent, { semester, courses }
         }
       }
       if (rule === SLOT_RULES.EXCLUDE_DEPT) {
-        const excludedDeptId = deptMap.get(target)
-        if (course.department_id === excludedDeptId) {
+        const excludedCodes = (target ?? '').split(',').map(code => code.trim())
+        const excludedDeptIds = excludedCodes.map(code => deptMap.get(code)).filter(id => id !== undefined)
+        if (excludedDeptIds.includes(course.department_id)) {
           return {
             success: false,
-            error: `Slot ${slot} does not allow courses from that department`,
+            error: `Slot ${slot} does not allow courses from excluded departments (${excludedCodes.join(', ')})`,
             status: 400,
           }
         }
@@ -200,18 +202,18 @@ export async function submitCourses(auth: VerifiedStudent, { semester, courses }
   // Calculate total credits
   const totalCredits = courseData.reduce((sum, c) => sum + c.credits, 0)
 
-  if (totalCredits < settings.min_credits) {
+  if (totalCredits < blueprint.min_credits) {
     return {
       success: false,
-      error: `Total credits (${totalCredits}) is below the minimum of ${settings.min_credits}`,
+      error: `Total credits (${totalCredits}) is below the minimum of ${blueprint.min_credits}`,
       status: 400,
     }
   }
 
-  if (totalCredits > settings.max_credits) {
+  if (totalCredits > blueprint.max_credits) {
     return {
       success: false,
-      error: `Total credits (${totalCredits}) exceeds the maximum of ${settings.max_credits}`,
+      error: `Total credits (${totalCredits}) exceeds the maximum of ${blueprint.max_credits}`,
       status: 400,
     }
   }
