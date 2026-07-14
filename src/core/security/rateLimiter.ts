@@ -51,6 +51,6 @@ export const adminCrudLimiter = new Ratelimit({
 // 5 password-reset attempts per hour per IP (keyed by IP/email)
 export const resetPasswordLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(5, '1 h'),
+  limiter: Ratelimit.slidingWindow(2, '1 h'),
   prefix: 'fyimp:reset-password',
-})
+})

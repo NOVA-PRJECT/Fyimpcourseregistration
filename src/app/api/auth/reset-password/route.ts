@@ -33,9 +33,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
   }
 
-  await supabaseAdmin.auth.admin.generateLink({
-    type: 'recovery',
-    email: result.data.email,
+  await supabaseAdmin.auth.resetPasswordForEmail(result.data.email,{
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/reset-password/confirm`,
   })
 
   return NextResponse.json({ success: true })
