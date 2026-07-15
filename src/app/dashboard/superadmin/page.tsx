@@ -20,7 +20,7 @@ interface Department {
   name: string
   code: string
   campus_id: string
-  campuses: { name: string }
+  campuses?: { name: string } | null
 }
 
 interface Faculty {
@@ -240,7 +240,7 @@ export default function SuperAdminDashboard() {
       if (data.details && typeof data.details === 'object') {
         const fieldErrors = data.details.fieldErrors || {}
         const formatted = Object.entries(fieldErrors)
-          .map(([field, msgs]) => `${field}: ${(msgs as any).join(', ')}`)
+          .map(([field, msgs]) => `${field}: ${(msgs as string[]).join(', ')}`)
           .join('; ')
         setError(formatted || data.error || 'Failed to add faculty')
       } else {
@@ -265,7 +265,7 @@ export default function SuperAdminDashboard() {
     // L6 fix: Use campus_id directly instead of reverse-lookup by name
     setEditFacultyCampusId(f.campus_id ?? '')
     // Find the dept_id from departments list by matching dept name
-    const matchedDept = departments.find(d => d.name === (f.departments as any)?.name)
+    const matchedDept = departments.find(d => d.name === f.departments?.name)
     setEditFacultyDeptId(matchedDept?.id ?? '')
     clearMessages()
   }
@@ -465,7 +465,7 @@ export default function SuperAdminDashboard() {
                         <td>{i + 1}</td>
                         <td>{dept.name}</td>
                         <td><span className={styles.codeBadge}>{dept.code}</span></td>
-                        <td>{(dept.campuses as any)?.name ?? '—'}</td>
+                        <td>{dept.campuses?.name ?? '—'}</td>
                         <td>
                           <div className={styles.actionBtns}>
                             <button className={styles.editBtn} onClick={() => {
@@ -525,7 +525,7 @@ export default function SuperAdminDashboard() {
                           <p style={{ margin: 0, fontSize: '0.68rem', color: '#9ba1ab' }}>{f.email}</p>
                         </td>
                         <td><span className={styles.rolePill}>{roleLabel(f.role)}</span></td>
-                        <td>{(f.departments as any)?.name ?? '—'}</td>
+                        <td>{f.departments?.name ?? '—'}</td>
                         <td>
                           <div className={styles.actionBtns}>
                             {/* ← NEW edit button */}
@@ -641,7 +641,7 @@ export default function SuperAdminDashboard() {
               <div className={styles.field}>
                 <label className={styles.label}>Role</label>
                 <select className={styles.input} value={facultyRole}
-                  onChange={e => setFacultyRole(e.target.value as any)}>
+                  onChange={e => setFacultyRole(e.target.value as 'hod' | 'campus_director' | 'teaching_staff')}>
                   <option value="hod">HOD</option>
                   <option value="campus_director">Campus Director</option>
                   <option value="teaching_staff">Teaching Staff</option>

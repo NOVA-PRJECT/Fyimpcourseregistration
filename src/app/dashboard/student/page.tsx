@@ -44,13 +44,25 @@ export default async function StudentDashboardPage() {
     .eq('semester', student.current_semester)
     .maybeSingle()
 
+  interface StudentProfile {
+    full_name: string
+    roll_number: string
+    current_semester: number
+    academic_year_joined: string | null
+    must_change_password: boolean
+    departments: { name: string } | null
+    campuses: { name: string } | null
+  }
+
+  const typedStudent = student as unknown as StudentProfile | null
+
   const studentInfo = {
-    full_name: student.full_name,
-    roll_number: student.roll_number,
-    current_semester: student.current_semester,
-    academic_year_joined: student.academic_year_joined ?? '—',
-    department_name: (student.departments as any)?.name ?? 'Unknown',
-    campus_name: (student.campuses as any)?.name ?? 'Unknown',
+    full_name: typedStudent?.full_name ?? '',
+    roll_number: typedStudent?.roll_number ?? '',
+    current_semester: typedStudent?.current_semester ?? 1,
+    academic_year_joined: typedStudent?.academic_year_joined ?? '—',
+    department_name: typedStudent?.departments?.name ?? 'Unknown',
+    campus_name: typedStudent?.campuses?.name ?? 'Unknown',
   }
 
   return (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { PasswordValidationSchema } from '@/core/validation/passwordSchema'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifyStudent, handleAuthError } from '@/core/auth/verifyRole'
 import { logServerError } from '@/core/logging/logger'
@@ -11,11 +12,7 @@ import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 export const dynamic = 'force-dynamic'
 
 const ChangePasswordSchema = z.object({
-  new_password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Za-z]/, 'Password must contain at least one letter')
-    .regex(/[0-9]/, 'Password must contain at least one number'),
+  new_password: PasswordValidationSchema,
   confirm_password: z.string().min(1, 'Please confirm your password'),
 }).refine(data => data.new_password === data.confirm_password, {
   message: 'Passwords do not match',

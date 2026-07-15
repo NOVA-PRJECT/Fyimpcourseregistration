@@ -36,6 +36,16 @@ export async function getClassRoster(courseId: string, campus_id: string) {
     return { success: false, error: 'Course does not belong to your campus', status: 403 }
   }
 
+  const slotFields = [
+    'slot_1_course_id',
+    'slot_2_course_id',
+    'slot_3_course_id',
+    'slot_4_course_id',
+    'slot_5_course_id',
+    'slot_6_course_id',
+  ]
+  const orClause = slotFields.map(field => `${field}.eq.${courseId}`).join(',')
+
   const { data: registrations, error: regError } = await supabaseAdmin
     .from('student_registrations')
     .select(`
@@ -48,14 +58,7 @@ export async function getClassRoster(courseId: string, campus_id: string) {
       slot_6_course_id
     `)
     .eq('academic_year', academicYear)
-    .or(
-      `slot_1_course_id.eq.${courseId},` +
-      `slot_2_course_id.eq.${courseId},` +
-      `slot_3_course_id.eq.${courseId},` +
-      `slot_4_course_id.eq.${courseId},` +
-      `slot_5_course_id.eq.${courseId},` +
-      `slot_6_course_id.eq.${courseId}`
-    )
+    .or(orClause)
 
   if (regError) {
     logServerError('getClassRoster', regError, { courseId, campus_id, step: 'registrations_fetch' })
@@ -94,18 +97,27 @@ export async function getClassRoster(courseId: string, campus_id: string) {
     return { success: false, error: 'Failed to fetch student details', status: 500 }
   }
 
+  interface StudentWithDept {
+    id: string
+    full_name: string
+    roll_number: string
+    departments: { name: string; code: string } | null
+  }
+
+  const typedStudents = students as unknown as StudentWithDept[]
+
   const departmentBreakdown: Record<string, number> = {}
-  students.forEach((student: any) => {
-    const deptName = (student.departments as any)?.name ?? 'Unknown'
+  typedStudents.forEach((student) => {
+    const deptName = student.departments?.name ?? 'Unknown'
     departmentBreakdown[deptName] = (departmentBreakdown[deptName] ?? 0) + 1
   })
 
-  const roster = students.map((student: any) => ({
+  const roster = typedStudents.map((student) => ({
     id: student.id,
     full_name: student.full_name,
     roll_number: student.roll_number,
-    department: (student.departments as any)?.name ?? 'Unknown',
-    department_code: (student.departments as any)?.code ?? '',
+    department: student.departments?.name ?? 'Unknown',
+    department_code: student.departments?.code ?? '',
   }))
 
   return {

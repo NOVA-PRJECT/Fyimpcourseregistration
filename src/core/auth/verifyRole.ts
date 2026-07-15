@@ -48,9 +48,15 @@ export type AuthSuccess<T> = { success: true } & T
 // Shared Faculty Role verification helper
 // ─────────────────────────────────────────────
 
-async function verifyFacultyRole(
-  expectedRole: 'hod' | 'campus_director' | 'teaching_staff'
-): Promise<AuthSuccess<{ userId: string; department_id?: string; campus_id: string; role: typeof expectedRole }> | AuthError> {
+type FacultySuccessRoleMap = {
+  hod: VerifiedHod
+  campus_director: VerifiedDirector
+  teaching_staff: VerifiedTeacher
+}
+
+async function verifyFacultyRole<T extends 'hod' | 'campus_director' | 'teaching_staff'>(
+  expectedRole: T
+): Promise<AuthSuccess<FacultySuccessRoleMap[T]> | AuthError> {
   const supabase = await getSupabaseServerClient()
   const { data, error: claimsError } = await supabase.auth.getClaims()
   const claims = data?.claims
@@ -85,13 +91,38 @@ async function verifyFacultyRole(
     campusId = faculty.campus_id
   }
 
+  if (!campusId) {
+    return { success: false, error: 'Campus assignment is missing', status: 400 }
+  }
+
+  if (expectedRole === 'hod') {
+    if (!departmentId) {
+      return { success: false, error: 'HOD has no department assigned', status: 400 }
+    }
+    return {
+      success: true,
+      userId: claims.sub,
+      department_id: departmentId,
+      campus_id: campusId,
+      role: 'hod',
+    } as unknown as AuthSuccess<FacultySuccessRoleMap[T]>
+  }
+
+  if (expectedRole === 'campus_director') {
+    return {
+      success: true,
+      userId: claims.sub,
+      campus_id: campusId,
+      role: 'campus_director',
+    } as unknown as AuthSuccess<FacultySuccessRoleMap[T]>
+  }
+
   return {
     success: true,
     userId: claims.sub,
-    department_id: departmentId,
-    campus_id: campusId!,
-    role: expectedRole,
-  } as any
+    campus_id: campusId,
+    role: 'teaching_staff',
+  } as unknown as AuthSuccess<FacultySuccessRoleMap[T]>
 }
 
 // ─────────────────────────────────────────────
@@ -99,12 +130,7 @@ async function verifyFacultyRole(
 // ─────────────────────────────────────────────
 
 export const verifyHod = cache(async (): Promise<AuthSuccess<VerifiedHod> | AuthError> => {
-  const auth = await verifyFacultyRole('hod')
-  if (!auth.success) return auth
-  if (!auth.department_id) {
-    return { success: false, error: 'HOD has no department assigned', status: 400 }
-  }
-  return auth as AuthSuccess<VerifiedHod>
+  return verifyFacultyRole('hod')
 })
 
 // ─────────────────────────────────────────────
@@ -112,9 +138,7 @@ export const verifyHod = cache(async (): Promise<AuthSuccess<VerifiedHod> | Auth
 // ─────────────────────────────────────────────
 
 export const verifyDirector = cache(async (): Promise<AuthSuccess<VerifiedDirector> | AuthError> => {
-  const auth = await verifyFacultyRole('campus_director')
-  if (!auth.success) return auth
-  return auth as AuthSuccess<VerifiedDirector>
+  return verifyFacultyRole('campus_director')
 })
 
 // ─────────────────────────────────────────────
@@ -147,9 +171,7 @@ export const verifySuperAdmin = cache(async (): Promise<AuthSuccess<VerifiedSupe
 // ─────────────────────────────────────────────
 
 export const verifyTeacher = cache(async (): Promise<AuthSuccess<VerifiedTeacher> | AuthError> => {
-  const auth = await verifyFacultyRole('teaching_staff')
-  if (!auth.success) return auth
-  return auth as AuthSuccess<VerifiedTeacher>
+  return verifyFacultyRole('teaching_staff')
 })
 
 // ─────────────────────────────────────────────
@@ -208,6 +230,10 @@ export const verifyStudent = cache(async (options?: { allowMustChangePassword?: 
     fullName = student.full_name
   }
 
+  if (!departmentId || !campusId) {
+    return { success: false, error: 'Student department or campus assignment is missing', status: 400 }
+  }
+
   if (mustChangePassword && !options?.allowMustChangePassword) {
     return { success: false, error: 'Password change required', status: 403 }
   }
@@ -215,8 +241,8 @@ export const verifyStudent = cache(async (options?: { allowMustChangePassword?: 
   return {
     success: true,
     userId: claims.sub,
-    department_id: departmentId!,
-    campus_id: campusId!,
+    department_id: departmentId,
+    campus_id: campusId,
     role: 'student',
     must_change_password: mustChangePassword,
     current_semester: currentSemester,

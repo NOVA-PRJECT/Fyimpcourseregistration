@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createResponseTrackingClient } from '@/core/database/supabaseClient'
+import { resetPasswordLimiter } from '@/core/security/rateLimiter'
 import { z } from 'zod'
+import { PasswordValidationSchema } from '@/core/validation/passwordSchema'
 
 export const dynamic = 'force-dynamic'
 
 const Schema = z.object({
   code: z.string().min(1),
-  new_password: z.string().min(8).max(128),
+  new_password: PasswordValidationSchema,
 })
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  const { success: withinLimit } = await resetPasswordLimiter.limit(ip)
+
+  if (!withinLimit) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429 }
+    )
+  }
+
   let body
   try {
     body = await request.json()

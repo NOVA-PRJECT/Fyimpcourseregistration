@@ -47,11 +47,16 @@ export async function POST() {
   }
 
   // Get the list of students whose semester will become > 10 (so we can clean up their auth users)
-  const { data: nearMaxStudents } = await supabaseAdmin
+  const { data: nearMaxStudents, error: fetchError } = await supabaseAdmin
     .from('students')
     .select('id, current_semester')
     .eq('campus_id', auth.campus_id)
     .eq('current_semester', 10) // these will be promoted to 11 → graduated
+
+  if (fetchError) {
+    logServerError('/api/admin/campus/promote-students', fetchError, { userId: auth.userId, step: 'fetch_near_max_students' })
+    return NextResponse.json({ error: 'Failed to promote students' }, { status: 500 })
+  }
 
   // Run the promote RPC
   const { data: promotedCount, error } = await supabase

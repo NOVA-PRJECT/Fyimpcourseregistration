@@ -105,7 +105,7 @@ export async function getBlueprint(auth: VerifiedStudent) {
         .select('id, course_code, title, department_id, semester, credits, category, tag')
 
       if (fixedCourseIds.length > 0) {
-        query = query.not('id', 'in', `(${fixedCourseIds.join(',')})`)
+        query = query.not('id', 'in', fixedCourseIds)
       }
 
       // DEPT_RESTRICTED
@@ -128,7 +128,7 @@ export async function getBlueprint(auth: VerifiedStudent) {
         const deptIds = deptCodes.map((code: string) => deptMap.get(code)).filter((id): id is string => id !== undefined)
         if (deptIds.length === 0) return { slot, rule, name, options: [] }
         const { data: options } = await query
-          .not('department_id', 'in', `(${deptIds.join(',')})`)
+          .not('department_id', 'in', deptIds)
           .eq('semester', auth.current_semester)
           .in('category', ['DSC', 'DSE'])
 

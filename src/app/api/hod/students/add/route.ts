@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { z } from 'zod'
+import { PasswordValidationSchema } from '@/core/validation/passwordSchema'
 import { deleteAuthUser } from '@/core/auth/deleteAuthUser'
 import { logServerError } from '@/core/logging/logger'
 import { adminCrudLimiter } from '@/core/security/rateLimiter'
@@ -21,7 +22,7 @@ const AddStudentSchema = z.object({
     .max(10)
     .default(1),
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: PasswordValidationSchema,
 })
 
 export async function POST(request: NextRequest) {

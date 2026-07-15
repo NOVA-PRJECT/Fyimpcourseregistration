@@ -3,15 +3,14 @@ import { bulkCreateStudents } from '@/modules/hod/services/bulkCreateStudents'
 import { verifyHod, handleAuthError } from '@/core/auth/verifyRole'
 import { bulkUploadLimiter } from '@/core/security/rateLimiter'
 import { z } from 'zod'
+import { PasswordValidationSchema } from '@/core/validation/passwordSchema'
 import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export const dynamic = 'force-dynamic'
 
 const BulkStudentsBodySchema = z.object({
   rows: z.array(z.unknown()).min(1, 'At least one row is required').max(120, 'Maximum 120 students per upload'),
-  batch_default_password: z
-    .string()
-    .min(8, 'Batch password must be at least 8 characters'),
+  batch_default_password: PasswordValidationSchema,
 })
 
 export async function POST(request: NextRequest) {

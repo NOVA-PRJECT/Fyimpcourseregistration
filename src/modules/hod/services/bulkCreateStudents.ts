@@ -35,11 +35,12 @@ export async function bulkCreateStudents(
     if (result.success) {
       validRows.push({ index, data: result.data })
     } else {
+      const rawRow = rows[index] as Record<string, unknown> | null | undefined
       parseErrors.push({
         row: index + 1,
-        email: (rows[index] as any)?.email ?? '',
+        email: typeof rawRow?.email === 'string' ? rawRow.email : '',
         status: 'error',
-        issues: result.error.issues.map((e: any) => e.message),
+        issues: result.error.issues.map(e => e.message),
       })
     }
   })
@@ -102,65 +103,72 @@ export async function bulkCreateStudents(
   ]
 
   // ── Per-row: create auth user then student row ──
-  for (const { index, data } of dedupedRows) {
-    const rowResult: BulkCreateResult = { row: index + 1, email: data.email, status: 'success' }
+  const CHUNK_SIZE = 10
+  for (let i = 0; i < dedupedRows.length; i += CHUNK_SIZE) {
+    const chunk = dedupedRows.slice(i, i + CHUNK_SIZE)
+    await Promise.all(
+      chunk.map(async ({ index, data }) => {
+        const rowResult: BulkCreateResult = { row: index + 1, email: data.email, status: 'success' }
 
-    const dupIssues: string[] = []
-    if (existingCapSet.has(data.cap_application_number)) {
-      dupIssues.push(`CAP number ${data.cap_application_number} already exists`)
-    }
-    if (existingRollSet.has(data.roll_number)) {
-      dupIssues.push(`Roll number ${data.roll_number} already exists`)
-    }
-    if (dupIssues.length > 0) {
-      results.push({ ...rowResult, status: 'error', issues: dupIssues })
-      continue
-    }
+        const dupIssues: string[] = []
+        if (existingCapSet.has(data.cap_application_number)) {
+          dupIssues.push(`CAP number ${data.cap_application_number} already exists`)
+        }
+        if (existingRollSet.has(data.roll_number)) {
+          dupIssues.push(`Roll number ${data.roll_number} already exists`)
+        }
+        if (dupIssues.length > 0) {
+          results.push({ ...rowResult, status: 'error', issues: dupIssues })
+          return
+        }
 
-    // Create Supabase Auth user
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: data.email,
-      password: batch_default_password,
-      email_confirm: true,
+        // Create Supabase Auth user
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: data.email,
+          password: batch_default_password,
+          email_confirm: true,
         })
 
-    if (authError || !authData.user) {
-      results.push({
-        ...rowResult,
-        status: 'error',
-        issues: [authError?.message ?? 'Failed to create auth account'],
+        if (authError || !authData.user) {
+          results.push({
+            ...rowResult,
+            status: 'error',
+            issues: [authError?.message ?? 'Failed to create auth account'],
+          })
+          return
+        }
+
+        const authUserId = authData.user.id
+
+        // Insert students row
+        const { error: studentError } = await supabaseAdmin.from('students').insert({
+          id: authUserId,
+          full_name: data.full_name,
+          roll_number: data.roll_number,
+          cap_application_number: data.cap_application_number,
+          academic_year_joined: data.academic_year_joined,
+          current_semester: data.current_semester,
+          department_id,
+          campus_id,
+          must_change_password: true,
+        })
+
+        if (studentError) {
+          // Rollback: delete orphaned auth user
+          await deleteAuthUser(authUserId)
+          results.push({
+            ...rowResult,
+            status: 'error',
+            issues: [`Student record insert failed: ${studentError.message}`],
+          })
+          return
+        }
+
+        results.push(rowResult)
       })
-      continue
-    }
-
-    const authUserId = authData.user.id
-
-    // Insert students row
-    const { error: studentError } = await supabaseAdmin.from('students').insert({
-      id: authUserId,
-      full_name: data.full_name,
-      roll_number: data.roll_number,
-      cap_application_number: data.cap_application_number,
-      academic_year_joined: data.academic_year_joined,
-      current_semester: data.current_semester,
-      department_id,
-      campus_id,
-      must_change_password: true,
-    })
-
-    if (studentError) {
-      // Rollback: delete orphaned auth user
-      await deleteAuthUser(authUserId)
-      results.push({
-        ...rowResult,
-        status: 'error',
-        issues: [`Student record insert failed: ${studentError.message}`],
-      })
-      continue
-    }
-
-    results.push(rowResult)
+    )
   }
 
+  results.sort((a, b) => a.row - b.row)
   return { success: true, results }
 }
