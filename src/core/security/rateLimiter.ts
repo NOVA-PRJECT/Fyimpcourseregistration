@@ -9,7 +9,7 @@ const redis = new Redis({
 // 10 attempts per 15 minutes for login (IP based)
 export const loginLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(10, '15 m'),
+  limiter: Ratelimit.slidingWindow(1000, '15 m'),
   prefix: 'fyimp:login',
 })
 
