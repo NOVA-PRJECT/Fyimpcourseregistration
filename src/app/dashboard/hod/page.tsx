@@ -44,6 +44,25 @@ interface UploadResult {
 
 type Tab = 'defaulters' | 'upload' | 'students' | 'blueprint' | 'courses'
 
+function getAcademicYearOptions(): string[] {
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const years: string[] = []
+  // Generate options from currentYear - 5 to currentYear + 2
+  for (let i = currentYear - 5; i <= currentYear + 2; i++) {
+    years.push(`${i}-${String(i + 1).slice(-2)}`)
+  }
+  return years
+}
+
+function getDefaultAcademicYear(): string {
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
+  if (month >= 6) return `${year}-${String(year + 1).slice(-2)}`
+  return `${year - 1}-${String(year).slice(-2)}`
+}
+
 export default function HodDashboard() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -75,7 +94,7 @@ export default function HodDashboard() {
   const [addRoll, setAddRoll] = useState('')
   const [addEmail, setAddEmail] = useState('')
   const [addPassword, setAddPassword] = useState('')
-  const [addYearJoined, setAddYearJoined] = useState('')
+  const [addYearJoined, setAddYearJoined] = useState(getDefaultAcademicYear())
   const [addSemester, setAddSemester] = useState(1)
   const [adding, setAdding] = useState(false)
 
@@ -239,7 +258,7 @@ export default function HodDashboard() {
       setStudentSuccess('Student created successfully')
       setTimeout(() => setStudentSuccess(''), 1000)
       setShowAddModal(false)
-      setAddName(''); setAddCap(''); setAddRoll(''); setAddEmail(''); setAddPassword(''); setAddYearJoined(''); setAddSemester(1)
+      setAddName(''); setAddCap(''); setAddRoll(''); setAddEmail(''); setAddPassword(''); setAddYearJoined(getDefaultAcademicYear()); setAddSemester(1)
       fetchStudents()
     }
     setAdding(false)
@@ -543,7 +562,7 @@ export default function HodDashboard() {
                 <div className={styles.emptyState}>
                   <div className={styles.emptyIcon}>👥</div>
                   <p className={styles.emptyTitle}>No students found</p>
-                  <p className={styles.emptySubtitle}>No students in Semester {studentSemester}. Click Load to fetch or Add to create one.</p>
+                  <p className={styles.emptySubtitle}>No students in Semester {studentSemester}. Click <b>+ Add Student</b> to create one.</p>
                 </div>
               ) : (
                 <table className={styles.table}>
@@ -578,13 +597,22 @@ export default function HodDashboard() {
                       { label: 'Full Name *', value: addName, set: setAddName, type: 'text', placeholder: 'Student full name' },
                       { label: 'Roll Number *', value: addRoll, set: setAddRoll, type: 'text', placeholder: 'e.g. 2025-CS-001' },
                       { label: 'CAP Number *', value: addCap, set: setAddCap, type: 'text', placeholder: 'e.g. CAP2025001' },
-                      { label: 'Academic Year Joined *', value: addYearJoined, set: setAddYearJoined, type: 'text', placeholder: 'e.g. 2025-26' },
+                      { label: 'Academic Year Joined *', value: addYearJoined, set: setAddYearJoined, type: 'select' },
                       { label: 'Email *', value: addEmail, set: setAddEmail, type: 'email', placeholder: 'student@email.com' },
                       { label: 'Password *', value: addPassword, set: setAddPassword, type: 'password', placeholder: 'Min. 8 characters' },
                     ].map(({ label, value, set, type, placeholder }) => (
                       <div key={label} className={styles.field}>
                         <label className={styles.label}>{label}</label>
-                        <input type={type} className={styles.input} placeholder={placeholder} value={value} onChange={e => set(e.target.value)} />
+                        {type === 'select' ? (
+                          <select className={styles.input} value={value} onChange={e => set(e.target.value)}>
+                            <option value="">Select Academic Year</option>
+                            {getAcademicYearOptions().map(year => (
+                              <option key={year} value={year}>{year}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input type={type} className={styles.input} placeholder={placeholder} value={value} onChange={e => set(e.target.value)} />
+                        )}
                       </div>
                     ))}
                     <div className={styles.field}>
@@ -596,7 +624,7 @@ export default function HodDashboard() {
                   </div>
                   {studentError && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{studentError}</div>}
                   <div className={styles.modalActions}>
-                    <button className={styles.modalCancelBtn} onClick={() => { setShowAddModal(false); setAddName(''); setAddCap(''); setAddRoll(''); setAddEmail(''); setAddPassword(''); setAddYearJoined(''); setAddSemester(1); setStudentError('') }} disabled={adding}>Cancel</button>
+                    <button className={styles.modalCancelBtn} onClick={() => { setShowAddModal(false); setAddName(''); setAddCap(''); setAddRoll(''); setAddEmail(''); setAddPassword(''); setAddYearJoined(getDefaultAcademicYear()); setAddSemester(1); setStudentError('') }} disabled={adding}>Cancel</button>
                     <button className={styles.modalConfirmBtn} onClick={handleAddStudent} disabled={adding}>{adding ? 'Creating...' : 'Create Student →'}</button>
                   </div>
                 </div>
