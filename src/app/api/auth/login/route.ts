@@ -60,6 +60,16 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Reset rate limits on successful login
+  try {
+    await Promise.all([
+      (loginLimiter as any).resetUsedTokens(ip),
+      (emailLoginLimiter as any).resetUsedTokens(email.toLowerCase()),
+    ])
+  } catch (resetError) {
+    console.error('Failed to reset login rate limits:', resetError)
+  }
+
   // 5. Look up role & details in database tables
   const { role, redirectTo, department_id, campus_id, must_change_password } = await determineUserRoute(authData.user.id)
 
