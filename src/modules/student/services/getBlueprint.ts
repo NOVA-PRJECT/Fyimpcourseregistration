@@ -105,7 +105,7 @@ export async function getBlueprint(auth: VerifiedStudent) {
         .select('id, course_code, title, department_id, semester, credits, category, tag')
 
       if (fixedCourseIds.length > 0) {
-        query = query.not('id', 'in', fixedCourseIds)
+        query = query.not('id', 'in', `(${fixedCourseIds.join(',')})`)
       }
 
       // DEPT_RESTRICTED
@@ -113,10 +113,14 @@ export async function getBlueprint(auth: VerifiedStudent) {
         const deptCodes = ((target as string) ?? '').split(',').map((code: string) => code.trim())
         const deptIds = deptCodes.map((code: string) => deptMap.get(code)).filter((id): id is string => id !== undefined)
         if (deptIds.length === 0) return { slot, rule, name, options: [] }
-        const { data: options } = await query
+        const { data: options, error: optionsError } = await query
           .in('department_id', deptIds)
           .eq('semester', auth.current_semester)
           .in('category', ['DSC', 'DSE'])
+
+        if (optionsError) {
+          console.error('getBlueprint DEPT_RESTRICTED query error:', optionsError)
+        }
 
         const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
         return { slot, rule, name, options: filtered }
@@ -127,10 +131,14 @@ export async function getBlueprint(auth: VerifiedStudent) {
         const deptCodes = ((target as string) ?? '').split(',').map((code: string) => code.trim())
         const deptIds = deptCodes.map((code: string) => deptMap.get(code)).filter((id): id is string => id !== undefined)
         if (deptIds.length === 0) return { slot, rule, name, options: [] }
-        const { data: options } = await query
-          .not('department_id', 'in', deptIds)
+        const { data: options, error: optionsError } = await query
+          .not('department_id', 'in', `(${deptIds.join(',')})`)
           .eq('semester', auth.current_semester)
           .in('category', ['DSC', 'DSE'])
+
+        if (optionsError) {
+          console.error('getBlueprint EXCLUDE_DEPT query error:', optionsError)
+        }
 
         const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
         return { slot, rule, name, options: filtered }
@@ -138,10 +146,14 @@ export async function getBlueprint(auth: VerifiedStudent) {
 
       // POOL_RESTRICTED — own department by tag
       if (rule === SLOT_RULES.POOL_RESTRICTED) {
-        const { data: options } = await query
+        const { data: options, error: optionsError } = await query
           .eq('department_id', auth.department_id)
           .eq('tag', target)
           .eq('semester', auth.current_semester)
+
+        if (optionsError) {
+          console.error('getBlueprint POOL_RESTRICTED query error:', optionsError)
+        }
 
         const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
         return { slot, rule, name, options: filtered }
@@ -155,7 +167,10 @@ export async function getBlueprint(auth: VerifiedStudent) {
         if (target.includes('MDC')) {
           q = q.neq('department_id', auth.department_id)
         }
-        const { data: options } = await q
+        const { data: options, error: optionsError } = await q
+        if (optionsError) {
+          console.error('getBlueprint GLOBAL_BASKET query error:', optionsError)
+        }
         const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
         return { slot, rule, name, options: filtered }
       }
