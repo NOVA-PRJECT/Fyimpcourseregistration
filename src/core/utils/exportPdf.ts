@@ -2,7 +2,6 @@ import jsPDF from 'jspdf'
 
 interface Student {
   full_name: string
-  roll_number?: string
   department_name?: string
 }
 

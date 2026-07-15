@@ -18,7 +18,6 @@ export default async function StudentDashboardPage() {
     .from('students')
     .select(`
       full_name,
-      roll_number,
       current_semester,
       academic_year_joined,
       must_change_password,
@@ -46,7 +45,6 @@ export default async function StudentDashboardPage() {
 
   interface StudentProfile {
     full_name: string
-    roll_number: string
     current_semester: number
     academic_year_joined: string | null
     must_change_password: boolean
@@ -58,7 +56,6 @@ export default async function StudentDashboardPage() {
 
   const studentInfo = {
     full_name: typedStudent?.full_name ?? '',
-    roll_number: typedStudent?.roll_number ?? '',
     current_semester: typedStudent?.current_semester ?? 1,
     academic_year_joined: typedStudent?.academic_year_joined ?? '—',
     department_name: typedStudent?.departments?.name ?? 'Unknown',

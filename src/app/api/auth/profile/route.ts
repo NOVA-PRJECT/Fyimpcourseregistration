@@ -16,7 +16,7 @@ export async function GET() {
   if (role === 'student') {
     const { data: student } = await supabaseAdmin
       .from('students')
-      .select('full_name, current_semester, roll_number, department_id, campus_id, departments(name), campuses(name)')
+      .select('full_name, current_semester, department_id, campus_id, departments(name), campuses(name)')
       .eq('id', user.id)
       .single()
     return NextResponse.json({ role, profile: student })

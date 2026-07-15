@@ -3,7 +3,6 @@ import { Semester } from '../constants/semesters'
 export type Student = {
   id: string
   full_name: string
-  roll_number: string
   department_id: string
   campus_id: string
   current_semester: Semester

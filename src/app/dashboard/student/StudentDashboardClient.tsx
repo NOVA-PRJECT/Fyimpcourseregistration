@@ -9,7 +9,6 @@ import styles from './student-dashboard.module.css'
 
 interface StudentInfo {
   full_name: string
-  roll_number: string
   current_semester: number
   academic_year_joined: string
   department_name: string
@@ -69,10 +68,6 @@ export default function StudentDashboardClient({ studentInfo, hasSubmission }: S
 
             {/* Detail Grid */}
             <div className={styles.profileGrid}>
-              <div className={styles.profileField}>
-                <span className={styles.profileFieldLabel}>Roll Number</span>
-                <span className={styles.profileFieldValue}>{studentInfo.roll_number || '—'}</span>
-              </div>
               <div className={styles.profileField}>
                 <span className={styles.profileFieldLabel}>Department</span>
                 <span className={styles.profileFieldValue}>{studentInfo.department_name}</span>

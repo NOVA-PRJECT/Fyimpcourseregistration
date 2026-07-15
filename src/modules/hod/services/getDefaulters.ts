@@ -12,7 +12,7 @@ export async function getAllDepartmentStudents(
 ) {
   let studentsQuery = supabaseAdmin
     .from('students')
-    .select('id, full_name, roll_number, current_semester')
+    .select('id, full_name, current_semester')
     .eq('department_id', department_id)
     .eq('campus_id', campus_id)
     .order('current_semester', { ascending: true })
@@ -72,7 +72,6 @@ export async function getAllDepartmentStudents(
   const enriched = students.map((s: any) => ({
     id: s.id,
     full_name: s.full_name,
-    roll_number: s.roll_number,
     current_semester: s.current_semester,
     submitted: submittedSet.has(`${s.id}:${s.current_semester}`),
   }))

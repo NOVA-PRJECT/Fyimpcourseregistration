@@ -53,49 +53,37 @@ export async function bulkCreateStudents(
     }
   }
 
-  // Check for duplicates within the upload itself (cap + roll)
+  // Check for duplicates within the upload itself (cap)
   const capSet = new Set<string>()
-  const rollSet = new Set<string>()
   const internalDupeErrors: BulkCreateResult[] = []
   const dedupedRows: Array<{ index: number; data: BulkUploadRow }> = []
 
   for (const { index, data } of validRows) {
     const capDupe = capSet.has(data.cap_application_number)
-    const rollDupe = rollSet.has(data.roll_number)
-    if (capDupe || rollDupe) {
+    if (capDupe) {
       internalDupeErrors.push({
         row: index + 1,
         email: data.email,
         status: 'error',
         issues: [
-          ...(capDupe ? [`Duplicate CAP number in this upload: ${data.cap_application_number}`] : []),
-          ...(rollDupe ? [`Duplicate roll number in this upload: ${data.roll_number}`] : []),
+          `Duplicate CAP number in this upload: ${data.cap_application_number}`
         ],
       })
     } else {
       capSet.add(data.cap_application_number)
-      rollSet.add(data.roll_number)
       dedupedRows.push({ index, data })
     }
   }
 
   // Check against existing students in DB
   const allCaps = dedupedRows.map(r => r.data.cap_application_number)
-  const allRolls = dedupedRows.map(r => r.data.roll_number)
 
-  const [{ data: existingCaps }, { data: existingRolls }] = await Promise.all([
-    supabaseAdmin
-      .from('students')
-      .select('cap_application_number')
-      .in('cap_application_number', allCaps),
-    supabaseAdmin
-      .from('students')
-      .select('roll_number')
-      .in('roll_number', allRolls),
-  ])
+  const { data: existingCaps } = await supabaseAdmin
+    .from('students')
+    .select('cap_application_number')
+    .in('cap_application_number', allCaps)
 
   const existingCapSet = new Set((existingCaps ?? []).map((s: any) => s.cap_application_number))
-  const existingRollSet = new Set((existingRolls ?? []).map((s: any) => s.roll_number))
 
   const results: BulkCreateResult[] = [
     ...parseErrors,
@@ -113,9 +101,6 @@ export async function bulkCreateStudents(
         const dupIssues: string[] = []
         if (existingCapSet.has(data.cap_application_number)) {
           dupIssues.push(`CAP number ${data.cap_application_number} already exists`)
-        }
-        if (existingRollSet.has(data.roll_number)) {
-          dupIssues.push(`Roll number ${data.roll_number} already exists`)
         }
         if (dupIssues.length > 0) {
           results.push({ ...rowResult, status: 'error', issues: dupIssues })
@@ -144,7 +129,6 @@ export async function bulkCreateStudents(
         const { error: studentError } = await supabaseAdmin.from('students').insert({
           id: authUserId,
           full_name: data.full_name,
-          roll_number: data.roll_number,
           cap_application_number: data.cap_application_number,
           academic_year_joined: data.academic_year_joined,
           current_semester: data.current_semester,

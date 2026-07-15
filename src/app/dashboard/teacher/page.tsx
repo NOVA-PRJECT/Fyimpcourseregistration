@@ -14,7 +14,6 @@ interface Course {
 interface Student {
   id: string
   full_name: string
-  roll_number: string
   department: string
   department_code: string
 }
@@ -83,7 +82,6 @@ export default function TeacherDashboard() {
       courseCode: rosterData.course.course_code,
       students: rosterData.students.map(s => ({
         full_name: s.full_name,
-        roll_number: s.roll_number,
         department_name: s.department,
       })),
     })
@@ -252,14 +250,13 @@ export default function TeacherDashboard() {
               ) : (
                 <table className={styles.table}>
                   <thead className={styles.tableHead}>
-                    <tr><th>#</th><th>Name</th><th>Roll No</th><th>Department</th></tr>
+                    <tr><th>#</th><th>Name</th><th>Department</th></tr>
                   </thead>
                   <tbody>
                     {rosterData.students.map((student, index) => (
                       <tr key={student.id} className={styles.tableRow}>
                         <td>{index + 1}</td>
                         <td>{student.full_name}</td>
-                        <td className={styles.rollNumber}>{student.roll_number}</td>
                         <td><span className={styles.deptBadge}>{student.department_code || student.department}</span></td>
                       </tr>
                     ))}

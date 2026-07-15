@@ -84,7 +84,6 @@ export async function getClassRoster(courseId: string, campus_id: string) {
     .select(`
       id,
       full_name,
-      roll_number,
       departments (
         name,
         code
@@ -100,7 +99,6 @@ export async function getClassRoster(courseId: string, campus_id: string) {
   interface StudentWithDept {
     id: string
     full_name: string
-    roll_number: string
     departments: { name: string; code: string } | null
   }
 
@@ -115,7 +113,6 @@ export async function getClassRoster(courseId: string, campus_id: string) {
   const roster = typedStudents.map((student) => ({
     id: student.id,
     full_name: student.full_name,
-    roll_number: student.roll_number,
     department: student.departments?.name ?? 'Unknown',
     department_code: student.departments?.code ?? '',
   }))

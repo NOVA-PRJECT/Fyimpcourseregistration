@@ -24,7 +24,6 @@ interface Student {
 interface DeptStudent {
   id: string
   full_name: string
-  roll_number: string
   current_semester: number
   submitted: boolean
 }
@@ -91,7 +90,6 @@ export default function HodDashboard() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [addName, setAddName] = useState('')
   const [addCap, setAddCap] = useState('')
-  const [addRoll, setAddRoll] = useState('')
   const [addEmail, setAddEmail] = useState('')
   const [addPassword, setAddPassword] = useState('')
   const [addYearJoined, setAddYearJoined] = useState(getDefaultAcademicYear())
@@ -228,7 +226,7 @@ export default function HodDashboard() {
   }
 
   async function handleAddStudent() {
-    if (!addName || !addCap || !addRoll || !addEmail || !addPassword || !addYearJoined) {
+    if (!addName || !addCap || !addEmail || !addPassword || !addYearJoined) {
       setStudentError('All fields are required')
       return
     }
@@ -243,7 +241,6 @@ export default function HodDashboard() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         full_name: addName,
-        roll_number: addRoll,
         cap_application_number: addCap,
         academic_year_joined: addYearJoined,
         current_semester: addSemester,
@@ -258,7 +255,7 @@ export default function HodDashboard() {
       setStudentSuccess('Student created successfully')
       setTimeout(() => setStudentSuccess(''), 1000)
       setShowAddModal(false)
-      setAddName(''); setAddCap(''); setAddRoll(''); setAddEmail(''); setAddPassword(''); setAddYearJoined(getDefaultAcademicYear()); setAddSemester(1)
+      setAddName(''); setAddCap(''); setAddEmail(''); setAddPassword(''); setAddYearJoined(getDefaultAcademicYear()); setAddSemester(1)
       fetchStudents()
     }
     setAdding(false)
@@ -424,10 +421,10 @@ export default function HodDashboard() {
               <div className={styles.formatHint}>
                 <p className={styles.formatHintTitle}>Required CSV Columns</p>
                 <p className={styles.formatHintCode}>
-                  full_name, roll_number, cap_application_number, academic_year_joined, current_semester, email
+                  full_name, cap_application_number, academic_year_joined, current_semester, email
                 </p>
                 <p className={styles.formatHintCode} style={{ marginTop: '0.35rem', color: '#9ba1ab' }}>
-                  Example: Ahmed Ali, 2025-CS-001, CAP2025001, 2025-26, 1, ahmed@email.com
+                  Example: Ahmed Ali, CAP2025001, 2025-26, 1, ahmed@email.com
                 </p>
               </div>
 
@@ -595,7 +592,6 @@ export default function HodDashboard() {
                   <div className={styles.fieldGroup}>
                     {[
                       { label: 'Full Name *', value: addName, set: setAddName, type: 'text', placeholder: 'Student full name' },
-                      { label: 'Roll Number *', value: addRoll, set: setAddRoll, type: 'text', placeholder: 'e.g. 2025-CS-001' },
                       { label: 'CAP Number *', value: addCap, set: setAddCap, type: 'text', placeholder: 'e.g. CAP2025001' },
                       { label: 'Academic Year Joined *', value: addYearJoined, set: setAddYearJoined, type: 'select' },
                       { label: 'Email *', value: addEmail, set: setAddEmail, type: 'email', placeholder: 'student@email.com' },
@@ -624,7 +620,7 @@ export default function HodDashboard() {
                   </div>
                   {studentError && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{studentError}</div>}
                   <div className={styles.modalActions}>
-                    <button className={styles.modalCancelBtn} onClick={() => { setShowAddModal(false); setAddName(''); setAddCap(''); setAddRoll(''); setAddEmail(''); setAddPassword(''); setAddYearJoined(getDefaultAcademicYear()); setAddSemester(1); setStudentError('') }} disabled={adding}>Cancel</button>
+                    <button className={styles.modalCancelBtn} onClick={() => { setShowAddModal(false); setAddName(''); setAddCap(''); setAddEmail(''); setAddPassword(''); setAddYearJoined(getDefaultAcademicYear()); setAddSemester(1); setStudentError('') }} disabled={adding}>Cancel</button>
                     <button className={styles.modalConfirmBtn} onClick={handleAddStudent} disabled={adding}>{adding ? 'Creating...' : 'Create Student →'}</button>
                   </div>
                 </div>
@@ -749,14 +745,13 @@ export default function HodDashboard() {
                   ) : (
                     <table className={styles.table}>
                       <thead className={styles.tableHead}>
-                        <tr><th>#</th><th>Name</th><th>Roll No</th><th>Sem</th><th>Status</th></tr>
+                        <tr><th>#</th><th>Name</th><th>Sem</th><th>Status</th></tr>
                       </thead>
                       <tbody>
                         {deptData.students.map((student, index) => (
                           <tr key={student.id} className={styles.tableRow}>
                             <td>{index + 1}</td>
                             <td>{student.full_name}</td>
-                            <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{student.roll_number}</td>
                             <td>Sem {student.current_semester}</td>
                             <td>
                               <span style={{

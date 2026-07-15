@@ -12,7 +12,6 @@ export const dynamic = 'force-dynamic'
 
 const AddStudentSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
-  roll_number: z.string().min(1, 'Roll number is required'),
   cap_application_number: z.string().min(1, 'CAP number is required'),
   academic_year_joined: z.string().min(1, 'Academic year joined is required'),
   current_semester: z.coerce
@@ -50,27 +49,17 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { full_name, roll_number, cap_application_number, academic_year_joined, current_semester, email, password } = result.data
+  const { full_name, cap_application_number, academic_year_joined, current_semester, email, password } = result.data
 
   // Duplicate check
-  const [{ data: existingCap }, { data: existingRoll }] = await Promise.all([
-    supabaseAdmin
-      .from('students')
-      .select('id')
-      .eq('cap_application_number', cap_application_number)
-      .maybeSingle(),
-    supabaseAdmin
-      .from('students')
-      .select('id')
-      .eq('roll_number', roll_number)
-      .maybeSingle(),
-  ])
+  const { data: existingCap } = await supabaseAdmin
+    .from('students')
+    .select('id')
+    .eq('cap_application_number', cap_application_number)
+    .maybeSingle()
 
   if (existingCap) {
     return NextResponse.json({ error: 'This CAP number already exists' }, { status: 409 })
-  }
-  if (existingRoll) {
-    return NextResponse.json({ error: 'This roll number already exists' }, { status: 409 })
   }
 
   // Create Supabase Auth user
@@ -95,7 +84,6 @@ export async function POST(request: NextRequest) {
   const { error: studentError } = await supabaseAdmin.from('students').insert({
     id: authUserId,
     full_name,
-    roll_number,
     cap_application_number,
     academic_year_joined,
     current_semester,
@@ -115,12 +103,11 @@ export async function POST(request: NextRequest) {
     eventType: AuditEvents.STUDENT_CREATED,
     userId: auth.userId,
     userRole: auth.role,
-    action: `created student: ${roll_number}`,
+    action: `created student: ${cap_application_number}`,
     resourceType: 'student',
     resourceId: authUserId,
     status: 'success',
     metadata: {
-      roll_number,
       cap_application_number,
       department_id: auth.department_id,
       campus_id: auth.campus_id,
