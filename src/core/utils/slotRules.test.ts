@@ -62,6 +62,15 @@ describe('isCourseEligibleForSlot', () => {
     expect(isCourseEligibleForSlot(course, SLOT_RULES.GLOBAL_BASKET, 'MDC-basket', 'dept-cs-uuid', deptMap)).toBe(true)
     // If it is MDC and same department, it should fail
     expect(isCourseEligibleForSlot(course, SLOT_RULES.GLOBAL_BASKET, 'MDC-basket', 'dept-math-uuid', deptMap)).toBe(false)
+
+    // If it is not MDC and same department, it should succeed
+    const nonMdcCourse = {
+      course_code: 'VAC101',
+      department_id: 'dept-math-uuid',
+      category: 'VAC',
+      tag: 'VAC-basket',
+    }
+    expect(isCourseEligibleForSlot(nonMdcCourse, SLOT_RULES.GLOBAL_BASKET, 'VAC-basket', 'dept-math-uuid', deptMap)).toBe(true)
   })
 
   it('validates DEPT_RESTRICTED rule with multiple department codes', () => {
@@ -93,14 +102,23 @@ describe('isCourseEligibleForSlot', () => {
     expect(isCourseEligibleForSlot(courseMath, SLOT_RULES.EXCLUDE_DEPT, 'CS,MATH', 'dept-cs-uuid', deptMap)).toBe(false)
   })
 
-  it('validates GLOBAL_BASKET rule excludes own department unconditionally', () => {
+  it('validates GLOBAL_BASKET rule excludes own department only for MDC targets', () => {
     const course = {
       course_code: 'AEC101',
       department_id: 'dept-cs-uuid',
       category: 'AEC',
       tag: 'AEC-basket',
     }
-    expect(isCourseEligibleForSlot(course, SLOT_RULES.GLOBAL_BASKET, 'AEC-basket', 'dept-cs-uuid', deptMap)).toBe(false)
-    expect(isCourseEligibleForSlot(course, SLOT_RULES.GLOBAL_BASKET, 'AEC-basket', 'dept-math-uuid', deptMap)).toBe(true)
+    // AEC target does not contain MDC -> same department is allowed
+    expect(isCourseEligibleForSlot(course, SLOT_RULES.GLOBAL_BASKET, 'AEC-basket', 'dept-cs-uuid', deptMap)).toBe(true)
+
+    const mdcCourse = {
+      course_code: 'MDC101',
+      department_id: 'dept-cs-uuid',
+      category: 'MDC',
+      tag: 'MDC-basket',
+    }
+    // MDC target contains MDC -> same department is excluded
+    expect(isCourseEligibleForSlot(mdcCourse, SLOT_RULES.GLOBAL_BASKET, 'MDC-basket', 'dept-cs-uuid', deptMap)).toBe(false)
   })
 })

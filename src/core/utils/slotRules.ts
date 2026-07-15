@@ -40,7 +40,7 @@ export function isCourseEligibleForSlot(
 
   if (rule === SLOT_RULES.GLOBAL_BASKET) {
     if (course.tag !== target) return false
-    if (course.department_id === studentDepartmentId) return false
+    if (target.includes('MDC') && course.department_id === studentDepartmentId) return false
     return true
   }
 

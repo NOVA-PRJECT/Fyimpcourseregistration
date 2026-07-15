@@ -152,7 +152,9 @@ export async function getBlueprint(auth: VerifiedStudent) {
         let q = query
           .eq('tag', target)
           .eq('semester', auth.current_semester)
-          .neq('department_id', auth.department_id)
+        if (target.includes('MDC')) {
+          q = q.neq('department_id', auth.department_id)
+        }
         const { data: options } = await q
         const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
         return { slot, rule, name, options: filtered }
