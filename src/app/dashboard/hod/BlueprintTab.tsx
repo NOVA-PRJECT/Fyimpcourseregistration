@@ -25,8 +25,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [minCredits, setMinCredits] = useState<number | ''>(18)
-  const [maxCredits, setMaxCredits] = useState<number | ''>(26)
+  const [minCredits, setMinCredits] = useState<number | ''>(0)
+  const [maxCredits, setMaxCredits] = useState<number | ''>(0)
   const [slots, setSlots] = useState<SlotData[]>(
     Array.from({ length: 6 }, (_, i) => ({
       slot: i + 1, rule: '', target: '', name: ''
@@ -87,8 +87,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     }
 
     if (data) {
-      setMinCredits(data.min_credits ?? 18)
-      setMaxCredits(data.max_credits ?? 26)
+      setMinCredits(data.min_credits ?? 0)
+      setMaxCredits(data.max_credits ?? 0)
       setSlots(Array.from({ length: 6 }, (_, i) => ({
         slot: i + 1,
         rule: data[`slot_${i + 1}_rule`] ?? '',
@@ -97,6 +97,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       })))
     } else {
       // No blueprint yet — reset to empty
+      setMinCredits(0)
+      setMaxCredits(0)
       setSlots(Array.from({ length: 6 }, (_, i) => ({
         slot: i + 1, rule: '', target: '', name: ''
       })))
