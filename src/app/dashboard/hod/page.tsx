@@ -131,6 +131,20 @@ export default function HodDashboard() {
     loadHodInfo()
   }, [])
 
+  // Load active tab from sessionStorage on mount (hydration-safe)
+  useEffect(() => {
+    const storedTab = sessionStorage.getItem('hod_active_tab') as Tab | null
+    const validTabs: Tab[] = ['defaulters', 'upload', 'students', 'blueprint', 'courses']
+    if (storedTab && validTabs.includes(storedTab)) {
+      setActiveTab(storedTab)
+    }
+  }, [])
+
+  function changeTab(tab: Tab) {
+    setActiveTab(tab)
+    sessionStorage.setItem('hod_active_tab', tab)
+  }
+
   // Auto-load views on tab switch
   useEffect(() => {
     if (activeTab === 'defaulters' && !deptData && !loadingDefaulters) {
@@ -146,10 +160,34 @@ export default function HodDashboard() {
     if (!file) return
     if (!file.name.endsWith('.csv')) {
       setUploadError('Please upload a CSV file only')
+      setSelectedFile(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
-    setSelectedFile(file)
-    setUploadError('')
+
+    Papa.parse(file, {
+      header: true,
+      preview: 1,
+      complete: (results) => {
+        const headers = results.meta.fields || []
+        const requiredHeaders = ['full_name', 'cap_application_number', 'academic_year_joined', 'current_semester', 'email']
+        const missing = requiredHeaders.filter(h => !headers.includes(h))
+
+        if (missing.length > 0) {
+          setUploadError(`Invalid CSV headers. Missing required columns: ${missing.join(', ')}`)
+          setSelectedFile(null)
+          if (fileInputRef.current) fileInputRef.current.value = ''
+        } else {
+          setSelectedFile(file)
+          setUploadError('')
+        }
+      },
+      error: () => {
+        setUploadError('Failed to read CSV file')
+        setSelectedFile(null)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      }
+    })
     setUploadResult(null)
     setUploadSuccess('')
   }
@@ -388,19 +426,19 @@ export default function HodDashboard() {
 
       {/* Tab Bar */}
       <div className={styles.tabBar}>
-        <button className={`${styles.tabBtn} ${activeTab === 'defaulters' ? styles.tabActive : ''}`} onClick={() => setActiveTab('defaulters')}>
+        <button className={`${styles.tabBtn} ${activeTab === 'defaulters' ? styles.tabActive : ''}`} onClick={() => changeTab('defaulters')}>
           📋 Defaulters
         </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'upload' ? styles.tabActive : ''}`} onClick={() => setActiveTab('upload')}>
+        <button className={`${styles.tabBtn} ${activeTab === 'upload' ? styles.tabActive : ''}`} onClick={() => changeTab('upload')}>
           📂 Bulk Upload
         </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'students' ? styles.tabActive : ''}`} onClick={() => setActiveTab('students')}>
+        <button className={`${styles.tabBtn} ${activeTab === 'students' ? styles.tabActive : ''}`} onClick={() => changeTab('students')}>
           👥 Students
         </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'blueprint' ? styles.tabActive : ''}`} onClick={() => setActiveTab('blueprint')}>
+        <button className={`${styles.tabBtn} ${activeTab === 'blueprint' ? styles.tabActive : ''}`} onClick={() => changeTab('blueprint')}>
           📐 Blueprint
         </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'courses' ? styles.tabActive : ''}`} onClick={() => setActiveTab('courses')}>
+        <button className={`${styles.tabBtn} ${activeTab === 'courses' ? styles.tabActive : ''}`} onClick={() => changeTab('courses')}>
           📚 Courses
         </button>
       </div>

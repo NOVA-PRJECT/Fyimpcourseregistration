@@ -110,6 +110,14 @@ export default function RegisterPage() {
     setError('')
   }
 
+  function isSlotDuplicate(slotNumber: number): boolean {
+    const courseId = selectedCourses[slotNumber]
+    if (!courseId) return false
+    return Object.entries(selectedCourses).some(
+      ([slotStr, id]) => Number(slotStr) !== slotNumber && id === courseId
+    )
+  }
+
   async function handleSubmit() {
     if (!blueprint || !studentInfo) return
 
@@ -163,6 +171,9 @@ export default function RegisterPage() {
   const isValidCredits = blueprint
     ? totalCredits >= blueprint.min_credits && totalCredits <= blueprint.max_credits
     : false
+
+  const selectedCourseIds = Object.values(selectedCourses).filter(Boolean)
+  const hasDuplicates = selectedCourseIds.length !== new Set(selectedCourseIds).size
 
   return (
     <div className={styles.pageWrapper}>
@@ -284,24 +295,36 @@ export default function RegisterPage() {
                   )}
 
                   {slot.rule !== 'FIXED' && slot.options && (
-                    <select
-                      className={styles.selectInput}
-                      value={selectedCourses[slot.slot] ?? ''}
-                      onChange={e => handleCourseSelect(slot.slot, e.target.value)}
-                      disabled={pageState === 'submitting' || pageState === 'submitted'}
-                    >
-                      <option value="">— Select a paper —</option>
-                      {slot.options.map(course => (
-                        <option key={course.id} value={course.id}>
-                          {course.title} ({course.credits} cr)
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      <select
+                        className={styles.selectInput}
+                        value={selectedCourses[slot.slot] ?? ''}
+                        onChange={e => handleCourseSelect(slot.slot, e.target.value)}
+                        disabled={pageState === 'submitting' || pageState === 'submitted'}
+                      >
+                        <option value="">— Select a paper —</option>
+                        {slot.options.map(course => (
+                          <option key={course.id} value={course.id}>
+                            {course.title} ({course.credits} cr)
+                          </option>
+                        ))}
+                      </select>
+                      {isSlotDuplicate(slot.slot) && (
+                        <p style={{ color: '#dc2626', fontSize: '0.72rem', marginTop: '0.35rem', fontWeight: 500 }}>
+                          ⚠️ This course is already selected in another slot.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               ))}
             </div>
 
+            {hasDuplicates && (
+              <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>
+                ⚠️ Warning: Duplicate courses selected. You cannot select the same course in multiple slots.
+              </div>
+            )}
             {error && <div className={styles.errorBanner}>{error}</div>}
             {successMsg && (
               <div className={styles.successModalOverlay} onClick={() => setSuccessMsg('')}>
@@ -317,7 +340,7 @@ export default function RegisterPage() {
               <button
                 className={styles.submitBtn}
                 onClick={handleSubmit}
-                disabled={pageState === 'submitting' || !isValidCredits}
+                disabled={pageState === 'submitting' || !isValidCredits || hasDuplicates}
               >
                 {pageState === 'submitting' ? (
                   <><span className={styles.smallSpinner} /> Submitting...</>

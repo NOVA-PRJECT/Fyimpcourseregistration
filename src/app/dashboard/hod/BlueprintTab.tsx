@@ -54,6 +54,58 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
 
+  // Helper to determine credit ranges for each slot
+  function getSlotCreditRange(slot: SlotData): { min: number; max: number } {
+    if (!slot.rule) return { min: 0, max: 0 }
+
+    if (slot.rule === 'FIXED') {
+      const course = courses.find(c => c.course_code === slot.target)
+      const cr = course ? course.credits : 0
+      return { min: cr, max: cr }
+    }
+
+    // Check if we have any matching courses in our department as a proxy
+    let matchingCourses: any[] = []
+    if (slot.rule === 'POOL_RESTRICTED') {
+      matchingCourses = courses.filter(c => c.tag === slot.target)
+    } else if (slot.rule === 'GLOBAL_BASKET') {
+      matchingCourses = courses.filter(c => c.tag === slot.target)
+    } else if (slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT') {
+      matchingCourses = courses.filter(c => ['DSC', 'DSE'].includes(c.category))
+    }
+
+    if (matchingCourses.length > 0) {
+      const credits = matchingCourses.map(c => c.credits)
+      return { min: Math.min(...credits), max: Math.max(...credits) }
+    }
+
+    // Fallbacks based on standard NEP/FYIMP regulations
+    if (slot.rule === 'GLOBAL_BASKET') {
+      const tag = (slot.target ?? '').toUpperCase()
+      if (tag.includes('MDC')) return { min: 3, max: 3 }
+      if (tag.includes('VAC')) return { min: 2, max: 2 }
+      if (tag.includes('SEC')) return { min: 2, max: 2 }
+      if (tag.includes('AEC')) return { min: 3, max: 3 }
+    }
+
+    return { min: 4, max: 4 }
+  }
+
+  // Calculate live bounds
+  let totalMin = 0
+  let totalMax = 0
+  slots.forEach(s => {
+    const { min, max } = getSlotCreditRange(s)
+    totalMin += min
+    totalMax += max
+  })
+
+  const isImpossible = maxCredits !== '' && totalMin > Number(maxCredits)
+  let warningMessage = ''
+  if (maxCredits !== '' && totalMin > Number(maxCredits)) {
+    warningMessage = `The minimum credits achievable (${totalMin}) exceeds your configured maximum (${maxCredits}). Students will not be able to submit.`
+  }
+
   // Fetch on mount
   useEffect(() => {
     fetchBlueprint(1)
@@ -261,6 +313,59 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                       setMaxCredits(val === '' ? '' : Number(val))
                     }} />
                 </div>
+              </div>
+
+              {/* Credit Feasibility Indicator */}
+              <div style={{
+                background: '#ffffff',
+                border: '1.5px solid #dde1e7',
+                borderRadius: '0.45rem',
+                padding: '0.85rem 1rem',
+                marginBottom: '1.5rem',
+                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.02)'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#44474e', fontWeight: 600 }}>
+                    Calculated Credit Bounds for Current Slots:
+                  </span>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#002147' }}>
+                    {totalMin} — {totalMax} credits
+                  </span>
+                </div>
+                {isImpossible && (
+                  <div style={{
+                    marginTop: '0.6rem',
+                    padding: '0.5rem 0.75rem',
+                    backgroundColor: '#fee2e2',
+                    border: '1px solid #fca5a5',
+                    borderRadius: '0.35rem',
+                    color: '#dc2626',
+                    fontSize: '0.72rem',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem'
+                  }}>
+                    ⚠️ <b>Configuration Error:</b> {warningMessage}
+                  </div>
+                )}
+                {!isImpossible && maxCredits !== '' && (
+                  <div style={{
+                    marginTop: '0.6rem',
+                    padding: '0.5rem 0.75rem',
+                    backgroundColor: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: '0.35rem',
+                    color: '#1d4ed8',
+                    fontSize: '0.72rem',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem'
+                  }}>
+                    ℹ️ <b>Info:</b> The current configured slots require a minimum of {totalMin} credits, which fits below your maximum limit of {maxCredits} credits.
+                  </div>
+                )}
               </div>
 
               {/* Slot Editors */}
@@ -593,7 +698,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                   <div className={styles.field}>
                     <label className={styles.label}>Tag (optional)</label>
                     <input type="text" className={styles.input} placeholder="e.g. POOL-A or MDC-1"
-                      value={courseTag} onChange={e => setCourseTag(e.target.value)} />
+                      value={courseTag} onChange={e => setCourseTag(e.target.value.toUpperCase())} />
                   </div>
                 </div>
                 {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{error}</div>}
