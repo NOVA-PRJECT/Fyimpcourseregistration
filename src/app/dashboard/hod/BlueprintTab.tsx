@@ -25,8 +25,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [minCredits, setMinCredits] = useState(18)
-  const [maxCredits, setMaxCredits] = useState(26)
+  const [minCredits, setMinCredits] = useState<number | ''>(18)
+  const [maxCredits, setMaxCredits] = useState<number | ''>(26)
   const [slots, setSlots] = useState<SlotData[]>(
     Array.from({ length: 6 }, (_, i) => ({
       slot: i + 1, rule: '', target: '', name: ''
@@ -46,11 +46,13 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   const [deleteCourse, setDeleteCourse] = useState<any | null>(null)
   const [courseCode, setCourseCode] = useState('')
   const [courseTitle, setCourseTitle] = useState('')
-  const [courseCredits, setCourseCredits] = useState(4)
-  const [courseCategory, setCourseCategory] = useState('DSC')
+  const [courseCredits, setCourseCredits] = useState<number | '' | null>(null)
+  const [courseCategory, setCourseCategory] = useState<string | null>(null)
   const [courseTag, setCourseTag] = useState('')
   const [savingCourse, setSavingCourse] = useState(false)
   const [deletingCourse, setDeletingCourse] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false)
 
   // Fetch on mount
   useEffect(() => {
@@ -119,6 +121,10 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   }
 
   async function handleSaveBlueprint() {
+    if (minCredits === '' || maxCredits === '') {
+      setError('Min and Max credits are required')
+      return
+    }
     setSaving(true)
     setError('')
     setSuccess('')
@@ -139,7 +145,17 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   }
 
   async function handleSaveCourse() {
-    if (!courseCode || !courseTitle) { setError('Code and title are required'); return }
+    if (!courseCode.trim()) { setError('Course code is required'); return }
+    if (!courseTitle.trim()) { setError('Course title is required'); return }
+    if (courseCredits === null || courseCredits === '') { setError('Credits are required'); return }
+    if (!courseCategory) { setError('Category is required'); return }
+
+    const needTag = ['MDC', 'VAC', 'SEC', 'AEC'].includes(courseCategory)
+    if (needTag && !courseTag.trim()) {
+      setError(`Tag is required for category ${courseCategory}`)
+      return
+    }
+
     setSavingCourse(true)
     setError('')
 
@@ -148,8 +164,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       method: isEdit ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(isEdit
-        ? { id: editCourse.id, course_code: courseCode, title: courseTitle, credits: courseCredits, category: courseCategory, tag: courseTag }
-        : { course_code: courseCode, title: courseTitle, semester, credits: courseCredits, category: courseCategory, tag: courseTag }
+        ? { id: editCourse.id, course_code: courseCode.trim().toUpperCase(), title: courseTitle.trim(), credits: courseCredits, category: courseCategory, tag: courseTag.trim() }
+        : { course_code: courseCode.trim().toUpperCase(), title: courseTitle.trim(), semester, credits: courseCredits, category: courseCategory, tag: courseTag.trim() }
       ),
     })
     const data = await res.json()
@@ -160,7 +176,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       setTimeout(() => setSuccess(''), 1000)
       setShowAddCourse(false)
       setEditCourse(null)
-      setCourseCode(''); setCourseTitle(''); setCourseCredits(4); setCourseCategory('DSC'); setCourseTag('')
+      setCourseCode(''); setCourseTitle(''); setCourseCredits(null); setCourseCategory(null); setCourseTag('')
       fetchCourses()
     }
     setSavingCourse(false)
@@ -199,7 +215,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
 
       {/* Semester Selector */}
       <div className={styles.semesterRow}>
-        <span className={styles.semesterLabel}>Semester:</span>
+        <span className={styles.semesterLabel}><b>Blueprint For Semester :</b></span>
         <select className={styles.semesterSelect} value={semester}
           onChange={e => {
             const nextSem = Number(e.target.value)
@@ -222,19 +238,26 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
           {/* ── BLUEPRINT EDITOR ── */}
           {view === 'blueprint' && (
             <>
-              <p className={styles.sectionTitle}>Blueprint — Semester {semester}</p>
 
               {/* Credits */}
               <div className={styles.creditsRow}>
                 <div className={styles.creditField}>
                   <label className={styles.label}>Min Credits</label>
                   <input type="number" className={styles.input}
-                    value={minCredits} onChange={e => setMinCredits(Number(e.target.value))} />
+                    value={minCredits}
+                    onChange={e => {
+                      const val = e.target.value
+                      setMinCredits(val === '' ? '' : Number(val))
+                    }} />
                 </div>
                 <div className={styles.creditField}>
                   <label className={styles.label}>Max Credits</label>
                   <input type="number" className={styles.input}
-                    value={maxCredits} onChange={e => setMaxCredits(Number(e.target.value))} />
+                    value={maxCredits}
+                    onChange={e => {
+                      const val = e.target.value
+                      setMaxCredits(val === '' ? '' : Number(val))
+                    }} />
                 </div>
               </div>
 
@@ -242,11 +265,11 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
               <div className={styles.slotsEditorContainer}>
                 {slots.map(slot => (
                   <div key={slot.slot} className={styles.slotEditorCard}>
-                    <p className={styles.slotEditorTitle}>Slot {slot.slot}</p>
+                    <p className={styles.slotEditorTitle}>Paper {slot.slot}</p>
 
                     <div className={styles.fieldGroup}>
                       <div className={styles.field}>
-                        <label className={styles.label}>Slot Name</label>
+                        <label className={styles.label}>Paper Name</label>
                         <input type="text" className={styles.input}
                           placeholder="e.g. Major 1, MDC, Elective"
                           value={slot.name}
@@ -420,10 +443,42 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                 ))}
               </div>
 
-              {error && <div className={styles.errorBanner} style={{ marginTop: '1rem', marginBottom: '1rem' }}>{error}</div>}
-              <button className={styles.saveBtn} onClick={handleSaveBlueprint} disabled={saving}>
-                {saving ? 'Saving...' : 'Save Blueprint →'}
-              </button>
+              <div style={{
+                position: 'sticky',
+                bottom: 0,
+                background: '#f0f2f5',
+                padding: '1rem 0',
+                borderTop: '1.5px solid #dde1e7',
+                zIndex: 10,
+                display: 'flex',
+                gap: '0.75rem',
+                marginTop: '1.5rem',
+              }}>
+                <button
+                  type="button"
+                  className={styles.saveBtn}
+                  style={{ flex: 1, background: '#ffffff', color: '#44474e', border: '1.5px solid #dde1e7' }}
+                  onClick={() => setShowCancelConfirm(true)}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={styles.saveBtn}
+                  style={{ flex: 1 }}
+                  onClick={() => {
+                    if (minCredits === '' || maxCredits === '') {
+                      setError('Min and Max credits are required')
+                      return
+                    }
+                    setShowSaveConfirm(true)
+                  }}
+                  disabled={saving}
+                >
+                  {saving ? 'Saving...' : 'Save Blueprint →'}
+                </button>
+              </div>
             </>
           )}
 
@@ -433,7 +488,15 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
               <div className={styles.sectionHeader}>
                 <p className={styles.sectionTitle}>Courses — Semester {semester}</p>
                 <button className={styles.addBtn} onClick={() => {
-                  setShowAddCourse(true); setError(''); setSuccess('')
+                  setCourseCode('')
+                  setCourseTitle('')
+                  setCourseCredits(null)
+                  setCourseCategory(null)
+                  setCourseTag('')
+                  setEditCourse(null)
+                  setShowAddCourse(true)
+                  setError('')
+                  setSuccess('')
                 }}>+ Add Course</button>
               </div>
 
@@ -500,7 +563,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                   <div className={styles.field}>
                     <label className={styles.label}>Course Code</label>
                     <input type="text" className={styles.input} placeholder="e.g. KU01DSCMAT101"
-                      value={courseCode} onChange={e => setCourseCode(e.target.value)} />
+                      value={courseCode} onChange={e => setCourseCode(e.target.value.toUpperCase())} />
                   </div>
                   <div className={styles.field}>
                     <label className={styles.label}>Title</label>
@@ -510,11 +573,16 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                   <div className={styles.field}>
                     <label className={styles.label}>Credits</label>
                     <input type="number" className={styles.input} min={1} max={10}
-                      value={courseCredits} onChange={e => setCourseCredits(Number(e.target.value))} />
+                      value={courseCredits ?? ''}
+                      onChange={e => {
+                        const val = e.target.value
+                        setCourseCredits(val === '' ? null : Number(val))
+                      }} />
                   </div>
                   <div className={styles.field}>
                     <label className={styles.label}>Category</label>
-                    <select className={styles.input} value={courseCategory} onChange={e => setCourseCategory(e.target.value)}>
+                    <select className={styles.input} value={courseCategory ?? ''} onChange={e => setCourseCategory(e.target.value || null)}>
+                      <option value="">— Select Category —</option>
                       {['DSS', 'DSC', 'DSE', 'VAC', 'SEC', 'MDC', 'MOOC', 'AEC', 'INT', 'FWD', 'RPH', 'CIP'].map(c => (
                         <option key={c} value={c}>{c}</option>
                       ))}
@@ -529,7 +597,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                 {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{error}</div>}
                 <div className={styles.modalActions}>
                   <button className={styles.modalCancelBtn}
-                    onClick={() => { setShowAddCourse(false); setEditCourse(null); setCourseCode(''); setCourseTitle(''); setCourseCredits(4); setCourseCategory('DSC'); setCourseTag(''); setError('') }}
+                    onClick={() => { setShowAddCourse(false); setEditCourse(null); setCourseCode(''); setCourseTitle(''); setCourseCredits(null); setCourseCategory(null); setCourseTag(''); setError('') }}
                     disabled={savingCourse}>Cancel</button>
                   <button className={styles.modalConfirmBtn} onClick={handleSaveCourse} disabled={savingCourse}>
                     {savingCourse ? 'Saving...' : editCourse ? 'Save Changes →' : 'Add Course →'}
@@ -558,6 +626,52 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
             </div>
           )}
         </>
+      )}
+
+      {/* Discard Changes Confirmation */}
+      {showCancelConfirm && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Discard Changes</h3>
+            <p className={styles.modalSubtitle}>
+              Are you sure you want to discard all edits?
+            </p>
+            <div className={styles.modalActions}>
+              <button className={styles.modalCancelBtn} onClick={() => setShowCancelConfirm(false)}>
+                No, Keep Editing
+              </button>
+              <button className={styles.modalConfirmBtn} onClick={() => {
+                setShowCancelConfirm(false)
+                fetchBlueprint(semester)
+              }}>
+                Yes, Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save Blueprint Confirmation */}
+      {showSaveConfirm && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Save Blueprint</h3>
+            <p className={styles.modalSubtitle}>
+              Are you sure you want to save this blueprint? This will update the paper rules and credit requirements for Semester {semester}.
+            </p>
+            <div className={styles.modalActions}>
+              <button className={styles.modalCancelBtn} onClick={() => setShowSaveConfirm(false)}>
+                Cancel
+              </button>
+              <button className={styles.modalConfirmBtn} onClick={() => {
+                setShowSaveConfirm(false)
+                handleSaveBlueprint()
+              }}>
+                Yes, Save Blueprint
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )
