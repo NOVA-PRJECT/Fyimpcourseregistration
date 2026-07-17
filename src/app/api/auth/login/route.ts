@@ -91,20 +91,19 @@ export async function POST(request: NextRequest) {
   }
 
   // 6. Sync role and organizational metadata to Supabase Auth user (app_metadata & user_metadata)
-  await Promise.all([
-    supabaseAdmin.auth.admin.updateUserById(authData.user.id, {
-      user_metadata: { role },
-      app_metadata: {
-        role,
-        department_id: department_id ?? null,
-        campus_id: campus_id ?? null,
-        must_change_password: must_change_password ?? false
-      }
-    }),
-    authData.session
-      ? supabase.auth.refreshSession(authData.session)
-      : Promise.resolve(null),
-  ])
+  await supabaseAdmin.auth.admin.updateUserById(authData.user.id, {
+    user_metadata: { role },
+    app_metadata: {
+      role,
+      department_id: department_id ?? null,
+      campus_id: campus_id ?? null,
+      must_change_password: must_change_password ?? false
+    }
+  })
+
+  if (authData.session) {
+    await supabase.auth.refreshSession(authData.session)
+  }
 
   // 7. Formulate redirect response and set user_role cookie
   const response = NextResponse.json({ redirectTo })

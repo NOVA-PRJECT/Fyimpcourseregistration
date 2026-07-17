@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import Papa from 'papaparse'
 import styles from './hod-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
+import { Eye, EyeOff } from 'lucide-react'
 
 // ── Types ──
 interface HodInfo {
@@ -75,6 +76,7 @@ export default function HodDashboard() {
   // ── Upload Tab State ──
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [batchPassword, setBatchPassword] = useState('')
+  const [showBatchPassword, setShowBatchPassword] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [uploadError, setUploadError] = useState('')
@@ -93,6 +95,7 @@ export default function HodDashboard() {
   const [addCap, setAddCap] = useState('')
   const [addEmail, setAddEmail] = useState('')
   const [addPassword, setAddPassword] = useState('')
+  const [showAddPassword, setShowAddPassword] = useState(false)
   const [addYearJoined, setAddYearJoined] = useState(getDefaultAcademicYear())
   const [addSemester, setAddSemester] = useState(1)
   const [adding, setAdding] = useState(false)
@@ -470,14 +473,24 @@ export default function HodDashboard() {
               {/* Batch Password Field */}
               <div className={styles.field} style={{ marginBottom: '0.85rem' }}>
                 <label className={styles.label}>Batch Default Password *</label>
-                <input
-                  type="password"
-                  className={styles.input}
-                  placeholder="Min. 8 characters — all students in this upload get this"
-                  value={batchPassword}
-                  onChange={e => setBatchPassword(e.target.value)}
-                  autoComplete="new-password"
-                />
+                <div className="password-wrapper">
+                  <input
+                    type={showBatchPassword ? 'text' : 'password'}
+                    className={`${styles.input} password-input`}
+                    placeholder="Min. 8 characters — all students in this upload get this"
+                    value={batchPassword}
+                    onChange={e => setBatchPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowBatchPassword(!showBatchPassword)}
+                    aria-label={showBatchPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showBatchPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
                 <p style={{ fontSize: '0.7rem', color: '#9ba1ab', margin: '0.25rem 0 0' }}>
                   Students must change this password on first login.
                 </p>
@@ -645,6 +658,24 @@ export default function HodDashboard() {
                               <option key={year} value={year}>{year}</option>
                             ))}
                           </select>
+                        ) : type === 'password' ? (
+                          <div className="password-wrapper">
+                            <input
+                              type={showAddPassword ? 'text' : 'password'}
+                              className={`${styles.input} password-input`}
+                              placeholder={placeholder}
+                              value={value}
+                              onChange={e => set(e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              className="password-toggle-btn"
+                              onClick={() => setShowAddPassword(!showAddPassword)}
+                              aria-label={showAddPassword ? 'Hide password' : 'Show password'}
+                            >
+                              {showAddPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                          </div>
                         ) : (
                           <input type={type} className={styles.input} placeholder={placeholder} value={value} onChange={e => set(e.target.value)} />
                         )}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Eye, EyeOff } from 'lucide-react'
 import styles from './login.module.css'
 import { ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
 import { Role } from '@/core/constants/roles'
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const [checking, setChecking] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
@@ -178,17 +180,27 @@ export default function LoginPage() {
 
             <div className={styles.field}>
               <label className={styles.label}>Password</label>
-              <input
-                type="password"
-                className={`${styles.input} ${fieldErrors.password ? styles.inputError : ''}`}
-                placeholder="••••••••"
-                value={password}
-                onChange={e => {
-                  setPassword(e.target.value)
-                  setFieldErrors(prev => ({ ...prev, password: undefined }))
-                }}
-                autoComplete="current-password"
-              />
+              <div className="password-wrapper">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className={`${styles.input} password-input ${fieldErrors.password ? styles.inputError : ''}`}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => {
+                    setPassword(e.target.value)
+                    setFieldErrors(prev => ({ ...prev, password: undefined }))
+                  }}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               {fieldErrors.password && (
                 <p className={styles.errorMsg}>{fieldErrors.password}</p>
               )}

@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import styles from './change-password.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
+import { Eye, EyeOff } from 'lucide-react'
 
 export default function ChangePasswordPage() {
   useBfcacheGuard()
   const router = useRouter()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<{ new_password?: string; confirm_password?: string }>({})
@@ -75,18 +78,28 @@ export default function ChangePasswordPage() {
 
           <div className={styles.field}>
             <label className={styles.label} htmlFor="new-password">New Password</label>
-            <input
-              id="new-password"
-              type="password"
-              className={`${styles.input} ${fieldErrors.new_password ? styles.inputError : ''}`}
-              placeholder="Min. 10 characters, include a number"
-              value={newPassword}
-              onChange={e => {
-                setNewPassword(e.target.value)
-                setFieldErrors(prev => ({ ...prev, new_password: undefined }))
-              }}
-              autoComplete="new-password"
-            />
+            <div className="password-wrapper">
+              <input
+                id="new-password"
+                type={showNewPassword ? 'text' : 'password'}
+                className={`${styles.input} password-input ${fieldErrors.new_password ? styles.inputError : ''}`}
+                placeholder="Min. 10 characters, include a number"
+                value={newPassword}
+                onChange={e => {
+                  setNewPassword(e.target.value)
+                  setFieldErrors(prev => ({ ...prev, new_password: undefined }))
+                }}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+              >
+                {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             {fieldErrors.new_password && (
               <p className={styles.fieldError}>{fieldErrors.new_password}</p>
             )}
@@ -94,18 +107,28 @@ export default function ChangePasswordPage() {
 
           <div className={styles.field}>
             <label className={styles.label} htmlFor="confirm-password">Confirm Password</label>
-            <input
-              id="confirm-password"
-              type="password"
-              className={`${styles.input} ${fieldErrors.confirm_password ? styles.inputError : ''}`}
-              placeholder="Repeat your new password"
-              value={confirmPassword}
-              onChange={e => {
-                setConfirmPassword(e.target.value)
-                setFieldErrors(prev => ({ ...prev, confirm_password: undefined }))
-              }}
-              autoComplete="new-password"
-            />
+            <div className="password-wrapper">
+              <input
+                id="confirm-password"
+                type={showConfirmPassword ? 'text' : 'password'}
+                className={`${styles.input} password-input ${fieldErrors.confirm_password ? styles.inputError : ''}`}
+                placeholder="Repeat your new password"
+                value={confirmPassword}
+                onChange={e => {
+                  setConfirmPassword(e.target.value)
+                  setFieldErrors(prev => ({ ...prev, confirm_password: undefined }))
+                }}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             {fieldErrors.confirm_password && (
               <p className={styles.fieldError}>{fieldErrors.confirm_password}</p>
             )}

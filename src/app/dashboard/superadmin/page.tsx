@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { Eye, EyeOff } from 'lucide-react'
 import styles from './superadmin-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
@@ -73,6 +74,7 @@ export default function SuperAdminDashboard() {
   const [facultyName, setFacultyName] = useState('')
   const [facultyEmail, setFacultyEmail] = useState('')
   const [facultyPassword, setFacultyPassword] = useState('')
+  const [showFacultyPassword, setShowFacultyPassword] = useState(false)
   const [facultyRole, setFacultyRole] = useState<'hod' | 'campus_director' | 'teaching_staff'>('hod')
   const [facultyDeptId, setFacultyDeptId] = useState('')
   const [facultyCampusId, setFacultyCampusId] = useState('')
@@ -635,8 +637,23 @@ export default function SuperAdminDashboard() {
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Password</label>
-                <input type="password" className={styles.input} placeholder="Min. 8 characters"
-                  value={facultyPassword} onChange={e => setFacultyPassword(e.target.value)} />
+                <div className="password-wrapper">
+                  <input
+                    type={showFacultyPassword ? 'text' : 'password'}
+                    className={`${styles.input} password-input`}
+                    placeholder="Min. 8 characters"
+                    value={facultyPassword}
+                    onChange={e => setFacultyPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowFacultyPassword(!showFacultyPassword)}
+                    aria-label={showFacultyPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showFacultyPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Role</label>
