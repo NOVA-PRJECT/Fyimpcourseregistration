@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import styles from '../student-dashboard.module.css'
 import ResourceBanner from '@/component/ResourceBanner'
+import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
 interface Course {
   id: string
@@ -131,6 +132,7 @@ interface StudentInfo {
 type PageState = 'loading_blueprint' | 'closed' | 'ready' | 'submitting' | 'submitted'
 
 export default function RegisterPage() {
+  useBfcacheGuard()
   const router = useRouter()
   const [pageState, setPageState] = useState<PageState>('loading_blueprint')
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null)

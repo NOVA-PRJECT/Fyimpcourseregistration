@@ -1,11 +1,10 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import styles from './superadmin-dashboard.module.css'
+import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
 type Tab = 'campuses' | 'departments' | 'faculty'
 
@@ -34,6 +33,7 @@ interface Faculty {
 }
 
 export default function SuperAdminDashboard() {
+  useBfcacheGuard()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>('campuses')
   const [adminName, setAdminName] = useState('')

@@ -4,8 +4,10 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import styles from './change-password.module.css'
+import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
 export default function ChangePasswordPage() {
+  useBfcacheGuard()
   const router = useRouter()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -16,7 +18,7 @@ export default function ChangePasswordPage() {
   function validate() {
     const errors: typeof fieldErrors = {}
     if (!newPassword) errors.new_password = 'New password is required'
-    else if (newPassword.length < 8) errors.new_password = 'Password must be at least 8 characters'
+    else if (newPassword.length < 10) errors.new_password = 'Password must be at least 10 characters'
     else if (!/[A-Za-z]/.test(newPassword)) errors.new_password = 'Password must contain at least one letter'
     else if (!/[0-9]/.test(newPassword)) errors.new_password = 'Password must contain at least one number'
     if (!confirmPassword) errors.confirm_password = 'Please confirm your password'
@@ -77,7 +79,7 @@ export default function ChangePasswordPage() {
               id="new-password"
               type="password"
               className={`${styles.input} ${fieldErrors.new_password ? styles.inputError : ''}`}
-              placeholder="Min. 8 characters, include a number"
+              placeholder="Min. 10 characters, include a number"
               value={newPassword}
               onChange={e => {
                 setNewPassword(e.target.value)
@@ -112,7 +114,7 @@ export default function ChangePasswordPage() {
           <div className={styles.requirements}>
             <p className={styles.reqTitle}>Password must:</p>
             <ul className={styles.reqList}>
-              <li className={newPassword.length >= 8 ? styles.met : ''}>Be at least 8 characters</li>
+              <li className={newPassword.length >= 10 ? styles.met : ''}>Be at least 10 characters</li>
               <li className={/[A-Za-z]/.test(newPassword) ? styles.met : ''}>Contain at least one letter</li>
               <li className={/[0-9]/.test(newPassword) ? styles.met : ''}>Contain at least one number</li>
             </ul>

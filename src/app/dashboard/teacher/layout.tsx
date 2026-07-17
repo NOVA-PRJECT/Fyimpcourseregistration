@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { verifyTeacher } from '@/core/auth/verifyRole'
 import { redirect } from 'next/navigation'
 import { ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'

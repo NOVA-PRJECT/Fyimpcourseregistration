@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import styles from './director-dashboard.module.css'
+import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
 export default function DirectorDashboard() {
+  useBfcacheGuard()
   const router = useRouter()
 
   const [directorName, setDirectorName] = useState('')

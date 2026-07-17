@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 import styles from './student-dashboard.module.css'
+import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
 interface StudentInfo {
   full_name: string
@@ -21,6 +22,7 @@ interface StudentDashboardClientProps {
 }
 
 export default function StudentDashboardClient({ studentInfo, hasSubmission }: StudentDashboardClientProps) {
+  useBfcacheGuard()
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
 

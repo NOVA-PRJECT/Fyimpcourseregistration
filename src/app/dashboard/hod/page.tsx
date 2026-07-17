@@ -1,12 +1,12 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
 import BlueprintTab from './BlueprintTab'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Papa from 'papaparse'
 import styles from './hod-dashboard.module.css'
+import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
 // ── Types ──
 interface HodInfo {
@@ -63,6 +63,7 @@ function getDefaultAcademicYear(): string {
 }
 
 export default function HodDashboard() {
+  useBfcacheGuard()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
 

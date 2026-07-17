@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import styles from './teacher-dashboard.module.css'
+import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
 interface Course {
   id: string
@@ -26,6 +27,7 @@ interface RosterData {
 }
 
 export default function TeacherDashboard() {
+  useBfcacheGuard()
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [teacherName, setTeacherName] = useState('')

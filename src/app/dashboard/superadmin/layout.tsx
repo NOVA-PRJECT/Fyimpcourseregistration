@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { verifySuperAdmin } from '@/core/auth/verifyRole'
 import { redirect } from 'next/navigation'
 import { ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
