@@ -9,7 +9,7 @@ const redis = new Redis({
 // 10 attempts per 15 minutes for login (IP based)
 export const loginLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(1000, '15 m'),
+  limiter: Ratelimit.slidingWindow(10, '15 m'),
   prefix: 'fyimp:login',
 })
 
@@ -48,9 +48,20 @@ export const adminCrudLimiter = new Ratelimit({
   prefix: 'fyimp:admin-crud',
 })
 
-// 5 password-reset attempts per hour per IP (keyed by IP/email)
+/*
+// 2 password-reset attempts per hour per IP (keyed by IP/email)
 export const resetPasswordLimiter = new Ratelimit({
   redis,
   limiter: Ratelimit.slidingWindow(2, '1 h'),
   prefix: 'fyimp:reset-password',
 })
+*/
+
+export async function resetLoginRateLimits(ip: string, email: string): Promise<void> {
+  await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (loginLimiter as any).resetUsedTokens(ip),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (emailLoginLimiter as any).resetUsedTokens(email),
+  ])
+}

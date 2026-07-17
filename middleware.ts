@@ -55,8 +55,8 @@ export async function middleware(request: NextRequest) {
   const isLoginRoute = pathname.startsWith('/login')
   const isDashboardRoute = pathname.startsWith('/dashboard')
   const isApiRoute = pathname.startsWith('/api')
-  const isResetRoute = pathname.startsWith('/reset-password')
-  if (isResetRoute) return response
+  // const isResetRoute = pathname.startsWith('/reset-password')
+  // if (isResetRoute) return response
 
 
 

@@ -8,8 +8,8 @@ import { adminCrudLimiter } from '@/core/security/rateLimiter'
 export const dynamic = 'force-dynamic'
 
 const CourseSchema = z.object({
-  course_code: z.string().min(1, 'Course code is required'),
-  title: z.string().min(1, 'Title is required'),
+  course_code: z.string().min(1, 'Course code is required').max(20, 'Course code must not exceed 20 characters'),
+  title: z.string().min(1, 'Title is required').max(150, 'Title must not exceed 150 characters'),
   semester: z.number().int().min(1).max(10),
   credits: z.number().int().min(1),
   category: z.enum(['DSC','DSE','MDC','VAC','SEC','AEC','MOC','MOOC','INT','RPH','FWD','DSS','DMP','CIP']),
@@ -18,8 +18,8 @@ const CourseSchema = z.object({
 
 const UpdateCourseSchema = z.object({
   id: z.string().uuid('Invalid course ID'),
-  course_code: z.string().min(1, 'Course code is required'),
-  title: z.string().min(1, 'Title is required'),
+  course_code: z.string().min(1, 'Course code is required').max(20, 'Course code must not exceed 20 characters'),
+  title: z.string().min(1, 'Title is required').max(150, 'Title must not exceed 150 characters'),
   credits: z.number().int().min(1),
   category: z.enum(['DSC','DSE','MDC','VAC','SEC','AEC','MOC','MOOC','INT','RPH','FWD','DSS','DMP','CIP']),
   tag: z.string().optional().or(z.literal('')),

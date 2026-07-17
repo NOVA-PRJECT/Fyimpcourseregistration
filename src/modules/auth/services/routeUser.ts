@@ -9,49 +9,47 @@ export async function determineUserRoute(authUserId: string): Promise<{
   campus_id?: string | null
   must_change_password?: boolean
 }> {
+  const [studentRes, facultyRes, adminRes] = await Promise.all([
+    supabaseAdmin
+      .from('students')
+      .select('id, department_id, campus_id, must_change_password')
+      .eq('id', authUserId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('faculty')
+      .select('id, role, department_id, campus_id')
+      .eq('id', authUserId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('admins')
+      .select('id')
+      .eq('id', authUserId)
+      .maybeSingle(),
+  ])
 
-  // Check students table
-  const { data: student } = await supabaseAdmin
-    .from('students')
-    .select('id, department_id, campus_id, must_change_password')
-    .eq('id', authUserId)
-    .single()
-
-  if (student) {
+  if (studentRes.data) {
+    const s = studentRes.data
     return {
       role: 'student',
       redirectTo: ROLE_DASHBOARD_MAP['student'],
-      department_id: student.department_id,
-      campus_id: student.campus_id,
-      must_change_password: student.must_change_password,
+      department_id: s.department_id,
+      campus_id: s.campus_id,
+      must_change_password: s.must_change_password,
     }
   }
 
-  // Check faculty table
-  const { data: faculty } = await supabaseAdmin
-    .from('faculty')
-    .select('id, role, department_id, campus_id')
-    .eq('id', authUserId)
-    .single()
-
-  if (faculty) {
-    const role = faculty.role as Role
+  if (facultyRes.data) {
+    const f = facultyRes.data
+    const role = f.role as Role
     return {
       role,
       redirectTo: ROLE_DASHBOARD_MAP[role],
-      department_id: faculty.department_id,
-      campus_id: faculty.campus_id,
+      department_id: f.department_id,
+      campus_id: f.campus_id,
     }
   }
 
-  // Check admins table
-  const { data: admin } = await supabaseAdmin
-    .from('admins')
-    .select('id')
-    .eq('id', authUserId)
-    .single()
-
-  if (admin) {
+  if (adminRes.data) {
     return { role: 'superadmin', redirectTo: ROLE_DASHBOARD_MAP['superadmin'] }
   }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import styles from '../student-dashboard.module.css'
@@ -11,6 +11,100 @@ interface Course {
   course_code: string
   title: string
   credits: number
+  department_name?: string
+}
+
+function CustomSelect({
+  options,
+  value,
+  onChange,
+  disabled,
+  placeholder = "— Select a paper —"
+}: {
+  options: Course[]
+  value: string
+  onChange: (val: string) => void
+  disabled?: boolean
+  placeholder?: string
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const selectedCourse = options.find(c => c.id === value)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  return (
+    <div ref={containerRef} className={styles.customSelectWrapper}>
+      <button
+        type="button"
+        className={styles.customSelectTrigger}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+      >
+        {selectedCourse ? (
+          <div className={styles.triggerContent}>
+            <span className={styles.triggerTitle}>{selectedCourse.title}</span>
+            <span className={styles.triggerMeta}>
+              {selectedCourse.department_name || 'General'} • {selectedCourse.credits} cr
+            </span>
+          </div>
+        ) : (
+          <span className={styles.placeholderText}>{placeholder}</span>
+        )}
+        <span className={styles.triggerArrow} />
+      </button>
+
+      {isOpen && (
+        <div className={styles.customSelectDropdown}>
+          {options.length === 0 ? (
+            <div className={styles.customOptionNoData}>No options available</div>
+          ) : (
+            <>
+              {placeholder && (
+                <div
+                  className={`${styles.customOption} ${!value ? styles.selected : ''}`}
+                  onClick={() => {
+                    onChange('')
+                    setIsOpen(false)
+                  }}
+                >
+                  <span className={styles.placeholderOption}>{placeholder}</span>
+                </div>
+              )}
+              {options.map(course => (
+                <div
+                  key={course.id}
+                  className={`${styles.customOption} ${value === course.id ? styles.selected : ''}`}
+                  onClick={() => {
+                    onChange(course.id)
+                    setIsOpen(false)
+                  }}
+                >
+                  <div className={styles.optionUpper}>
+                    {course.title}
+                  </div>
+                  <div className={styles.optionLower}>
+                    <span className={styles.optionDept}>{course.department_name || 'General'}</span>
+                    <span className={styles.optionCredits}>{course.credits} cr</span>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface BlueprintSlot {
@@ -296,19 +390,12 @@ export default function RegisterPage() {
 
                   {slot.rule !== 'FIXED' && slot.options && (
                     <>
-                      <select
-                        className={styles.selectInput}
+                      <CustomSelect
+                        options={slot.options}
                         value={selectedCourses[slot.slot] ?? ''}
-                        onChange={e => handleCourseSelect(slot.slot, e.target.value)}
+                        onChange={val => handleCourseSelect(slot.slot, val)}
                         disabled={pageState === 'submitting' || pageState === 'submitted'}
-                      >
-                        <option value="">— Select a paper —</option>
-                        {slot.options.map(course => (
-                          <option key={course.id} value={course.id}>
-                            {course.title} ({course.credits} cr)
-                          </option>
-                        ))}
-                      </select>
+                      />
                       {isSlotDuplicate(slot.slot) && (
                         <p style={{ color: '#dc2626', fontSize: '0.72rem', marginTop: '0.35rem', fontWeight: 500 }}>
                           ⚠️ This course is already selected in another slot.

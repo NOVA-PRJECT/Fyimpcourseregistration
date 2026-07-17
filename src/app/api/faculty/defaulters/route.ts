@@ -11,7 +11,10 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const semesterParam = searchParams.get('semester')
-  const semesterFilter = semesterParam ? Number(semesterParam) : undefined
+  const parsedSemester = semesterParam ? Number(semesterParam) : NaN
+  const semesterFilter = !isNaN(parsedSemester) && Number.isInteger(parsedSemester)
+    ? parsedSemester
+    : undefined
 
   const response = await getAllDepartmentStudents(
     auth.department_id,

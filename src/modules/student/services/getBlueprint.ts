@@ -44,6 +44,7 @@ export async function getBlueprint(auth: VerifiedStudent) {
 
   // Build department code → id map for O(1) lookup
   const deptMap = new Map(departmentsData?.map(d => [d.code, d.id]) || [])
+  const deptIdToName = new Map(departmentsData?.map(d => [d.id, d.name]) || [])
 
   // PRE-FLIGHT: Identify all slots and batch-fetch FIXED courses
   const slotsInfo = Array.from({ length: 6 }).map((_, i) => ({
@@ -91,11 +92,15 @@ export async function getBlueprint(auth: VerifiedStudent) {
     ...slotsInfo.map(async ({ slot, rule, target, name }) => {
       // FIXED — already resolved from batch fetch
       if (rule === SLOT_RULES.FIXED) {
+        const c = fixedCoursesMap[target]
         return {
           slot,
           rule,
           name,
-          course: fixedCoursesMap[target] ?? undefined,
+          course: c ? {
+            ...c,
+            department_name: deptIdToName.get(c.department_id) || 'Unknown'
+          } : undefined,
         }
       }
 
@@ -123,7 +128,11 @@ export async function getBlueprint(auth: VerifiedStudent) {
         }
 
         const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
-        return { slot, rule, name, options: filtered }
+        const mapped = filtered.map(c => ({
+          ...c,
+          department_name: deptIdToName.get(c.department_id) || 'Unknown'
+        }))
+        return { slot, rule, name, options: mapped }
       }
 
       // EXCLUDE_DEPT
@@ -141,7 +150,11 @@ export async function getBlueprint(auth: VerifiedStudent) {
         }
 
         const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
-        return { slot, rule, name, options: filtered }
+        const mapped = filtered.map(c => ({
+          ...c,
+          department_name: deptIdToName.get(c.department_id) || 'Unknown'
+        }))
+        return { slot, rule, name, options: mapped }
       }
 
       // POOL_RESTRICTED — own department by tag
@@ -156,7 +169,11 @@ export async function getBlueprint(auth: VerifiedStudent) {
         }
 
         const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
-        return { slot, rule, name, options: filtered }
+        const mapped = filtered.map(c => ({
+          ...c,
+          department_name: deptIdToName.get(c.department_id) || 'Unknown'
+        }))
+        return { slot, rule, name, options: mapped }
       }
 
       // GLOBAL_BASKET — other departments by tag
@@ -172,7 +189,11 @@ export async function getBlueprint(auth: VerifiedStudent) {
           console.error('getBlueprint GLOBAL_BASKET query error:', optionsError)
         }
         const filtered = (options ?? []).filter(c => isCourseEligibleForSlot(c, rule, target, auth.department_id, deptMap))
-        return { slot, rule, name, options: filtered }
+        const mapped = filtered.map(c => ({
+          ...c,
+          department_name: deptIdToName.get(c.department_id) || 'Unknown'
+        }))
+        return { slot, rule, name, options: mapped }
       }
 
       // Unknown rule — return empty safely

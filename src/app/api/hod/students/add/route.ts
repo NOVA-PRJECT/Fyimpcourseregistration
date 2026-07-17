@@ -11,7 +11,7 @@ import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 export const dynamic = 'force-dynamic'
 
 const AddStudentSchema = z.object({
-  full_name: z.string().min(1, 'Full name is required'),
+  full_name: z.string().min(1, 'Full name is required').max(100, 'Full name must not exceed 100 characters'),
   cap_application_number: z.string().min(1, 'CAP number is required'),
   academic_year_joined: z.string().min(1, 'Academic year joined is required'),
   current_semester: z.coerce

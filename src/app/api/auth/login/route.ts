@@ -1,27 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { determineUserRoute } from '@/modules/auth/services/routeUser'
-import { loginLimiter, emailLoginLimiter } from '@/core/security/rateLimiter'
+import { loginLimiter, emailLoginLimiter, resetLoginRateLimits } from '@/core/security/rateLimiter'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { createResponseTrackingClient } from '@/core/database/supabaseClient'
 import { LoginSchema } from '@/modules/auth/schemas/loginSchema'
 import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export async function POST(request: NextRequest) {
-  // 1. Rate Limiting (prevent brute force logins from the same IP)
   let ip = request.headers.get('x-forwarded-for') ?? 'unknown'
   if (ip && ip !== 'unknown') {
     ip = ip.split(',')[0].trim()
   }
-  const { success } = await loginLimiter.limit(ip)
 
-  if (!success) {
-    return NextResponse.json(
-      { error: 'Too many attempts. Please try again later.' },
-      { status: 429 }
-    )
-  }
-
-  // 2. Parse request body & validate
+  // Parse and validate body first so we have the email for the email limiter
   let body
   try {
     body = await request.json()
@@ -36,9 +27,20 @@ export async function POST(request: NextRequest) {
 
   const { email, password } = result.data
 
-  // 1b. Rate Limiting (prevent brute force logins per account/email)
-  const { success: emailWithinLimit } = await emailLoginLimiter.limit(email.toLowerCase())
-  if (!emailWithinLimit) {
+  // Run both rate limiters in parallel now that we have ip and email
+  const [ipLimit, emailLimit] = await Promise.all([
+    loginLimiter.limit(ip),
+    emailLoginLimiter.limit(email.toLowerCase()),
+  ])
+
+  if (!ipLimit.success) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Please try again later.' },
+      { status: 429 }
+    )
+  }
+
+  if (!emailLimit.success) {
     return NextResponse.json(
       { error: 'Too many attempts for this account. Please try again later.' },
       { status: 429 }
@@ -54,6 +56,17 @@ export async function POST(request: NextRequest) {
   })
 
   if (authError || !authData?.user) {
+    // Fire and forget — don't block the error response
+    logAuditEvent({
+      eventType: 'login_failed',
+      userId: 'unknown',
+      userRole: 'unknown',
+      action: `failed login attempt`,
+      resourceType: 'user',
+      status: 'failure',
+      ipAddress: ip,
+      metadata: { email },
+    })
     return NextResponse.json(
       { error: 'Invalid email or password. Please try again.' },
       { status: 401 }
@@ -62,10 +75,7 @@ export async function POST(request: NextRequest) {
 
   // Reset rate limits on successful login
   try {
-    await Promise.all([
-      (loginLimiter as any).resetUsedTokens(ip),
-      (emailLoginLimiter as any).resetUsedTokens(email.toLowerCase()),
-    ])
+    await resetLoginRateLimits(ip, email.toLowerCase())
   } catch (resetError) {
     console.error('Failed to reset login rate limits:', resetError)
   }
@@ -81,20 +91,20 @@ export async function POST(request: NextRequest) {
   }
 
   // 6. Sync role and organizational metadata to Supabase Auth user (app_metadata & user_metadata)
-  await supabaseAdmin.auth.admin.updateUserById(authData.user.id, {
-    user_metadata: { role },
-    app_metadata: {
-      role,
-      department_id: department_id ?? null,
-      campus_id: campus_id ?? null,
-      must_change_password: must_change_password ?? false
-    }
-  })
-
-  // Refresh session so cookies are rewritten with updated app_metadata immediately
-  if (authData.session) {
-    await supabase.auth.refreshSession(authData.session)
-  }
+  await Promise.all([
+    supabaseAdmin.auth.admin.updateUserById(authData.user.id, {
+      user_metadata: { role },
+      app_metadata: {
+        role,
+        department_id: department_id ?? null,
+        campus_id: campus_id ?? null,
+        must_change_password: must_change_password ?? false
+      }
+    }),
+    authData.session
+      ? supabase.auth.refreshSession(authData.session)
+      : Promise.resolve(null),
+  ])
 
   // 7. Formulate redirect response and set user_role cookie
   const response = NextResponse.json({ redirectTo })
@@ -112,7 +122,8 @@ export async function POST(request: NextRequest) {
     maxAge: 60 * 60 * 24 * 7
   })
 
-  await logAuditEvent({
+  // Do not await — audit log must not block the login response
+  logAuditEvent({
     eventType: AuditEvents.USER_LOGIN,
     userId: authData.user.id,
     userRole: role,

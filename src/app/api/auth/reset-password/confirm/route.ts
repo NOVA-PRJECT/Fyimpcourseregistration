@@ -1,3 +1,4 @@
+/*
 import { NextRequest, NextResponse } from 'next/server'
 import { createResponseTrackingClient } from '@/core/database/supabaseClient'
 import { resetPasswordLimiter } from '@/core/security/rateLimiter'
@@ -56,4 +57,9 @@ export async function POST(request: NextRequest) {
   })
 
   return response
+}
+*/
+
+export async function POST() {
+  return new Response('Reset password feature is disabled', { status: 404 })
 }

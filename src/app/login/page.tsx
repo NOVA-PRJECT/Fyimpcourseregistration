@@ -219,9 +219,11 @@ export default function LoginPage() {
             <div className={styles.dividerLine} />
           </div>
 
+          {/*
           <p className={styles.forgotLink}>
             <Link href="/reset-password">Forgot password?</Link>
           </p>
+          */}
         </div>
 
       </div>

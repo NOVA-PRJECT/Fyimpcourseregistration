@@ -1,3 +1,4 @@
+/*
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/core/database/supabaseAdmin'
 import { resetPasswordLimiter } from '@/core/security/rateLimiter'
@@ -38,4 +39,9 @@ export async function POST(request: NextRequest) {
   })
 
   return NextResponse.json({ success: true })
+}
+*/
+
+export async function POST() {
+  return new Response('Reset password feature is disabled', { status: 404 })
 }
