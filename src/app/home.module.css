@@ -1,21 +1,35 @@
 /* =========================================
-   HOME PAGE — CSS MODULE
+   PREMIUM MINIMALIST HOME PAGE — CSS MODULE
    ========================================= */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
-
+:root {
+  --primary-bg: #030a16;
+  --gold-accent: #c9a227;
+  --gold-light: #f3d063;
+  --gold-glow: rgba(201, 162, 39, 0.4);
+  --glass-bg: rgba(255, 255, 255, 0.02);
+  --glass-border: rgba(255, 255, 255, 0.07);
+  --glass-border-hover: rgba(201, 162, 39, 0.3);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.45);
+  --font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-display: 'Outfit', sans-serif;
+}
 
 .pageWrapper {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font-family);
   min-height: 100dvh;
   width: 100%;
-  background-color: #002147;
+  background: radial-gradient(circle at 50% 50%, #061830 0%, #020710 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
   position: relative;
-  overflow-y: auto;
+  overflow: hidden;
+  padding: 1.5rem;
   box-sizing: border-box;
 }
 
@@ -25,227 +39,207 @@
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(rgba(201,162,39,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(201,162,39,0.04) 1px, transparent 1px);
-  background-size: 48px 48px;
+    linear-gradient(rgba(201, 162, 39, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201, 162, 39, 0.015) 1px, transparent 1px);
+  background-size: 64px 64px;
   pointer-events: none;
   z-index: 0;
 }
 
-/* Glow effects */
+/* Glow backdrops */
 .glowTop {
   position: fixed;
-  top: -8rem;
-  right: -8rem;
-  width: 20rem;
-  height: 20rem;
-  background: rgba(201,162,39,0.06);
-  border-radius: 50%;
-  filter: blur(60px);
+  top: -15rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50rem;
+  height: 35rem;
+  background: radial-gradient(circle, rgba(201, 162, 39, 0.08) 0%, transparent 70%);
   pointer-events: none;
   z-index: 0;
+  filter: blur(60px);
 }
 
 .glowBottom {
   position: fixed;
-  bottom: -8rem;
-  left: -8rem;
-  width: 18rem;
-  height: 18rem;
-  background: rgba(26,95,168,0.12);
-  border-radius: 50%;
-  filter: blur(60px);
+  bottom: -15rem;
+  left: 15%;
+  width: 40rem;
+  height: 40rem;
+  background: radial-gradient(circle, rgba(26, 95, 168, 0.1) 0%, transparent 75%);
   pointer-events: none;
   z-index: 0;
-}
-
-/* University header */
-.universityHeader {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 0.85rem;
-}
-
-.logoWrapper {
-  width: 3.75rem;
-  height: 3.75rem;
-  background: rgba(255,255,255,0.08);
-  border-radius: 50%;
-  border: 1px solid rgba(201,162,39,0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.45rem;
-  margin-bottom: 0.6rem;
-  box-shadow: 0 0 24px rgba(201,162,39,0.1);
-}
-
-.universityName {
-  color: #ffffff;
-  font-size: 1rem;
-  font-weight: 700;
-  margin: 0 0 0.3rem 0;
-  text-align: center;
-}
-
-.goldLine {
-  width: 2rem;
-  height: 2px;
-  background: #c9a227;
-  border-radius: 2px;
+  filter: blur(100px);
 }
 
 /* Main card */
 .card {
   position: relative;
-  z-index: 1;
+  z-index: 10;
   width: 100%;
-  max-width: 22rem;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 1.25rem;
-  padding: 1.25rem;
-  backdrop-filter: blur(8px);
-  animation: cardReveal 0.4s ease both;
-  box-sizing: border-box;
-}
-
-@keyframes cardReveal {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Portal title */
-.portalTitle {
-  color: #ffffff;
-  font-size: 1.15rem;
-  font-weight: 800;
-  margin: 0 0 0.25rem 0;
-  text-align: center;
-  line-height: 1.2;
-}
-
-.portalSubtitle {
-  color: rgba(255,255,255,0.4);
-  font-size: 0.72rem;
-  text-align: center;
-  margin: 0 0 1rem 0;
-}
-
-/* Divider */
-.divider {
-  height: 1px;
-  background: rgba(255,255,255,0.08);
-  margin-bottom: 1rem;
-}
-
-/* Info list */
-.infoList {
+  max-width: 26rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 1.75rem;
+  padding: 3rem 2.25rem;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 
+    0 30px 60px rgba(0, 0, 0, 0.5), 
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 40px rgba(201, 162, 39, 0.01);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
+  align-items: center;
+  text-align: center;
+  box-sizing: border-box;
+  transition: border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.infoItem {
+.card:hover {
+  border-color: var(--glass-border-hover);
+  box-shadow: 
+    0 40px 80px rgba(0, 0, 0, 0.6), 
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 50px rgba(201, 162, 39, 0.05);
+}
+
+/* Brand Header */
+.brandHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.75rem;
+  animation: fadeInDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.logoWrapper {
+  width: 4.5rem;
+  height: 4.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 50%;
+  border: 1px solid rgba(201, 162, 39, 0.2);
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  justify-content: center;
+  padding: 0.6rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
-.infoDot {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: #c9a227;
-  flex-shrink: 0;
+.card:hover .logoWrapper {
+  transform: rotate(360deg);
+  border-color: var(--gold-accent);
+  box-shadow: 0 0 25px var(--gold-glow);
 }
 
-.infoText {
-  font-size: 0.78rem;
-  color: rgba(255,255,255,0.6);
-  margin: 0;
+.universityName {
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.6rem 0;
 }
 
-/* Login button */
-.loginBtn {
-  display: block;
-  width: 100%;
-  padding: 0.8rem;
-  background: #c9a227;
-  color: #002147;
-  font-family: inherit;
-  font-size: 0.85rem;
+.goldLine {
+  width: 3rem;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold-accent) 50%, transparent);
+  border-radius: 2px;
+}
+
+/* Portal Title */
+.portalTitle {
+  font-family: var(--font-display);
+  background: linear-gradient(135deg, #ffffff 40%, var(--gold-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-size: 1.5rem;
   font-weight: 800;
-  text-align: center;
+  letter-spacing: -0.02em;
+  margin: 0 0 1.75rem 0;
+  line-height: 1.25;
+  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+}
+
+.divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08) 50%, transparent);
+  margin-bottom: 2rem;
+  animation: fadeIn 1s ease 0.2s both;
+}
+
+/* Premium Login Button */
+.loginBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 1.05rem;
+  background: linear-gradient(90deg, var(--gold-accent) 0%, var(--gold-light) 50%, var(--gold-accent) 100%);
+  background-size: 200% auto;
+  color: #020710;
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  font-weight: 800;
   text-decoration: none;
-  border-radius: 0.65rem;
-  letter-spacing: 0.05em;
+  border-radius: 2.5rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  transition: background 0.15s ease, transform 0.1s ease;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 6px 20px rgba(201, 162, 39, 0.2);
   box-sizing: border-box;
+  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both;
 }
 
 .loginBtn:hover {
-  background: #b8911f;
+  transform: translateY(-3px);
+  background-position: right center;
+  box-shadow: 0 12px 30px rgba(201, 162, 39, 0.45);
 }
 
 .loginBtn:active {
-  transform: scale(0.98);
+  transform: translateY(-1px);
 }
 
-/* Note */
-.note {
-  color: rgba(255,255,255,0.2);
-  font-size: 0.65rem;
-  text-align: center;
-  margin: 0.75rem 0 0 0;
+.arrow {
+  display: inline-block;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.loginBtn:hover .arrow {
+  transform: translateX(4px);
 }
 
 /* Footer */
 .footer {
-  position: relative;
-  z-index: 1;
-  margin-top: 0.85rem;
-  color: rgba(255,255,255,0.18);
-  font-size: 0.6rem;
+  margin-top: 2.5rem;
+  color: var(--text-muted);
+  font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-align: center;
+  position: relative;
+  z-index: 10;
+  animation: fadeIn 1.2s ease 0.4s both;
 }
 
-/* Tablet and up */
-@media (min-width: 640px) {
-  .logoWrapper {
-    width: 5rem;
-    height: 5rem;
-  }
+/* Keyframes */
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
-  .universityName {
-    font-size: 1.2rem;
-  }
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
-  .universityHeader {
-    margin-bottom: 1.25rem;
-  }
-
-  .card {
-    padding: 1.75rem;
-    max-width: 24rem;
-  }
-
-  .portalTitle {
-    font-size: 1.35rem;
-  }
-
-  .infoText {
-    font-size: 0.82rem;
-  }
-
-  .footer {
-    margin-top: 1.25rem;
-  }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

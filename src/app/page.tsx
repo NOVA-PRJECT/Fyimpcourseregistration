@@ -10,7 +10,7 @@ import { Role } from '@/core/constants/roles'
 
 export default function Home() {
   const router = useRouter()
-  const [checking, setChecking] = useState(false)
+  const [checking, setChecking] = useState(true)
 
   useEffect(() => {
     async function checkSession(isBfcache: boolean) {
@@ -30,7 +30,7 @@ export default function Home() {
       setChecking(false)
     }
 
-    // Check on mount (lightweight background check, doesn't block mount rendering)
+    // Check on mount
     checkSession(false)
 
     // Check on pageshow (specifically for true bfcache restorations)
@@ -51,7 +51,7 @@ export default function Home() {
     return (
       <div style={{
         minHeight: '100vh',
-        backgroundColor: '#0a0a0a',
+        backgroundColor: '#030a16',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
@@ -59,8 +59,8 @@ export default function Home() {
         <div style={{
           width: '50px',
           height: '50px',
-          border: '3px solid rgba(212, 175, 55, 0.1)',
-          borderTop: '3px solid #d4af37',
+          border: '3px solid rgba(201, 162, 39, 0.1)',
+          borderTop: '3px solid #c9a227',
           borderRadius: '50%',
           animation: 'spin 1s linear infinite'
         }} />
@@ -73,76 +73,43 @@ export default function Home() {
       </div>
     )
   }
+
   return (
     <div className={styles.pageWrapper}>
-
-      {/* Background effects */}
+      {/* Background gradients */}
       <div className={styles.glowTop} />
       <div className={styles.glowBottom} />
 
-      {/* University Header */}
-      <div className={styles.universityHeader}>
-        <div className={styles.logoWrapper}>
-          <Image
-            src="/logo.png"
-            alt="Kannur University"
-            width={64}
-            height={64}
-            style={{ objectFit: 'contain' }}
-          />
-        </div>
-        <h1 className={styles.universityName}>Kannur University</h1>
-        <div className={styles.goldLine} />
-      </div>
-
       {/* Main Card */}
       <div className={styles.card}>
+        <div className={styles.brandHeader}>
+          <div className={styles.logoWrapper}>
+            <Image
+              src="/logo.png"
+              alt="Kannur University Logo"
+              width={64}
+              height={64}
+              style={{ objectFit: 'contain' }}
+            />
+          </div>
+          <h1 className={styles.universityName}>Kannur University</h1>
+          <div className={styles.goldLine} />
+        </div>
 
-        <h2 className={styles.portalTitle}>
-          FYIMP Course Registration Portal
-        </h2>
-        <p className={styles.portalSubtitle}>
-          Five Year Integrated Masters Programme
-        </p>
+        <h2 className={styles.portalTitle}>FYIMP Registration Portal</h2>
 
         <div className={styles.divider} />
 
-        {/* Info List */}
-        <div className={styles.infoList}>
-          <div className={styles.infoItem}>
-            <div className={styles.infoDot} />
-            <p className={styles.infoText}>
-              Students — Semester course selection
-            </p>
-          </div>
-          <div className={styles.infoItem}>
-            <div className={styles.infoDot} />
-            <p className={styles.infoText}>
-              Faculty & HODs — Department management
-            </p>
-          </div>
-          <div className={styles.infoItem}>
-            <div className={styles.infoDot} />
-            <p className={styles.infoText}>
-              Administration — Campus oversight
-            </p>
-          </div>
-        </div>
-
-        {/* Login Button */}
         <Link href="/login" className={styles.loginBtn}>
-          Login to Portal →
+          <span>Login to Portal</span>
+          <span className={styles.arrow}>→</span>
         </Link>
-
-
-
       </div>
 
       {/* Footer */}
-      <p className={styles.footer}>
-        © 2026 Kannur University • Internal Systems Division
-      </p>
-
+      <footer className={styles.footer}>
+        2026 Kannur University Mangattuparamba Campus
+      </footer>
     </div>
   )
 }
