@@ -27,7 +27,7 @@ export async function resolvePathwaySlots(
   }
 
   const fixedTargets = slotsInfo
-    .filter(s => s.rule === SLOT_RULES.FIXED || s.rule === SLOT_RULES.CAMPUS_FIXED)
+    .filter(s => s.rule === SLOT_RULES.FIXED || s.rule === SLOT_RULES.AEC_ELECT || s.rule === SLOT_RULES.CAMPUS_FIXED)
     .map(s => s.target)
 
   let fixedCourseIds: string[] = []
@@ -47,8 +47,8 @@ export async function resolvePathwaySlots(
 
   const resolvedSlots = await Promise.all(
     slotsInfo.map(async ({ slot, rule, target, name }) => {
-      // FIXED / CAMPUS_FIXED — already resolved from batch fetch
-      if (rule === SLOT_RULES.FIXED || rule === SLOT_RULES.CAMPUS_FIXED) {
+      // FIXED / AEC_ELECT / CAMPUS_FIXED — already resolved from batch fetch
+      if (rule === SLOT_RULES.FIXED || rule === SLOT_RULES.AEC_ELECT || rule === SLOT_RULES.CAMPUS_FIXED) {
         const c = fixedCoursesMap[target]
         return {
           slot,

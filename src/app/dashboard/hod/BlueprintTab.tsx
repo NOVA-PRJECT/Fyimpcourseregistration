@@ -5,8 +5,8 @@ import styles from './hod-dashboard.module.css'
 
 const RULES = [
   { value: '', label: '— Empty slot —' },
-  { value: 'FIXED', label: 'FIXED — Specific course' },
-  { value: 'CAMPUS_FIXED', label: 'CAMPUS_FIXED — Campus-specific course' },
+  { value: 'FIXED', label: 'FIXED — Specific DSC/DSE course from own campus' },
+  { value: 'AEC_ELECT', label: 'AEC ELECT — AEC course from all campuses' },
   { value: 'DEPT_RESTRICTED', label: 'DEPT_RESTRICTED — From specific dept (DSC/DSE)' },
   { value: 'EXCLUDE_DEPT', label: 'EXCLUDE_DEPT — Exclude specific dept (DSC/DSE)' },
   { value: 'POOL_RESTRICTED', label: 'POOL_RESTRICTED — Own dept pool by tag' },
@@ -65,7 +65,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   function getSlotCreditRange(slot: SlotData): { min: number; max: number } {
     if (!slot.rule) return { min: 0, max: 0 }
 
-    if (slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED') {
+    if (slot.rule === 'FIXED' || slot.rule === 'AEC_ELECT' || slot.rule === 'CAMPUS_FIXED') {
       const course = courses.find(c => c.course_code === slot.target)
       const cr = course ? course.credits : 0
       return { min: cr, max: cr }
@@ -428,7 +428,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
           {slot.rule && (
             <div className={styles.field} style={{ position: 'relative' }}>
               <label className={styles.label}>
-                Target {(slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED') ? '(Course Code)' :
+                Target {(slot.rule === 'FIXED' || slot.rule === 'AEC_ELECT' || slot.rule === 'CAMPUS_FIXED') ? '(Course Code)' :
                   slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? '(Departments)' :
                     '(Tag e.g. POOL-A, MDC-1)'}
               </label>
@@ -477,7 +477,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                     );
                   })}
                 </div>
-              ) : (slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED') ? (
+              ) : (slot.rule === 'FIXED' || slot.rule === 'AEC_ELECT' || slot.rule === 'CAMPUS_FIXED') ? (
                 <div style={{ position: 'relative' }}>
                   <input type="text" className={styles.input}
                     placeholder="Search & select course..."
@@ -512,7 +512,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                       border: '1px solid #dde1e7',
                       borderRadius: '0.4rem',
                       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                      maxHeight: '180px',
+                      maxHeight: '200px',
                       overflowY: 'auto',
                       zIndex: 200,
                     }}>
@@ -522,14 +522,29 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                         </div>
                       ) : (() => {
                         const searchStr = (fixedSearch[fixedKey] ?? '').toLowerCase()
-                        const filtered = courses.filter(c =>
-                          c.course_code.toLowerCase().includes(searchStr) ||
-                          c.title.toLowerCase().includes(searchStr)
-                        )
+                        const filtered = courses.filter(c => {
+                          const matchesText = c.course_code.toLowerCase().includes(searchStr) ||
+                            c.title.toLowerCase().includes(searchStr) ||
+                            (c.category && c.category.toLowerCase().includes(searchStr))
+
+                          if (!matchesText) return false
+
+                          // AEC_ELECT: show AEC courses from all campuses
+                          if (slot.rule === 'AEC_ELECT') {
+                            return c.category === 'AEC'
+                          }
+
+                          // FIXED: show ONLY DSC/DSE courses from own campus departments
+                          if (slot.rule === 'FIXED') {
+                            return ['DSC', 'DSE'].includes(c.category) && c.is_own_campus !== false
+                          }
+
+                          return true
+                        })
                         if (filtered.length === 0) {
                           return (
                             <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: '#9ba1ab' }}>
-                              No matching courses
+                              No matching courses found
                             </div>
                           )
                         }
@@ -541,14 +556,23 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                               setFixedOpen(prev => ({ ...prev, [fixedKey]: false }))
                             }}
                             style={{
-                              padding: '0.5rem 0.75rem',
+                              padding: '0.55rem 0.75rem',
                               fontSize: '0.75rem',
                               cursor: 'pointer',
                               borderBottom: '1px solid #f0f2f5',
-                              color: '#002147'
+                              color: '#002147',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.15rem'
                             }}
                             className={styles.comboboxItem}>
-                            <strong style={{ fontFamily: 'monospace' }}>{c.course_code}</strong> — {c.title}
+                            <div>
+                              <strong style={{ fontFamily: 'monospace' }}>{c.course_code}</strong> — {c.title}
+                            </div>
+                            <div style={{ fontSize: '0.68rem', color: '#6b7280' }}>
+                              <span style={{ fontWeight: 700, color: '#002147' }}>{c.category}</span>
+                              {c.department_name ? ` • ${c.department_name}` : ''}
+                            </div>
                           </div>
                         ))
                       })()}

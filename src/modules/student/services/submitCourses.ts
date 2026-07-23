@@ -143,7 +143,7 @@ export async function submitCourses(auth: VerifiedStudent, { semester, pathway_i
 
     if (!isEligible) {
       // Return the specific detailed error messages to keep user experience identical
-      if (rule === SLOT_RULES.FIXED || rule === SLOT_RULES.CAMPUS_FIXED) {
+      if (rule === SLOT_RULES.FIXED || rule === SLOT_RULES.AEC_ELECT || rule === SLOT_RULES.CAMPUS_FIXED) {
         return {
           success: false,
           error: `Slot ${slot} requires a fixed course and cannot be changed`,

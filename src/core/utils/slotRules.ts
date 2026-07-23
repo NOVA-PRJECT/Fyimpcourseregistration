@@ -16,7 +16,7 @@ export function isCourseEligibleForSlot(
     return course.course_code === target
   }
 
-  if (rule === SLOT_RULES.CAMPUS_FIXED) {
+  if (rule === SLOT_RULES.AEC_ELECT || rule === SLOT_RULES.CAMPUS_FIXED) {
     return course.course_code === target
   }
 

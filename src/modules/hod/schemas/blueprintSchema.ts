@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 const SlotRuleSchema = z.enum([
   'FIXED',
+  'AEC_ELECT',
   'CAMPUS_FIXED',
   'DEPT_RESTRICTED',
   'EXCLUDE_DEPT',

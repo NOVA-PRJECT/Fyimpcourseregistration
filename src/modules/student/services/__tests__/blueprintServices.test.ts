@@ -219,19 +219,19 @@ describe('SubmitCoursesSchema', () => {
 
 describe('isCourseEligibleForSlot', () => {
   // Import dynamically to avoid module resolution issues in test
-  it('handles CAMPUS_FIXED rule like FIXED', async () => {
+  it('handles AEC_ELECT rule like FIXED', async () => {
     const { isCourseEligibleForSlot } = await import('@/core/utils/slotRules')
     const deptMap = new Map<string, string>()
 
     const course = {
       course_code: 'KU1CAMPUS101',
       department_id: 'dept-1',
-      category: 'DSC',
+      category: 'AEC',
       tag: null,
     }
 
-    expect(isCourseEligibleForSlot(course, 'CAMPUS_FIXED', 'KU1CAMPUS101', 'dept-1', deptMap)).toBe(true)
-    expect(isCourseEligibleForSlot(course, 'CAMPUS_FIXED', 'WRONG_CODE', 'dept-1', deptMap)).toBe(false)
+    expect(isCourseEligibleForSlot(course, 'AEC_ELECT', 'KU1CAMPUS101', 'dept-1', deptMap)).toBe(true)
+    expect(isCourseEligibleForSlot(course, 'AEC_ELECT', 'WRONG_CODE', 'dept-1', deptMap)).toBe(false)
   })
 
   it('handles FIXED rule', async () => {
