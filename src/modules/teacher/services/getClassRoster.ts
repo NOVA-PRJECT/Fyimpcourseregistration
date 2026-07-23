@@ -117,6 +117,13 @@ export async function getClassRoster(courseId: string, campus_id: string) {
     department_code: student.departments?.code ?? '',
   }))
 
+  roster.sort((a, b) => {
+    const deptA = (a.department_code || a.department).toUpperCase()
+    const deptB = (b.department_code || b.department).toUpperCase()
+    if (deptA !== deptB) return deptA.localeCompare(deptB)
+    return a.full_name.localeCompare(b.full_name)
+  })
+
   return {
     success: true,
     data: {

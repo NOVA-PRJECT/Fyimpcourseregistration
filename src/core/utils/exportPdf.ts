@@ -3,6 +3,7 @@ import jsPDF from 'jspdf'
 interface Student {
   full_name: string
   department_name?: string
+  department_code?: string
 }
 
 interface AttendanceSheetOptions {
@@ -27,7 +28,15 @@ export async function generateAttendanceSheet({
   const pageHeight = doc.internal.pageSize.getHeight() // 210mm
   const margin = 8
 
-  // ── HEADER ──────────────────────────────────
+  // Sort students by department code (or department name) first, then by full_name
+  const sortedStudents = [...students].sort((a, b) => {
+    const deptA = (a.department_code || a.department_name || '').toUpperCase()
+    const deptB = (b.department_code || b.department_name || '').toUpperCase()
+    if (deptA !== deptB) return deptA.localeCompare(deptB)
+    return a.full_name.localeCompare(b.full_name)
+  })
+
+  // ── TOP BANNER ──────────────────────────────
   doc.setFillColor(0, 33, 71)
   doc.rect(0, 0, pageWidth, 18, 'F')
 
@@ -42,98 +51,132 @@ export async function generateAttendanceSheet({
 
   // ── COURSE INFO ROW ──────────────────────────
   doc.setTextColor(0, 0, 0)
-  doc.setFontSize(8)
+  doc.setFontSize(8.5)
   doc.setFont('helvetica', 'bold')
 
   const infoY = 24
   doc.text(`Course: ${courseTitle}`, margin, infoY)
   doc.text(`Code: ${courseCode}`, pageWidth / 2 - 20, infoY)
-  doc.text(`Total Students: ${students.length}`, pageWidth - margin - 40, infoY)
+  doc.text(`Total Students: ${sortedStudents.length}`, pageWidth - margin - 40, infoY)
 
   // ── MONTH / YEAR MANUAL WRITE LINES ──────────
   const lineY = 32
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
+  doc.setFontSize(8.5)
 
   doc.text('Month:', margin, lineY)
-  doc.line(margin + 16, lineY, margin + 55, lineY)
+  doc.line(margin + 14, lineY, margin + 55, lineY)
 
   doc.text('Year:', margin + 62, lineY)
-  doc.line(margin + 76, lineY, margin + 110, lineY)
+  doc.line(margin + 74, lineY, margin + 110, lineY)
 
-  doc.text('Department / Semester:', margin + 118, lineY)
-  doc.line(margin + 160, lineY, pageWidth - margin, lineY)
+
 
   // ── TABLE SETUP ──────────────────────────────
-  const tableStartY = 38
-  const rowHeight = 6.5
+  const tableStartY = 37
+  const rowHeight = 7.3
 
-  // Column widths
+  // Column widths (Total available width = 297 - 16 = 281mm)
   const slNoWidth = 8
   const nameWidth = 55
   const deptWidth = 14
-  const dayWidth = 6.1   // 31 days × 6.1mm = ~189.1mm
-  const totalWidth = 14.9
+  const dayWidth = 6.1   // 31 days × 6.1mm = 189.1mm
+  const totalWidth = 14.9 // 8 + 55 + 14 + 189.1 + 14.9 = 281mm
 
-  // Total days columns
   const days = 31
-
-  // Calculate starting X for days
   const daysStartX = margin + slNoWidth + nameWidth + deptWidth
 
-  // ── TABLE HEADER ─────────────────────────────
-  doc.setFillColor(0, 33, 71)
-  doc.rect(margin, tableStartY, pageWidth - margin * 2, rowHeight, 'F')
+  // Helper to draw table header
+  const drawTableHeader = (startY: number) => {
+    doc.setFillColor(0, 33, 71)
+    doc.rect(margin, startY, pageWidth - margin * 2, rowHeight, 'F')
 
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(6.5)
-  doc.setFont('helvetica', 'bold')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
 
-  // Header labels
-  doc.text('Sl.', margin + slNoWidth / 2, tableStartY + 4.2, { align: 'center' })
-  doc.text('Student Name', margin + slNoWidth + nameWidth / 2, tableStartY + 4.2, { align: 'center' })
-  doc.text('DEPT', margin + slNoWidth + nameWidth + deptWidth / 2, tableStartY + 4.2, { align: 'center' })
+    doc.text('Sl.', margin + slNoWidth / 2, startY + 4.8, { align: 'center' })
+    doc.text('Student Name', margin + slNoWidth + 2, startY + 4.8)
+    doc.text('DEPT', margin + slNoWidth + nameWidth + deptWidth / 2, startY + 4.8, { align: 'center' })
 
-  // Day number headers
-  for (let d = 1; d <= days; d++) {
-    const x = daysStartX + (d - 1) * dayWidth + dayWidth / 2
-    doc.text(String(d), x, tableStartY + 4.2, { align: 'center' })
+    for (let d = 1; d <= days; d++) {
+      const x = daysStartX + (d - 1) * dayWidth + dayWidth / 2
+      doc.text(String(d), x, startY + 4.8, { align: 'center' })
+    }
+
+    const totalX = daysStartX + days * dayWidth
+    doc.text('Total', totalX + totalWidth / 2, startY + 4.8, { align: 'center' })
   }
 
-  // Total header
-  const totalX = daysStartX + days * dayWidth
-  doc.text('Total', totalX + totalWidth / 2, tableStartY + 4.2, { align: 'center' })
+  // Draw initial Page 1 table header
+  drawTableHeader(tableStartY)
 
   // ── STUDENT ROWS ─────────────────────────────
-  doc.setTextColor(0, 0, 0)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6.5)
-
   let currentY = tableStartY + rowHeight
 
-  students.forEach((student, index) => {
-    // Alternate row shading
+  // Max Y boundary for Page 1 (fits 17-18 students on page 1)
+  // 37mm + 7.3mm header + 18 * 7.3mm = 175.7mm
+  const page1MaxY = 176
+
+  // Max Y boundary for Page 2+ (fits 20-21 students on succeeding pages)
+  // 8mm header start + 7.3mm header + 21 * 7.3mm = 168.6mm
+  const page2MaxY = 169
+
+  sortedStudents.forEach((student, index) => {
+    const isPage1 = doc.getNumberOfPages() === 1
+    const maxY = isPage1 ? page1MaxY : page2MaxY
+
+    // Page break if current row would exceed the page limit
+    if (currentY + rowHeight > maxY + 0.1 && index > 0) {
+      doc.addPage()
+      const newPageHeaderY = 8
+      drawTableHeader(newPageHeaderY)
+      currentY = newPageHeaderY + rowHeight
+    }
+
+    // Alternate row background shading
     if (index % 2 === 0) {
       doc.setFillColor(248, 249, 250)
       doc.rect(margin, currentY, pageWidth - margin * 2, rowHeight, 'F')
     }
 
+    // Outer boundary line for row
+    doc.setDrawColor(200, 200, 200)
+    doc.setLineWidth(0.1)
+
     // Sl. No.
-    doc.text(String(index + 1), margin + slNoWidth / 2, currentY + 4.2, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(0, 0, 0)
+    doc.text(String(index + 1), margin + slNoWidth / 2, currentY + 4.8, { align: 'center' })
 
-    // Student name — truncate if too long
-    const name = student.full_name.length > 28
-      ? student.full_name.substring(0, 26) + '...'
-      : student.full_name
-    doc.text(name, margin + slNoWidth + 2, currentY + 4.2)
+    // Student Name (larger font, bold for readability)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    let displayName = student.full_name
+    if (doc.getTextWidth(displayName) > nameWidth - 3) {
+      while (displayName.length > 0 && doc.getTextWidth(displayName + '...') > nameWidth - 3) {
+        displayName = displayName.slice(0, -1)
+      }
+      displayName += '...'
+    }
+    doc.text(displayName, margin + slNoWidth + 2, currentY + 4.8)
 
-    // Department (code only)
-    const dept = (student.department_name ?? '').length > 6
-      ? (student.department_name ?? '').substring(0, 5) + '...'
-      : (student.department_name ?? '—')
-    doc.text(dept, margin + slNoWidth + nameWidth + deptWidth / 2, currentY + 4.2, { align: 'center' })
+    // Department Code (from department table)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    const deptCode = student.department_code || student.department_name || '—'
+    let displayDept = deptCode
+    if (doc.getTextWidth(displayDept) > deptWidth - 1) {
+      while (displayDept.length > 0 && doc.getTextWidth(displayDept + '...') > deptWidth - 1) {
+        displayDept = displayDept.slice(0, -1)
+      }
+      displayDept += '...'
+    }
+    doc.text(displayDept, margin + slNoWidth + nameWidth + deptWidth / 2, currentY + 4.8, { align: 'center' })
 
     // 31 day cells — empty boxes for manual marking
+    doc.setDrawColor(180, 180, 180)
     for (let d = 0; d < days; d++) {
       const x = daysStartX + d * dayWidth
       doc.rect(x, currentY, dayWidth, rowHeight)
@@ -144,38 +187,6 @@ export async function generateAttendanceSheet({
     doc.rect(totalX, currentY, totalWidth, rowHeight)
 
     currentY += rowHeight
-
-    // Page break if needed (25mm margin for footer/signature spacing)
-    if (currentY + rowHeight > pageHeight - 25 && index < students.length - 1) {
-      doc.addPage()
-
-      // New page starts with just the column header — no course info, no logo, no month lines
-      const newPageHeaderY = margin
-
-      doc.setFillColor(0, 33, 71)
-      doc.rect(margin, newPageHeaderY, pageWidth - margin * 2, rowHeight, 'F')
-
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(6.5)
-      doc.setFont('helvetica', 'bold')
-
-      doc.text('Sl.', margin + slNoWidth / 2, newPageHeaderY + 4.2, { align: 'center' })
-      doc.text('Student Name', margin + slNoWidth + nameWidth / 2, newPageHeaderY + 4.2, { align: 'center' })
-      doc.text('DEPT', margin + slNoWidth + nameWidth + deptWidth / 2, newPageHeaderY + 4.2, { align: 'center' })
-
-      for (let d = 1; d <= days; d++) {
-        const x = daysStartX + (d - 1) * dayWidth + dayWidth / 2
-        doc.text(String(d), x, newPageHeaderY + 4.2, { align: 'center' })
-      }
-
-      doc.text('Total', totalX + totalWidth / 2, newPageHeaderY + 4.2, { align: 'center' })
-
-      doc.setTextColor(0, 0, 0)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6.5)
-
-      currentY = newPageHeaderY + rowHeight
-    }
   })
 
   // ── FOOTER & PAGINATION POST-PROCESSING ───────
@@ -213,7 +224,7 @@ export async function generateAttendanceSheet({
     if (i === totalPages) {
       const sigY = footerY - 6
       doc.setTextColor(0, 0, 0)
-      doc.setFontSize(7)
+      doc.setFontSize(7.5)
       doc.setFont('helvetica', 'normal')
 
       doc.line(margin, sigY, margin + 45, sigY)

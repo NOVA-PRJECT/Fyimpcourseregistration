@@ -85,6 +85,7 @@ export default function TeacherDashboard() {
       students: rosterData.students.map(s => ({
         full_name: s.full_name,
         department_name: s.department,
+        department_code: s.department_code,
       })),
     })
   }
