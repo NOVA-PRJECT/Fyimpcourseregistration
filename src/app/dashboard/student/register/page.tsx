@@ -329,7 +329,7 @@ export default function RegisterPage() {
     setSuccessMsg(`Courses submitted! Total credits: ${data.total_credits}`)
     setExistingSubmission({})
     setPageState('submitted')
-    setTimeout(() => setSuccessMsg(''), 1000)
+    router.push('/dashboard/student')
   }
 
   async function handleLogout() {
@@ -420,41 +420,80 @@ export default function RegisterPage() {
           </div>
         )}
 
-        {/* Pathway Picker */}
+        {/* Pathway Picker Hub */}
         {pageState === 'pathway_picker' && blueprint?.pathways && (
-          <div>
-            <p className={styles.sectionTitle}>Select Your Track</p>
-            <p style={{ fontSize: '0.82rem', color: '#6b7280', marginBottom: '1.25rem' }}>
-              Your department offers multiple course tracks. Please select the track you want to register for.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
-              {blueprint.pathways.map(pw => (
-                <button
-                  key={pw.id}
-                  type="button"
-                  onClick={() => selectPathway(pw.id)}
-                  style={{
-                    background: selectedPathwayId === pw.id ? '#e6f0fa' : '#ffffff',
-                    border: `2px solid ${selectedPathwayId === pw.id ? '#002147' : '#dde1e7'}`,
-                    borderRadius: '0.5rem',
-                    padding: '1rem 1.25rem',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#002147', marginBottom: '0.15rem' }}>
-                    {pw.name}
-                  </p>
-                  <p style={{ fontSize: '0.72rem', color: '#6b7280' }}>
-                    Click to view available courses for this track
-                  </p>
-                </button>
-              ))}
+          <div className={styles.trackPickerContainer}>
+            <div className={styles.trackHeader}>
+              <span className={styles.trackCategoryTag}>
+                <span>🎓</span> ACADEMIC PATHWAY SELECTION
+              </span>
+              <h2 className={styles.trackTitle}>Select Your Academic Track</h2>
+              <p className={styles.trackSubtitle}>
+                Your department offers {blueprint.pathways.length} specialized course tracks for Semester {studentInfo?.current_semester ?? ''}. Choose your track to configure your paper preferences.
+              </p>
             </div>
 
-            {error && <div className={styles.errorBanner}>{error}</div>}
+            <div className={styles.trackGrid}>
+              {blueprint.pathways.map((pw, idx) => {
+                const isSelected = selectedPathwayId === pw.id
+                // Pick icon based on index or name
+                const icon = idx === 0 ? '🎓' : idx === 1 ? '🔬' : idx === 2 ? '📚' : '⚡'
+
+                return (
+                  <div
+                    key={pw.id}
+                    className={`${styles.trackCard} ${isSelected ? styles.trackCardSelected : ''}`}
+                    onClick={() => selectPathway(pw.id)}
+                  >
+                    <div>
+                      <div className={styles.trackCardHeader}>
+                        <span className={styles.trackNumberBadge}>TRACK {idx + 1}</span>
+                        <div className={styles.trackRadioCircle}>
+                          {isSelected && <div className={styles.trackRadioDot} />}
+                        </div>
+                      </div>
+
+                      <div className={styles.trackIconTitleRow}>
+                        <div className={styles.trackIconBox}>{icon}</div>
+                        <div>
+                          <h3 className={styles.trackName}>{pw.name}</h3>
+                        </div>
+                      </div>
+
+                      <p className={styles.trackDescription}>
+                        Access tailored core papers and specialized elective selections for this academic track.
+                      </p>
+
+                      <div className={styles.trackMetaTags}>
+                        <span className={styles.trackMetaTag}>Core + Electives</span>
+                        <span className={styles.trackMetaTag}>{blueprint.min_credits}–{blueprint.max_credits} Credits</span>
+                        <span className={styles.trackMetaTag}>Sem {studentInfo?.current_semester ?? ''}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={styles.trackActionButton}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        selectPathway(pw.id)
+                      }}
+                    >
+                      {isSelected ? 'Continue with Selected Track →' : 'Select Track & Continue →'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className={styles.trackNoticeBox}>
+              <span className={styles.trackNoticeIcon}>💡</span>
+              <span>
+                <strong>Flexible Track Switch:</strong> You can switch your track choice anytime before submitting your final registration.
+              </span>
+            </div>
+
+            {error && <div className={styles.errorBanner} style={{ marginTop: '1rem' }}>{error}</div>}
           </div>
         )}
 
@@ -502,9 +541,8 @@ export default function RegisterPage() {
             {/* Credit Counter */}
             <div className={styles.creditCounter}>
               <span className={styles.creditLabel}>Total Credits</span>
-              <span className={`${styles.creditValue} ${
-                totalCredits === 0 ? '' : isValidCredits ? styles.valid : styles.invalid
-              }`}>
+              <span className={`${styles.creditValue} ${totalCredits === 0 ? '' : isValidCredits ? styles.valid : styles.invalid
+                }`}>
                 {totalCredits}
                 <span className={styles.creditRange}>
                   &nbsp;(min {blueprint.min_credits} — max {blueprint.max_credits})
