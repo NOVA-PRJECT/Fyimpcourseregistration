@@ -8,6 +8,20 @@ import { logAuditEvent, AuditEvents } from '@/core/logging/auditLogger'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Generate a URL-safe slug from a pathway name + random suffix.
+ * e.g. "Research Track" → "research-track-x7k2"
+ */
+function generatePathwayId(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+  const suffix = Math.random().toString(36).slice(2, 6)
+  return `${slug}-${suffix}`
+}
+
 // GET — fetch blueprint for dept + semester
 export async function GET(request: NextRequest) {
   const auth = await verifyHod()
@@ -61,20 +75,20 @@ export async function PUT(request: NextRequest) {
     )
   }
 
-  const { semester, min_credits, max_credits, slots } = result.data
+  const { semester, min_credits, max_credits, pathways } = result.data
 
-  const payload: Record<string, any> = {
+  // Assign IDs to pathways: preserve existing IDs, generate new ones for new pathways
+  const pathwaysWithIds = pathways.map(p => ({
+    ...p,
+    id: p.id && p.id.trim() !== '' ? p.id : generatePathwayId(p.name),
+  }))
+
+  const payload: Record<string, unknown> = {
     department_id: auth.department_id,
     semester,
     min_credits,
     max_credits,
-  }
-
-  for (let i = 1; i <= 6; i++) {
-    const slot = slots.find((s: any) => s.slot === i)
-    payload[`slot_${i}_rule`] = slot?.rule || null
-    payload[`slot_${i}_target`] = slot?.target || null
-    payload[`slot_${i}_name`] = slot?.name || null
+    pathways: pathwaysWithIds,
   }
 
   const supabase = await getSupabaseServerClient()
@@ -99,6 +113,7 @@ export async function PUT(request: NextRequest) {
       min_credits,
       max_credits,
       department_id: auth.department_id,
+      pathway_count: pathwaysWithIds.length,
     }
   })
 

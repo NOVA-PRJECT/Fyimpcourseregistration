@@ -6,6 +6,7 @@ import styles from './hod-dashboard.module.css'
 const RULES = [
   { value: '', label: '— Empty slot —' },
   { value: 'FIXED', label: 'FIXED — Specific course' },
+  { value: 'CAMPUS_FIXED', label: 'CAMPUS_FIXED — Campus-specific course' },
   { value: 'DEPT_RESTRICTED', label: 'DEPT_RESTRICTED — From specific dept (DSC/DSE)' },
   { value: 'EXCLUDE_DEPT', label: 'EXCLUDE_DEPT — Exclude specific dept (DSC/DSE)' },
   { value: 'POOL_RESTRICTED', label: 'POOL_RESTRICTED — Own dept pool by tag' },
@@ -13,10 +14,15 @@ const RULES = [
 ]
 
 interface SlotData {
-  slot: number
   rule: string
   target: string
   name: string
+}
+
+interface PathwayData {
+  id?: string
+  name: string
+  slots: SlotData[]
 }
 
 export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint' | 'courses' }) {
@@ -27,16 +33,17 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   const [success, setSuccess] = useState('')
   const [minCredits, setMinCredits] = useState<number | ''>(0)
   const [maxCredits, setMaxCredits] = useState<number | ''>(0)
-  const [slots, setSlots] = useState<SlotData[]>(
-    Array.from({ length: 6 }, (_, i) => ({
-      slot: i + 1, rule: '', target: '', name: ''
-    }))
-  )
+
+  // Pathway state
+  const [pathways, setPathways] = useState<PathwayData[]>([
+    { name: 'Default', slots: [{ rule: '', target: '', name: '' }] }
+  ])
+  const [editingPathwayIndex, setEditingPathwayIndex] = useState<number | null>(null)
 
   // New state variables for pickers
   const [departments, setDepartments] = useState<{ id: string; name: string; code: string }[]>([])
-  const [fixedSearch, setFixedSearch] = useState<Record<number, string>>({})
-  const [fixedOpen, setFixedOpen] = useState<Record<number, boolean>>({})
+  const [fixedSearch, setFixedSearch] = useState<Record<string, string>>({})
+  const [fixedOpen, setFixedOpen] = useState<Record<string, boolean>>({})
 
   // Courses state
   const [courses, setCourses] = useState<any[]>([])
@@ -58,7 +65,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   function getSlotCreditRange(slot: SlotData): { min: number; max: number } {
     if (!slot.rule) return { min: 0, max: 0 }
 
-    if (slot.rule === 'FIXED') {
+    if (slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED') {
       const course = courses.find(c => c.course_code === slot.target)
       const cr = course ? course.credits : 0
       return { min: cr, max: cr }
@@ -91,19 +98,43 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     return { min: 4, max: 4 }
   }
 
-  // Calculate live bounds
-  let totalMin = 0
-  let totalMax = 0
-  slots.forEach(s => {
-    const { min, max } = getSlotCreditRange(s)
-    totalMin += min
-    totalMax += max
+  // Calculate live bounds across all pathways
+  function getPathwayCreditRange(pw: PathwayData): { min: number; max: number } {
+    let totalMin = 0
+    let totalMax = 0
+    pw.slots.forEach(s => {
+      const { min, max } = getSlotCreditRange(s)
+      totalMin += min
+      totalMax += max
+    })
+    return { min: totalMin, max: totalMax }
+  }
+
+  // Overall credit bounds (worst-case across all pathways)
+  let overallMin = Infinity
+  let overallMax = 0
+  pathways.forEach(pw => {
+    const { min, max } = getPathwayCreditRange(pw)
+    if (min < overallMin) overallMin = min
+    if (max > overallMax) overallMax = max
+  })
+  if (overallMin === Infinity) overallMin = 0
+
+  const isImpossible = maxCredits !== '' && pathways.some(pw => {
+    const { min } = getPathwayCreditRange(pw)
+    return min > Number(maxCredits)
   })
 
-  const isImpossible = maxCredits !== '' && totalMin > Number(maxCredits)
   let warningMessage = ''
-  if (maxCredits !== '' && totalMin > Number(maxCredits)) {
-    warningMessage = `The minimum credits achievable (${totalMin}) exceeds your configured maximum (${maxCredits}). Students will not be able to submit.`
+  if (isImpossible) {
+    const badPathway = pathways.find(pw => {
+      const { min } = getPathwayCreditRange(pw)
+      return min > Number(maxCredits)
+    })
+    if (badPathway) {
+      const { min } = getPathwayCreditRange(badPathway)
+      warningMessage = `Pathway "${badPathway.name}" has a minimum of ${min} credits, exceeding your configured maximum of ${maxCredits}. Students on this pathway will not be able to submit.`
+    }
   }
 
   // Fetch on mount
@@ -141,19 +172,41 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     if (data) {
       setMinCredits(data.min_credits ?? 0)
       setMaxCredits(data.max_credits ?? 0)
-      setSlots(Array.from({ length: 6 }, (_, i) => ({
-        slot: i + 1,
-        rule: data[`slot_${i + 1}_rule`] ?? '',
-        target: data[`slot_${i + 1}_target`] ?? '',
-        name: data[`slot_${i + 1}_name`] ?? '',
-      })))
+
+      // Read from pathways JSONB if available, else create default pathway from flat columns
+      if (data.pathways && Array.isArray(data.pathways) && data.pathways.length > 0) {
+        setPathways(data.pathways.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          slots: (p.slots || []).map((s: any) => ({
+            rule: s.rule ?? '',
+            target: s.target ?? '',
+            name: s.name ?? '',
+          }))
+        })))
+      } else {
+        // Legacy: build single pathway from flat columns
+        const flatSlots: SlotData[] = []
+        for (let i = 1; i <= 6; i++) {
+          const rule = data[`slot_${i}_rule`] ?? ''
+          const target = data[`slot_${i}_target`] ?? ''
+          const name = data[`slot_${i}_name`] ?? ''
+          if (rule) {
+            flatSlots.push({ rule, target, name })
+          }
+        }
+        if (flatSlots.length === 0) {
+          flatSlots.push({ rule: '', target: '', name: '' })
+        }
+        setPathways([{ name: 'Default', slots: flatSlots }])
+      }
+      setEditingPathwayIndex(null)
     } else {
       // No blueprint yet — reset to empty
       setMinCredits(0)
       setMaxCredits(0)
-      setSlots(Array.from({ length: 6 }, (_, i) => ({
-        slot: i + 1, rule: '', target: '', name: ''
-      })))
+      setPathways([{ name: 'Default', slots: [{ rule: '', target: '', name: '' }] }])
+      setEditingPathwayIndex(null)
     }
 
     await fetchCourses(sem)
@@ -168,10 +221,47 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     setLoadingCourses(false)
   }
 
-  function updateSlot(slotNum: number, field: keyof SlotData, value: string) {
-    setSlots(prev => prev.map(s =>
-      s.slot === slotNum ? { ...s, [field]: value } : s
+  function updateSlot(pathwayIdx: number, slotIdx: number, field: keyof SlotData, value: string) {
+    setPathways(prev => prev.map((pw, pi) =>
+      pi === pathwayIdx
+        ? {
+            ...pw,
+            slots: pw.slots.map((s, si) =>
+              si === slotIdx ? { ...s, [field]: value } : s
+            )
+          }
+        : pw
     ))
+  }
+
+  function addSlotToPathway(pathwayIdx: number) {
+    setPathways(prev => prev.map((pw, pi) =>
+      pi === pathwayIdx
+        ? { ...pw, slots: [...pw.slots, { rule: '', target: '', name: '' }] }
+        : pw
+    ))
+  }
+
+  function removeSlotFromPathway(pathwayIdx: number, slotIdx: number) {
+    setPathways(prev => prev.map((pw, pi) =>
+      pi === pathwayIdx
+        ? { ...pw, slots: pw.slots.filter((_, si) => si !== slotIdx) }
+        : pw
+    ))
+  }
+
+  function addPathway() {
+    setPathways(prev => [...prev, { name: '', slots: [{ rule: '', target: '', name: '' }] }])
+    setEditingPathwayIndex(pathways.length)
+  }
+
+  function removePathway(idx: number) {
+    setPathways(prev => prev.filter((_, i) => i !== idx))
+    setEditingPathwayIndex(null)
+  }
+
+  function updatePathwayName(idx: number, name: string) {
+    setPathways(prev => prev.map((pw, i) => i === idx ? { ...pw, name } : pw))
   }
 
   async function handleSaveBlueprint() {
@@ -179,14 +269,46 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       setError('Min and Max credits are required')
       return
     }
+
+    // Validate all pathways have names
+    for (const pw of pathways) {
+      if (!pw.name.trim()) {
+        setError('All pathways must have a name')
+        return
+      }
+      // Filter out empty slots before validation
+      const validSlots = pw.slots.filter(s => s.rule)
+      if (validSlots.length === 0) {
+        setError(`Pathway "${pw.name}" must have at least one configured slot`)
+        return
+      }
+      for (const s of validSlots) {
+        if (!s.target.trim()) {
+          setError(`All slots in pathway "${pw.name}" must have a target`)
+          return
+        }
+        if (!s.name.trim()) {
+          setError(`All slots in pathway "${pw.name}" must have a name`)
+          return
+        }
+      }
+    }
+
     setSaving(true)
     setError('')
     setSuccess('')
 
+    // Build pathways payload: only send non-empty slots, preserve ids
+    const pathwaysPayload = pathways.map(pw => ({
+      ...(pw.id ? { id: pw.id } : {}),
+      name: pw.name,
+      slots: pw.slots.filter(s => s.rule && s.target.trim() && s.name.trim()),
+    }))
+
     const res = await fetch('/api/hod/blueprint', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ semester, min_credits: minCredits, max_credits: maxCredits, slots }),
+      body: JSON.stringify({ semester, min_credits: minCredits, max_credits: maxCredits, pathways: pathwaysPayload }),
     })
     const data = await res.json()
 
@@ -194,6 +316,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     else {
       setSuccess(data.message)
       setTimeout(() => setSuccess(''), 1000)
+      // Refetch to get server-generated IDs
+      fetchBlueprint(semester)
     }
     setSaving(false)
   }
@@ -253,6 +377,203 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       fetchCourses()
     }
     setDeletingCourse(false)
+  }
+
+  // Render a slot editor for a pathway
+  function renderSlotEditor(pathwayIdx: number, slotIdx: number, slot: SlotData) {
+    const fixedKey = `${pathwayIdx}-${slotIdx}`
+    return (
+      <div key={slotIdx} className={styles.slotEditorCard}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <p className={styles.slotEditorTitle}>Paper {slotIdx + 1}</p>
+          {pathways[pathwayIdx].slots.length > 1 && (
+            <button
+              type="button"
+              onClick={() => removeSlotFromPathway(pathwayIdx, slotIdx)}
+              style={{
+                background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer',
+                fontSize: '0.75rem', fontWeight: 600, padding: '0.25rem 0.5rem',
+              }}
+            >
+              ✕ Remove
+            </button>
+          )}
+        </div>
+
+        <div className={styles.fieldGroup}>
+          <div className={styles.field}>
+            <label className={styles.label}>Paper Name</label>
+            <input type="text" className={styles.input}
+              placeholder="e.g. Major 1, MDC, Elective"
+              value={slot.name}
+              onChange={e => updateSlot(pathwayIdx, slotIdx, 'name', e.target.value)} />
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label}>Rule</label>
+            <select className={styles.input} value={slot.rule}
+              onChange={e => {
+                const newRule = e.target.value
+                let newTarget = ''
+                if (newRule === 'POOL_RESTRICTED') {
+                  newTarget = 'POOL-'
+                }
+                updateSlot(pathwayIdx, slotIdx, 'rule', newRule)
+                updateSlot(pathwayIdx, slotIdx, 'target', newTarget)
+              }}>
+              {RULES.map(r => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+          {slot.rule && (
+            <div className={styles.field} style={{ position: 'relative' }}>
+              <label className={styles.label}>
+                Target {(slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED') ? '(Course Code)' :
+                  slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? '(Departments)' :
+                    '(Tag e.g. POOL-A, MDC-1)'}
+              </label>
+              {slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? (
+                <div className={styles.checkboxGroup} style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                  padding: '0.5rem',
+                  border: '1px solid #dde1e7',
+                  borderRadius: '0.4rem',
+                  background: '#ffffff',
+                  maxHeight: '120px',
+                  overflowY: 'auto'
+                }}>
+                  {departments.map(d => {
+                    const selectedCodes = slot.target ? slot.target.split(',').map(c => c.trim()) : [];
+                    const isChecked = selectedCodes.includes(d.code);
+                    return (
+                      <label key={d.id} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        padding: '0.25rem 0.5rem',
+                        border: '1px solid #f0f2f5',
+                        borderRadius: '3px',
+                        background: isChecked ? '#e6f0fa' : '#fafafa'
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={e => {
+                            let newCodes;
+                            if (e.target.checked) {
+                              newCodes = [...selectedCodes, d.code];
+                            } else {
+                              newCodes = selectedCodes.filter(c => c !== d.code);
+                            }
+                            updateSlot(pathwayIdx, slotIdx, 'target', newCodes.join(','));
+                          }}
+                        />
+                        {d.name} ({d.code})
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED') ? (
+                <div style={{ position: 'relative' }}>
+                  <input type="text" className={styles.input}
+                    placeholder="Search & select course..."
+                    value={
+                      fixedOpen[fixedKey]
+                        ? (fixedSearch[fixedKey] ?? '')
+                        : (() => {
+                            const course = courses.find(c => c.course_code === slot.target)
+                            return course ? `${course.course_code} — ${course.title}` : slot.target
+                          })()
+                    }
+                    onFocus={() => {
+                      setFixedOpen(prev => ({ ...prev, [fixedKey]: true }))
+                      setFixedSearch(prev => ({ ...prev, [fixedKey]: '' }))
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => {
+                        setFixedOpen(prev => ({ ...prev, [fixedKey]: false }))
+                      }, 150)
+                    }}
+                    onChange={e => {
+                      const val = e.target.value
+                      setFixedSearch(prev => ({ ...prev, [fixedKey]: val }))
+                    }} />
+                  {fixedOpen[fixedKey] && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #dde1e7',
+                      borderRadius: '0.4rem',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                      maxHeight: '180px',
+                      overflowY: 'auto',
+                      zIndex: 200,
+                    }}>
+                      {courses.length === 0 ? (
+                        <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: '#9ba1ab' }}>
+                          No courses found for Semester {semester}. Add courses first.
+                        </div>
+                      ) : (() => {
+                        const searchStr = (fixedSearch[fixedKey] ?? '').toLowerCase()
+                        const filtered = courses.filter(c =>
+                          c.course_code.toLowerCase().includes(searchStr) ||
+                          c.title.toLowerCase().includes(searchStr)
+                        )
+                        if (filtered.length === 0) {
+                          return (
+                            <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: '#9ba1ab' }}>
+                              No matching courses
+                            </div>
+                          )
+                        }
+                        return filtered.map(c => (
+                          <div key={c.id}
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => {
+                              updateSlot(pathwayIdx, slotIdx, 'target', c.course_code)
+                              setFixedOpen(prev => ({ ...prev, [fixedKey]: false }))
+                            }}
+                            style={{
+                              padding: '0.5rem 0.75rem',
+                              fontSize: '0.75rem',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid #f0f2f5',
+                              color: '#002147'
+                            }}
+                            className={styles.comboboxItem}>
+                            <strong style={{ fontFamily: 'monospace' }}>{c.course_code}</strong> — {c.title}
+                          </div>
+                        ))
+                      })()}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <input type="text" className={styles.input}
+                  placeholder="e.g. POOL-A or MDC-1"
+                  value={slot.target}
+                  onChange={e => {
+                    let val = e.target.value
+                    if (slot.rule === 'POOL_RESTRICTED') {
+                      if (!val.startsWith('POOL-')) {
+                        val = 'POOL-'
+                      }
+                    }
+                    updateSlot(pathwayIdx, slotIdx, 'target', val)
+                  }} />
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -326,10 +647,10 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                   <span style={{ fontSize: '0.78rem', color: '#44474e', fontWeight: 600 }}>
-                    Calculated Credit Bounds for Current Slots:
+                    Overall Credit Bounds (across all pathways):
                   </span>
                   <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#002147' }}>
-                    {totalMin} — {totalMax} credits
+                    {overallMin} — {overallMax} credits
                   </span>
                 </div>
                 {isImpossible && (
@@ -363,192 +684,164 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                     alignItems: 'center',
                     gap: '0.35rem'
                   }}>
-                    ℹ️ <b>Info:</b> The current configured slots require a minimum of {totalMin} credits, which fits below your maximum limit of {maxCredits} credits.
+                    ℹ️ <b>Info:</b> The current configured slots require a minimum of {overallMin} credits, which fits below your maximum limit of {maxCredits} credits.
                   </div>
                 )}
               </div>
 
-              {/* Slot Editors */}
-              <div className={styles.slotsEditorContainer}>
-                {slots.map(slot => (
-                  <div key={slot.slot} className={styles.slotEditorCard}>
-                    <p className={styles.slotEditorTitle}>Paper {slot.slot}</p>
-
-                    <div className={styles.fieldGroup}>
-                      <div className={styles.field}>
-                        <label className={styles.label}>Paper Name</label>
-                        <input type="text" className={styles.input}
-                          placeholder="e.g. Major 1, MDC, Elective"
-                          value={slot.name}
-                          onChange={e => updateSlot(slot.slot, 'name', e.target.value)} />
-                      </div>
-                      <div className={styles.field}>
-                        <label className={styles.label}>Rule</label>
-                        <select className={styles.input} value={slot.rule}
-                          onChange={e => {
-                            const newRule = e.target.value
-                            let newTarget = ''
-                            if (newRule === 'POOL_RESTRICTED') {
-                              newTarget = 'POOL-'
-                            }
-                            updateSlot(slot.slot, 'rule', newRule)
-                            updateSlot(slot.slot, 'target', newTarget)
-                          }}>
-                          {RULES.map(r => (
-                            <option key={r.value} value={r.value}>{r.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      {slot.rule && (
-                        <div className={styles.field} style={{ position: 'relative' }}>
-                          <label className={styles.label}>
-                            Target {slot.rule === 'FIXED' ? '(Course Code)' :
-                              slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? '(Departments)' :
-                                '(Tag e.g. POOL-A, MDC-1)'}
-                          </label>
-                          {slot.rule === 'DEPT_RESTRICTED' || slot.rule === 'EXCLUDE_DEPT' ? (
-                            <div className={styles.checkboxGroup} style={{
-                              display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: '0.5rem',
-                              padding: '0.5rem',
-                              border: '1px solid #dde1e7',
-                              borderRadius: '0.4rem',
-                              background: '#ffffff',
-                              maxHeight: '120px',
-                              overflowY: 'auto'
-                            }}>
-                              {departments.map(d => {
-                                const selectedCodes = slot.target ? slot.target.split(',').map(c => c.trim()) : [];
-                                const isChecked = selectedCodes.includes(d.code);
-                                return (
-                                  <label key={d.id} style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.25rem',
-                                    fontSize: '0.75rem',
-                                    cursor: 'pointer',
-                                    padding: '0.25rem 0.5rem',
-                                    border: '1px solid #f0f2f5',
-                                    borderRadius: '3px',
-                                    background: isChecked ? '#e6f0fa' : '#fafafa'
-                                  }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      onChange={e => {
-                                        let newCodes;
-                                        if (e.target.checked) {
-                                          newCodes = [...selectedCodes, d.code];
-                                        } else {
-                                          newCodes = selectedCodes.filter(c => c !== d.code);
-                                        }
-                                        updateSlot(slot.slot, 'target', newCodes.join(','));
-                                      }}
-                                    />
-                                    {d.name} ({d.code})
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          ) : slot.rule === 'FIXED' ? (
-                            <div style={{ position: 'relative' }}>
-                              <input type="text" className={styles.input}
-                                placeholder="Search & select course..."
-                                value={
-                                  fixedOpen[slot.slot]
-                                    ? (fixedSearch[slot.slot] ?? '')
-                                    : (() => {
-                                        const course = courses.find(c => c.course_code === slot.target)
-                                        return course ? `${course.course_code} — ${course.title}` : slot.target
-                                      })()
-                                }
-                                onFocus={() => {
-                                  setFixedOpen(prev => ({ ...prev, [slot.slot]: true }))
-                                  setFixedSearch(prev => ({ ...prev, [slot.slot]: '' }))
-                                }}
-                                onBlur={() => {
-                                  setTimeout(() => {
-                                    setFixedOpen(prev => ({ ...prev, [slot.slot]: false }))
-                                  }, 150)
-                                }}
-                                onChange={e => {
-                                  const val = e.target.value
-                                  setFixedSearch(prev => ({ ...prev, [slot.slot]: val }))
-                                }} />
-                              {fixedOpen[slot.slot] && (
-                                <div style={{
-                                  position: 'absolute',
-                                  top: '100%',
-                                  left: 0,
-                                  right: 0,
-                                  backgroundColor: '#ffffff',
-                                  border: '1px solid #dde1e7',
-                                  borderRadius: '0.4rem',
-                                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                                  maxHeight: '180px',
-                                  overflowY: 'auto',
-                                  zIndex: 200,
-                                }}>
-                                  {courses.length === 0 ? (
-                                    <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: '#9ba1ab' }}>
-                                      No courses found for Semester {semester}. Add courses first.
-                                    </div>
-                                  ) : (() => {
-                                    const searchStr = (fixedSearch[slot.slot] ?? '').toLowerCase()
-                                    const filtered = courses.filter(c =>
-                                      c.course_code.toLowerCase().includes(searchStr) ||
-                                      c.title.toLowerCase().includes(searchStr)
-                                    )
-                                    if (filtered.length === 0) {
-                                      return (
-                                        <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: '#9ba1ab' }}>
-                                          No matching courses
-                                        </div>
-                                      )
-                                    }
-                                    return filtered.map(c => (
-                                      <div key={c.id}
-                                        onMouseDown={e => e.preventDefault()}
-                                        onClick={() => {
-                                          updateSlot(slot.slot, 'target', c.course_code)
-                                          setFixedOpen(prev => ({ ...prev, [slot.slot]: false }))
-                                        }}
-                                        style={{
-                                          padding: '0.5rem 0.75rem',
-                                          fontSize: '0.75rem',
-                                          cursor: 'pointer',
-                                          borderBottom: '1px solid #f0f2f5',
-                                          color: '#002147'
-                                        }}
-                                        className={styles.comboboxItem}>
-                                        <strong style={{ fontFamily: 'monospace' }}>{c.course_code}</strong> — {c.title}
-                                      </div>
-                                    ))
-                                  })()}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <input type="text" className={styles.input}
-                              placeholder="e.g. POOL-A or MDC-1"
-                              value={slot.target}
-                              onChange={e => {
-                                let val = e.target.value
-                                if (slot.rule === 'POOL_RESTRICTED') {
-                                  if (!val.startsWith('POOL-')) {
-                                    val = 'POOL-'
-                                  }
-                                }
-                                updateSlot(slot.slot, 'target', val)
-                              }} />
-                          )}
-                        </div>
-                      )}
-                    </div>
+              {/* ── PATHWAY MANAGER ── */}
+              {editingPathwayIndex === null ? (
+                // Pathway list view
+                <>
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    marginBottom: '1rem'
+                  }}>
+                    <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#002147' }}>
+                      Pathways ({pathways.length})
+                    </p>
+                    <button
+                      type="button"
+                      onClick={addPathway}
+                      style={{
+                        background: '#002147', color: '#fff', border: 'none', borderRadius: '0.4rem',
+                        padding: '0.45rem 1rem', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      + Add Pathway
+                    </button>
                   </div>
-                ))}
-              </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                    {pathways.map((pw, idx) => {
+                      const { min, max } = getPathwayCreditRange(pw)
+                      const validSlots = pw.slots.filter(s => s.rule)
+                      return (
+                        <div key={idx} style={{
+                          background: '#ffffff',
+                          border: '1.5px solid #dde1e7',
+                          borderRadius: '0.45rem',
+                          padding: '0.85rem 1rem',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.02)',
+                        }}>
+                          <div>
+                            <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#002147', marginBottom: '0.2rem' }}>
+                              {pw.name || <span style={{ color: '#9ba1ab', fontStyle: 'italic' }}>Untitled Pathway</span>}
+                            </p>
+                            <p style={{ fontSize: '0.72rem', color: '#6b7280' }}>
+                              {validSlots.length} slot{validSlots.length !== 1 ? 's' : ''} • {min}–{max} credits
+                            </p>
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => setEditingPathwayIndex(idx)}
+                              style={{
+                                background: '#e6f0fa', color: '#002147', border: '1px solid #bfdbfe',
+                                borderRadius: '0.35rem', padding: '0.35rem 0.75rem',
+                                fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
+                              }}
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removePathway(idx)}
+                              disabled={pathways.length <= 1}
+                              style={{
+                                background: pathways.length <= 1 ? '#f3f4f6' : '#fee2e2',
+                                color: pathways.length <= 1 ? '#9ba1ab' : '#dc2626',
+                                border: `1px solid ${pathways.length <= 1 ? '#e5e7eb' : '#fca5a5'}`,
+                                borderRadius: '0.35rem', padding: '0.35rem 0.75rem',
+                                fontSize: '0.72rem', fontWeight: 600,
+                                cursor: pathways.length <= 1 ? 'not-allowed' : 'pointer',
+                              }}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                // Pathway editor view
+                <>
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    marginBottom: '1rem',
+                  }}>
+                    <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#002147' }}>
+                      Editing Pathway
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setEditingPathwayIndex(null)}
+                      style={{
+                        background: '#e6f0fa', color: '#002147', border: '1px solid #bfdbfe',
+                        borderRadius: '0.4rem', padding: '0.45rem 1rem',
+                        fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      ← Back to Pathways
+                    </button>
+                  </div>
+
+                  <div style={{
+                    background: '#ffffff', border: '1.5px solid #dde1e7', borderRadius: '0.45rem',
+                    padding: '1rem', marginBottom: '1rem',
+                  }}>
+                    <label className={styles.label}>Pathway Name</label>
+                    <input
+                      type="text"
+                      className={styles.input}
+                      placeholder="e.g. Research Track, Industry Track"
+                      value={pathways[editingPathwayIndex].name}
+                      onChange={e => updatePathwayName(editingPathwayIndex, e.target.value)}
+                    />
+                  </div>
+
+                  {/* Per-pathway credit range */}
+                  {(() => {
+                    const { min, max } = getPathwayCreditRange(pathways[editingPathwayIndex])
+                    return (
+                      <div style={{
+                        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.35rem',
+                        padding: '0.5rem 0.75rem', marginBottom: '1rem',
+                        fontSize: '0.75rem', color: '#44474e',
+                      }}>
+                        Pathway credit range: <b>{min} — {max}</b>
+                      </div>
+                    )
+                  })()}
+
+                  <div className={styles.slotsEditorContainer}>
+                    {pathways[editingPathwayIndex].slots.map((slot, slotIdx) =>
+                      renderSlotEditor(editingPathwayIndex, slotIdx, slot)
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => addSlotToPathway(editingPathwayIndex)}
+                    disabled={pathways[editingPathwayIndex].slots.length >= 10}
+                    style={{
+                      background: '#ffffff', color: '#002147', border: '1.5px dashed #bfdbfe',
+                      borderRadius: '0.4rem', padding: '0.6rem 1rem', width: '100%',
+                      fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+                      marginTop: '0.75rem', marginBottom: '1.5rem',
+                    }}
+                  >
+                    + Add Paper Slot
+                  </button>
+                </>
+              )}
+
+              {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{error}</div>}
 
               <div style={{
                 position: 'sticky',

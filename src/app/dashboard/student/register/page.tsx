@@ -116,12 +116,19 @@ interface BlueprintSlot {
   options?: Course[]
 }
 
+interface PathwaySummary {
+  id: string
+  name: string
+}
+
 interface BlueprintData {
   window_status: 'OPEN' | 'CLOSED'
   deadline: string
   min_credits: number
   max_credits: number
-  slots: BlueprintSlot[]
+  slots?: BlueprintSlot[]
+  pathways?: PathwaySummary[]
+  pathway_id?: string
 }
 
 interface StudentInfo {
@@ -129,7 +136,7 @@ interface StudentInfo {
   current_semester: number
 }
 
-type PageState = 'loading_blueprint' | 'closed' | 'ready' | 'submitting' | 'submitted'
+type PageState = 'loading_blueprint' | 'closed' | 'pathway_picker' | 'loading_slots' | 'ready' | 'submitting' | 'submitted'
 
 export default function RegisterPage() {
   useBfcacheGuard()
@@ -137,8 +144,10 @@ export default function RegisterPage() {
   const [pageState, setPageState] = useState<PageState>('loading_blueprint')
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null)
   const [blueprint, setBlueprint] = useState<BlueprintData | null>(null)
+  const [resolvedSlots, setResolvedSlots] = useState<BlueprintSlot[]>([])
+  const [selectedPathwayId, setSelectedPathwayId] = useState<string | null>(null)
   const [selectedCourses, setSelectedCourses] = useState<Record<number, string>>({})
-  const [existingSubmission, setExistingSubmission] = useState<Record<string, string> | null>(null)
+  const [existingSubmission, setExistingSubmission] = useState<Record<string, any> | null>(null)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
@@ -167,15 +176,50 @@ export default function RegisterPage() {
         return
       }
 
+      // Store existing registration data
       if (data.existing) {
-        const existing = data.existing
-        const prefilled: Record<number, string> = {}
-        for (let i = 1; i <= 6; i++) {
-          const courseId = existing[`slot_${i}_course_id`]
-          if (courseId) prefilled[i] = courseId
+        setExistingSubmission(data.existing)
+      }
+
+      // Single pathway — slots already resolved
+      if (data.data.slots) {
+        setResolvedSlots(data.data.slots)
+        const pathwayId = data.data.pathway_id ?? null
+        setSelectedPathwayId(pathwayId)
+
+        // Prefill from existing submission
+        if (data.existing) {
+          const existing = data.existing
+          if (existing.selections && existing.selections.courses) {
+            // Use selections JSONB
+            const prefilled: Record<number, string> = {}
+            existing.selections.courses.forEach((courseId: string, idx: number) => {
+              if (courseId) prefilled[idx + 1] = courseId
+            })
+            setSelectedCourses(prefilled)
+          } else {
+            // Fallback: use flat columns
+            const prefilled: Record<number, string> = {}
+            for (let i = 1; i <= 6; i++) {
+              const courseId = existing[`slot_${i}_course_id`]
+              if (courseId) prefilled[i] = courseId
+            }
+            setSelectedCourses(prefilled)
+          }
         }
-        setSelectedCourses(prefilled)
-        setExistingSubmission(existing)
+
+        setPageState('ready')
+        return
+      }
+
+      // Multiple pathways — show picker
+      if (data.data.pathways && data.data.pathways.length > 1) {
+        // Pre-select existing pathway if student already submitted
+        if (data.existing?.pathway_id) {
+          setSelectedPathwayId(data.existing.pathway_id)
+        }
+        setPageState('pathway_picker')
+        return
       }
 
       setPageState('ready')
@@ -184,11 +228,41 @@ export default function RegisterPage() {
     loadBlueprint()
   }, [])
 
+  async function selectPathway(pathwayId: string) {
+    setSelectedPathwayId(pathwayId)
+    setPageState('loading_slots')
+    setError('')
+
+    const response = await fetch(`/api/registrations/pathway-slots?pathway_id=${encodeURIComponent(pathwayId)}`)
+    const data = await response.json()
+
+    if (!response.ok) {
+      setError(data.error ?? 'Failed to load pathway courses.')
+      setPageState('pathway_picker')
+      return
+    }
+
+    setResolvedSlots(data.data.slots)
+
+    // Prefill if existing submission matches this pathway
+    if (existingSubmission?.pathway_id === pathwayId && existingSubmission?.selections?.courses) {
+      const prefilled: Record<number, string> = {}
+      existingSubmission.selections.courses.forEach((courseId: string, idx: number) => {
+        if (courseId) prefilled[idx + 1] = courseId
+      })
+      setSelectedCourses(prefilled)
+    } else {
+      setSelectedCourses({})
+    }
+
+    setPageState('ready')
+  }
+
   function calculateCredits(): number {
-    if (!blueprint) return 0
+    if (!resolvedSlots.length) return 0
     let total = 0
-    blueprint.slots.forEach(slot => {
-      if (slot.rule === 'FIXED' && slot.course) {
+    resolvedSlots.forEach(slot => {
+      if ((slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED') && slot.course) {
         total += slot.course.credits
       } else {
         const selectedId = selectedCourses[slot.slot]
@@ -215,11 +289,11 @@ export default function RegisterPage() {
   }
 
   async function handleSubmit() {
-    if (!blueprint || !studentInfo) return
+    if (!blueprint || !studentInfo || !selectedPathwayId) return
 
     const courses: string[] = []
-    for (const slot of blueprint.slots) {
-      if (slot.rule === 'FIXED' && slot.course) {
+    for (const slot of resolvedSlots) {
+      if ((slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED') && slot.course) {
         courses.push(slot.course.id)
       } else {
         const selected = selectedCourses[slot.slot]
@@ -239,6 +313,7 @@ export default function RegisterPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         semester: Number(studentInfo.current_semester),
+        pathway_id: selectedPathwayId,
         courses,
       }),
     })
@@ -261,6 +336,13 @@ export default function RegisterPage() {
     setLoggingOut(true)
     await fetch('/api/auth/logout', { method: 'POST' })
     window.location.href = '/login'
+  }
+
+  function handleChangeTrack() {
+    setResolvedSlots([])
+    setSelectedCourses({})
+    setSelectedPathwayId(existingSubmission?.pathway_id ?? null)
+    setPageState('pathway_picker')
   }
 
   const totalCredits = calculateCredits()
@@ -338,8 +420,54 @@ export default function RegisterPage() {
           </div>
         )}
 
+        {/* Pathway Picker */}
+        {pageState === 'pathway_picker' && blueprint?.pathways && (
+          <div>
+            <p className={styles.sectionTitle}>Select Your Track</p>
+            <p style={{ fontSize: '0.82rem', color: '#6b7280', marginBottom: '1.25rem' }}>
+              Your department offers multiple course tracks. Please select the track you want to register for.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              {blueprint.pathways.map(pw => (
+                <button
+                  key={pw.id}
+                  type="button"
+                  onClick={() => selectPathway(pw.id)}
+                  style={{
+                    background: selectedPathwayId === pw.id ? '#e6f0fa' : '#ffffff',
+                    border: `2px solid ${selectedPathwayId === pw.id ? '#002147' : '#dde1e7'}`,
+                    borderRadius: '0.5rem',
+                    padding: '1rem 1.25rem',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#002147', marginBottom: '0.15rem' }}>
+                    {pw.name}
+                  </p>
+                  <p style={{ fontSize: '0.72rem', color: '#6b7280' }}>
+                    Click to view available courses for this track
+                  </p>
+                </button>
+              ))}
+            </div>
+
+            {error && <div className={styles.errorBanner}>{error}</div>}
+          </div>
+        )}
+
+        {/* Loading Pathway Slots */}
+        {pageState === 'loading_slots' && (
+          <div className={styles.loadingState}>
+            <div className={styles.spinner} />
+            <p className={styles.loadingText}>Loading track courses...</p>
+          </div>
+        )}
+
         {/* Ready / Submitting / Submitted */}
-        {(pageState === 'ready' || pageState === 'submitting' || pageState === 'submitted') && blueprint && (
+        {(pageState === 'ready' || pageState === 'submitting' || pageState === 'submitted') && blueprint && resolvedSlots.length > 0 && (
           <>
             {/* Window Status Banner */}
             <div className={`${styles.windowBanner} ${blueprint.window_status === 'OPEN' ? styles.open : styles.closed}`}>
@@ -348,6 +476,22 @@ export default function RegisterPage() {
                 ? `Registration open — closes ${new Date(blueprint.deadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
                 : 'Registration window is closed'}
             </div>
+
+            {/* Change Track button (only for multi-pathway) */}
+            {blueprint.pathways && blueprint.pathways.length > 1 && pageState === 'ready' && (
+              <button
+                type="button"
+                onClick={handleChangeTrack}
+                style={{
+                  background: '#f8fafc', border: '1.5px solid #dde1e7', borderRadius: '0.4rem',
+                  padding: '0.5rem 1rem', fontSize: '0.78rem', fontWeight: 600,
+                  color: '#002147', cursor: 'pointer', marginBottom: '1rem', width: '100%',
+                  textAlign: 'center',
+                }}
+              >
+                ← Change Track
+              </button>
+            )}
 
             {pageState === 'submitted' && (
               <div className={styles.readOnlyBanner}>
@@ -371,7 +515,7 @@ export default function RegisterPage() {
             <p className={styles.sectionTitle}>Select Your Papers</p>
 
             <div className={styles.slotsContainer}>
-              {blueprint.slots.map(slot => (
+              {resolvedSlots.map(slot => (
                 <div
                   key={slot.slot}
                   className={`${styles.slotCard} ${pageState === 'ready' ? styles.active : ''}`}
@@ -380,7 +524,7 @@ export default function RegisterPage() {
                     <span className={styles.slotLabel}>{slot.name}</span>
                   </div>
 
-                  {slot.rule === 'FIXED' && slot.course && (
+                  {(slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED') && slot.course && (
                     <div className={styles.fixedCourse}>
                       <div>
                         <p className={styles.fixedCourseTitle}>{slot.course.title}</p>
@@ -390,7 +534,7 @@ export default function RegisterPage() {
                     </div>
                   )}
 
-                  {slot.rule !== 'FIXED' && slot.options && (
+                  {slot.rule !== 'FIXED' && slot.rule !== 'CAMPUS_FIXED' && slot.options && (
                     <>
                       <CustomSelect
                         options={slot.options}
