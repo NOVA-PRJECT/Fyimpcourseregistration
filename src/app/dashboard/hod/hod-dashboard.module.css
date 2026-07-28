@@ -180,6 +180,32 @@
   cursor: not-allowed;
 }
 
+.exportBtn {
+  padding: 0.5rem 1rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0f5132;
+  background: #d1e7dd;
+  border: 1px solid #badbcc;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.exportBtn:hover:not(:disabled) {
+  background: #bcd0c7;
+}
+
+.exportBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Stats row */
 .statsRow {
   display: grid;

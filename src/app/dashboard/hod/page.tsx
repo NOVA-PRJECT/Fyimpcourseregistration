@@ -8,6 +8,7 @@ import Papa from 'papaparse'
 import styles from './hod-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 import { Eye, EyeOff } from 'lucide-react'
+import { downloadStudentsExcel } from '@/core/utils/exportExcel'
 
 // ── Types ──
 interface HodInfo {
@@ -117,6 +118,33 @@ export default function HodDashboard() {
   const [defaulterError, setDefaulterError] = useState('')
   const [copied, setCopied] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+
+  // ── Excel Export State & Function ──
+  const [exportingExcel, setExportingExcel] = useState(false)
+
+  async function handleExportExcel(sem?: number | 'all') {
+    const targetSem = sem ?? (activeTab === 'students' ? studentSemester : defaulterSemester)
+    setExportingExcel(true)
+    try {
+      const semParam = targetSem === 'all' ? 'all' : targetSem
+      const response = await fetch(`/api/hod/export-students-excel?semester=${semParam}`)
+      const result = await response.json()
+
+      if (!response.ok) {
+        setStudentError(result.error ?? 'Failed to export Excel')
+      } else if (result.rows) {
+        if (result.rows.length === 0) {
+          alert('No student records found to export.')
+        } else {
+          downloadStudentsExcel(result.rows, targetSem === 'all' ? 'All_Semesters' : `Sem_${targetSem}`)
+        }
+      }
+    } catch {
+      setStudentError('Failed to export Excel file')
+    } finally {
+      setExportingExcel(false)
+    }
+  }
 
   useEffect(() => {
     async function loadHodInfo() {
@@ -602,6 +630,14 @@ export default function HodDashboard() {
               <button className={styles.addBtn} onClick={() => { setShowAddModal(true); setStudentError(''); setStudentSuccess('') }}>
                 + Add Student
               </button>
+              <button
+                className={styles.exportBtn}
+                onClick={() => handleExportExcel(studentSemester)}
+                disabled={exportingExcel}
+                title="Download Excel sheet with student details and all selected papers"
+              >
+                {exportingExcel ? 'Exporting...' : '📊 Export Excel (Students & Papers)'}
+              </button>
             </div>
 
             <div className={styles.tableWrapper}>
@@ -770,6 +806,14 @@ export default function HodDashboard() {
                 <option value="all">All Semesters</option>
                 {[1,2,3,4,5,6,7,8,9,10].map(s => <option key={s} value={s}>Semester {s}</option>)}
               </select>
+              <button
+                className={styles.exportBtn}
+                onClick={() => handleExportExcel(defaulterSemester)}
+                disabled={exportingExcel}
+                title="Download Excel sheet with student details and all selected papers"
+              >
+                {exportingExcel ? 'Exporting...' : '📊 Export Excel (Students & Papers)'}
+              </button>
             </div>
 
             {loadingDefaulters && (
