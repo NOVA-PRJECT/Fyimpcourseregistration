@@ -736,3 +736,344 @@
   color: #1a6b3c;
   margin-bottom: 1rem;
 }
+
+/* ══════════════════════════════════════
+   PDF EXPORT MODAL & DEPARTMENT FILTER STYLES
+══════════════════════════════════════ */
+
+.sectionHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tableFilterSelect {
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #dde1e7;
+  border-radius: 0.4rem;
+  background: #ffffff;
+  color: #002147;
+  cursor: pointer;
+  outline: none;
+}
+
+.tableFilterSelect:focus {
+  border-color: #002147;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 33, 71, 0.45);
+  backdrop-filter: blur(3px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+
+.modal {
+  background: #ffffff;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 28rem;
+  box-shadow: 0 12px 36px rgba(0, 33, 71, 0.22);
+  animation: modalReveal 0.2s ease both;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@keyframes modalReveal {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+}
+
+.modalTitle {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #002147;
+  margin: 0;
+}
+
+.modalCloseBtn {
+  background: transparent;
+  border: none;
+  font-size: 1.1rem;
+  color: #9ba1ab;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.3rem;
+  transition: all 0.15s ease;
+}
+
+.modalCloseBtn:hover {
+  background: #f0f2f5;
+  color: #002147;
+}
+
+.modalSubtitle {
+  font-size: 0.78rem;
+  color: #44474e;
+  margin: 0 0 1.25rem 0;
+  line-height: 1.45;
+}
+
+/* Radio options */
+.pdfOptionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+}
+
+.radioOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.6rem;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.radioOption:hover {
+  border-color: #002147;
+  background: #ffffff;
+}
+
+.radioOptionActive {
+  border-color: #002147;
+  background: #f0f4ff;
+}
+
+.radioInput {
+  margin-top: 0.25rem;
+  accent-color: #002147;
+  cursor: pointer;
+}
+
+.radioOptionContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.radioOptionTitle {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #002147;
+}
+
+.radioOptionDesc {
+  font-size: 0.72rem;
+  color: #6b7280;
+}
+
+/* Custom Department Checklist */
+.customDeptContainer {
+  background: #f8f9fa;
+  border: 1px solid #dde1e7;
+  border-radius: 0.6rem;
+  padding: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.deptQuickHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.65rem;
+}
+
+.deptQuickTitle {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #002147;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.deptQuickActions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.quickActionBtn {
+  background: #ffffff;
+  border: 1px solid #dde1e7;
+  border-radius: 0.35rem;
+  color: #002147;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quickActionBtn:hover {
+  background: #002147;
+  color: #ffffff;
+  border-color: #002147;
+}
+
+.deptChecklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.deptCheckItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.65rem;
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-radius: 0.45rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.deptCheckItem:hover {
+  border-color: #002147;
+}
+
+.deptCheckItemActive {
+  background: #ffffff;
+  border-color: #002147;
+  box-shadow: 0 1px 4px rgba(0, 33, 71, 0.08);
+}
+
+.checkboxInput {
+  accent-color: #002147;
+  margin-right: 0.5rem;
+  cursor: pointer;
+}
+
+.deptCheckText {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.deptCheckName {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #191c1d;
+}
+
+.deptCheckCodeBadge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: #f0f4f8;
+  color: #002147;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.3rem;
+  font-family: monospace;
+}
+
+.deptCheckCount {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #002147;
+}
+
+/* Warnings and summary */
+.pdfWarningBanner {
+  background: #fdf2f2;
+  border: 1px solid #f5c6c6;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.75rem;
+  color: #c0392b;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.pdfSummaryBox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f0f4ff;
+  border: 1px solid #c5d0f5;
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.78rem;
+  color: #002147;
+  margin-bottom: 1.25rem;
+}
+
+.pdfSummaryCount {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #002147;
+}
+
+/* Modal Actions */
+.modalActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.modalCancelBtn {
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.55rem 1rem;
+  border-radius: 0.45rem;
+  border: 1px solid #dde1e7;
+  background: #ffffff;
+  color: #44474e;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modalCancelBtn:hover:not(:disabled) {
+  background: #f0f2f5;
+  color: #191c1d;
+}
+
+.modalConfirmBtn {
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.55rem 1.1rem;
+  border-radius: 0.45rem;
+  border: none;
+  background: #c9a227;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modalConfirmBtn:hover:not(:disabled) {
+  background: #b8911f;
+}
+
+.modalConfirmBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
