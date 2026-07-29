@@ -1077,3 +1077,339 @@
   cursor: not-allowed;
 }
 
+/* ══════════════════════════════════════
+   PAPER FILTER & CUSTOM SELECT STYLES
+══════════════════════════════════════ */
+
+.filterCard {
+  background: #ffffff;
+  border: 1.5px solid #dde1e7;
+  border-top: 4px solid #c9a227;
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 2px 6px rgba(0, 33, 71, 0.04);
+}
+
+.filterCardHeader {
+  margin-bottom: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filterCardTitle {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #9ba1ab;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0;
+}
+
+.filterControlsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+@media (min-width: 640px) {
+  .filterControlsGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.filterLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #44474e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.filterSelect {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #002147;
+  background: #f8f9fa;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23002147' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  box-sizing: border-box;
+}
+
+.filterSelect:focus {
+  border-color: #002147;
+  background-color: #ffffff;
+}
+
+.paperSelectRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .paperSelectRow {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+}
+
+.paperSelectGroup {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+/* Custom Select Dropdown (Paper Select) */
+.customSelectWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.customSelectTrigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 2.25rem 0.55rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: #191c1d;
+  background: #f8f9fa;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  text-align: left;
+  position: relative;
+  min-height: 2.75rem;
+  box-sizing: border-box;
+}
+
+.customSelectTrigger:focus {
+  border-color: #002147;
+  background-color: #ffffff;
+}
+
+.customSelectTrigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.triggerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.triggerTitle {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #002147;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.triggerMeta {
+  font-size: 0.68rem;
+  color: #5b606a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.placeholderText {
+  color: #727782;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.triggerArrow {
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid #002147;
+  pointer-events: none;
+  transition: transform 0.2s ease;
+}
+
+.triggerArrowOpen {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.customSelectDropdown {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: 100%;
+  background: #ffffff;
+  border: 1.5px solid #002147;
+  border-radius: 0.5rem;
+  box-shadow: 0 6px 20px rgba(0, 33, 71, 0.18);
+  z-index: 1000;
+  max-height: 16rem;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.customOptionNoData {
+  padding: 0.85rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #9ba1ab;
+}
+
+.customOption {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid #f0f2f5;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.customOption:last-child {
+  border-bottom: none;
+}
+
+.customOption:hover {
+  background: #f0f4ff;
+}
+
+.customOption.selected {
+  background: #e8f0fe;
+  border-left: 3px solid #002147;
+}
+
+.placeholderOption {
+  font-size: 0.8rem;
+  color: #9ba1ab;
+  font-style: italic;
+}
+
+.optionUpper {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.optionTitle {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #002147;
+}
+
+.optionCode {
+  font-size: 0.72rem;
+  color: #5b606a;
+  font-family: monospace;
+}
+
+.optionLower {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.optionSemTag {
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: #f0f4f8;
+  color: #44474e;
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.3rem;
+  border: 1px solid #dde1e7;
+}
+
+.optionCountBadge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #16a34a;
+  background: #dcfce7;
+  padding: 0.12rem 0.5rem;
+  border-radius: 2rem;
+}
+
+/* ══════════════════════════════════════
+   SECTION DIVIDER & DETAILS CONTAINER
+══════════════════════════════════════ */
+
+.sectionDivider {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 1.75rem 0 1.25rem 0;
+  width: 100%;
+}
+
+.sectionDividerLine {
+  flex: 1;
+  height: 1.5px;
+  background: #cbd5e1;
+}
+
+.sectionDividerBadge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #002147;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  padding: 0.35rem 0.85rem;
+  border-radius: 2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.detailsContainer {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-top: 4px solid #002147;
+  border-radius: 0.85rem;
+  padding: 1.25rem;
+  box-shadow: 0 6px 20px rgba(0, 33, 71, 0.07);
+  animation: fadeInDetails 0.25s ease both;
+}
+
+@keyframes fadeInDetails {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
+

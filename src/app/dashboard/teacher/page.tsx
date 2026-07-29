@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import styles from './teacher-dashboard.module.css'
@@ -10,6 +10,15 @@ interface Course {
   id: string
   course_code: string
   title: string
+  semester?: number
+  department_id?: string
+  enrolled_count?: number
+}
+
+interface Department {
+  id: string
+  name: string
+  code: string
 }
 
 interface Student {
@@ -33,14 +42,117 @@ interface DeptOption {
   count: number
 }
 
+function CustomPaperSelect({
+  courses,
+  selectedCourseId,
+  onSelect,
+  disabled = false,
+  placeholder = "— Select a Paper / Course —"
+}: {
+  courses: Course[]
+  selectedCourseId: string
+  onSelect: (courseId: string) => void
+  disabled?: boolean
+  placeholder?: string
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const selectedCourse = courses.find(c => c.id === selectedCourseId)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  return (
+    <div ref={containerRef} className={styles.customSelectWrapper}>
+      <button
+        type="button"
+        className={styles.customSelectTrigger}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+      >
+        {selectedCourse ? (
+          <div className={styles.triggerContent}>
+            <span className={styles.triggerTitle}>{selectedCourse.title} ({selectedCourse.course_code})</span>
+            <span className={styles.triggerMeta}>
+              {selectedCourse.semester ? `Sem ${selectedCourse.semester}` : 'Paper'} • {selectedCourse.enrolled_count ?? 0} registered
+            </span>
+          </div>
+        ) : (
+          <span className={styles.placeholderText}>{placeholder}</span>
+        )}
+        <span className={`${styles.triggerArrow} ${isOpen ? styles.triggerArrowOpen : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className={styles.customSelectDropdown}>
+          {courses.length === 0 ? (
+            <div className={styles.customOptionNoData}>No papers available for selected filters</div>
+          ) : (
+            <>
+              {placeholder && (
+                <div
+                  className={`${styles.customOption} ${!selectedCourseId ? styles.selected : ''}`}
+                  onClick={() => {
+                    onSelect('')
+                    setIsOpen(false)
+                  }}
+                >
+                  <span className={styles.placeholderOption}>{placeholder}</span>
+                </div>
+              )}
+              {courses.map(course => (
+                <div
+                  key={course.id}
+                  className={`${styles.customOption} ${selectedCourseId === course.id ? styles.selected : ''}`}
+                  onClick={() => {
+                    onSelect(course.id)
+                    setIsOpen(false)
+                  }}
+                >
+                  <div className={styles.optionUpper}>
+                    <span className={styles.optionTitle}>{course.title}</span>
+                    <span className={styles.optionCode}>({course.course_code})</span>
+                  </div>
+                  <div className={styles.optionLower}>
+                    <span className={styles.optionSemTag}>
+                      {course.semester ? `Semester ${course.semester}` : 'Paper'}
+                    </span>
+                    <span className={styles.optionCountBadge}>
+                      👥 {course.enrolled_count ?? 0} registered
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function TeacherDashboard() {
   useBfcacheGuard()
   const router = useRouter()
-  const [searchQuery, setSearchQuery] = useState('')
   const [teacherName, setTeacherName] = useState('')
   const [loadingTeacher, setLoadingTeacher] = useState(true)
+  const [departments, setDepartments] = useState<Department[]>([])
   const [courses, setCourses] = useState<Course[]>([])
+  
+  // Filter States (Order: 1. Semester, 2. Department)
+  const [selectedSemester, setSelectedSemester] = useState('all')
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState('all')
   const [selectedCourseId, setSelectedCourseId] = useState('')
+
   const [loading, setLoading] = useState(false)
   const [rosterData, setRosterData] = useState<RosterData | null>(null)
   const [error, setError] = useState('')
@@ -65,11 +177,39 @@ export default function TeacherDashboard() {
       }
 
       setTeacherName(data.teacherName)
-      setCourses(data.courses)
+      setDepartments(data.departments ?? [])
+      setCourses(data.courses ?? [])
       setLoadingTeacher(false)
     }
     loadData()
   }, [])
+
+  // Derive unique semesters present in fetched courses
+  const availableSemesters = useMemo(() => {
+    const sems = new Set<number>()
+    courses.forEach(c => {
+      if (c.semester) sems.add(c.semester)
+    })
+    if (sems.size === 0) return [1, 2, 3, 4, 5, 6, 7, 8]
+    return Array.from(sems).sort((a, b) => a - b)
+  }, [courses])
+
+  // Filter courses by selected semester first, then department
+  const filteredCourses = useMemo(() => {
+    return courses.filter(c => {
+      const matchSem = selectedSemester === 'all' || (c.semester !== undefined && c.semester.toString() === selectedSemester)
+      const matchDept = selectedDepartmentId === 'all' || c.department_id === selectedDepartmentId
+      return matchSem && matchDept
+    })
+  }, [courses, selectedSemester, selectedDepartmentId])
+
+  // Reset selected paper if it is no longer valid under new filters
+  useEffect(() => {
+    if (selectedCourseId && !filteredCourses.some(c => c.id === selectedCourseId)) {
+      setSelectedCourseId('')
+      setRosterData(null)
+    }
+  }, [filteredCourses, selectedCourseId])
 
   // Derive unique departments from roster data
   const deptOptions: DeptOption[] = useMemo(() => {
@@ -118,15 +258,16 @@ export default function TeacherDashboard() {
     })
   }, [rosterData, tableDeptFilter])
 
-  async function handleFetch() {
-    if (!selectedCourseId) { setError('Please select a course first'); return }
+  async function handleFetchCourse(targetCourseId?: string) {
+    const courseIdToFetch = targetCourseId ?? selectedCourseId
+    if (!courseIdToFetch) { setError('Please select a paper first'); return }
 
     setLoading(true)
     setError('')
     setRosterData(null)
     setTableDeptFilter('all')
 
-    const response = await fetch(`/api/faculty/attendance?course_id=${selectedCourseId}`)
+    const response = await fetch(`/api/faculty/attendance?course_id=${courseIdToFetch}`)
     const result = await response.json()
 
     if (!response.ok) {
@@ -213,62 +354,74 @@ export default function TeacherDashboard() {
 
         {error && <div className={styles.errorBanner}>{error}</div>}
 
-        {/* Course Search */}
-        <p className={styles.searchLabel}>Select a Course</p>
-        <div className={styles.searchRow}>
-          <div className={styles.searchWrapper}>
-            <input
-              type="text"
-              className={styles.searchInput}
-              placeholder="Search course name or code..."
-              value={searchQuery}
-              onChange={e => {
-                setSearchQuery(e.target.value)
-                setSelectedCourseId('')
-                setRosterData(null)
-                setError('')
-              }}
-              autoComplete="off"
-            />
-
-            {searchQuery.length > 1 && !selectedCourseId && (
-              <div className={styles.searchResults}>
-                {courses
-                  .filter(c =>
-                    c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    c.course_code.toLowerCase().includes(searchQuery.toLowerCase())
-                  )
-                  .slice(0, 8)
-                  .map(course => (
-                    <button
-                      key={course.id}
-                      className={styles.searchResultItem}
-                      onClick={() => {
-                        setSelectedCourseId(course.id)
-                        setSearchQuery(`${course.title} — ${course.course_code}`)
-                      }}
-                    >
-                      <span className={styles.searchResultTitle}>{course.title}</span>
-                      <span className={styles.searchResultCode}>{course.course_code}</span>
-                    </button>
-                  ))
-                }
-                {courses.filter(c =>
-                  c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  c.course_code.toLowerCase().includes(searchQuery.toLowerCase())
-                ).length === 0 && (
-                  <div className={styles.searchNoResult}>No courses found</div>
-                )}
-              </div>
-            )}
+        {/* Paper Filter & Custom Select Card */}
+        <div className={styles.filterCard}>
+          <div className={styles.filterCardHeader}>
+            <p className={styles.filterCardTitle}>🔍 Paper Selection & Filters</p>
           </div>
-          <button
-            className={styles.fetchBtn}
-            onClick={handleFetch}
-            disabled={loading || !selectedCourseId}
-          >
-            {loading ? 'Loading...' : 'Get Roster →'}
-          </button>
+
+          <div className={styles.filterControlsGrid}>
+            {/* 1. Semester Filter FIRST */}
+            <div className={styles.filterGroup}>
+              <label className={styles.filterLabel}>1. Semester</label>
+              <select
+                className={styles.filterSelect}
+                value={selectedSemester}
+                onChange={e => {
+                  setSelectedSemester(e.target.value)
+                  setError('')
+                }}
+              >
+                <option value="all">All Semesters</option>
+                {availableSemesters.map(sem => (
+                  <option key={sem} value={sem.toString()}>
+                    Semester {sem}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. Department Filter SECOND */}
+            <div className={styles.filterGroup}>
+              <label className={styles.filterLabel}>2. Department</label>
+              <select
+                className={styles.filterSelect}
+                value={selectedDepartmentId}
+                onChange={e => {
+                  setSelectedDepartmentId(e.target.value)
+                  setError('')
+                }}
+              >
+                <option value="all">All Departments</option>
+                {departments.map(dept => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name} ({dept.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* 3. Paper / Course Custom Dropdown */}
+          <div className={styles.paperSelectGroup}>
+            <label className={styles.filterLabel}>
+              3. Paper / Course ({filteredCourses.length} available)
+            </label>
+            <CustomPaperSelect
+              courses={filteredCourses}
+              selectedCourseId={selectedCourseId}
+              onSelect={courseId => {
+                setSelectedCourseId(courseId)
+                setError('')
+                if (courseId) {
+                  handleFetchCourse(courseId)
+                } else {
+                  setRosterData(null)
+                }
+              }}
+              disabled={loading}
+            />
+          </div>
         </div>
 
         {/* Loading */}
@@ -279,98 +432,108 @@ export default function TeacherDashboard() {
           </div>
         )}
 
-        {/* Results */}
+        {/* Section Divider & Detailing Area */}
         {!loading && rosterData && (
           <>
-            {/* Course Info Banner */}
-            <div className={styles.courseInfoBanner}>
-              <div>
-                <p className={styles.courseInfoName}>{rosterData.course.title}</p>
-                <p className={styles.courseInfoCode}>{rosterData.course.course_code}</p>
-              </div>
+            <div className={styles.sectionDivider}>
+              <span className={styles.sectionDividerLine} />
+              <span className={styles.sectionDividerBadge}>
+                📊 Course & Class Roster Details
+              </span>
+              <span className={styles.sectionDividerLine} />
             </div>
 
-            <div className={styles.statsRow}>
-              <div className={styles.statCard}>
-                <p className={styles.statValue}>{rosterData.total_students}</p>
-                <p className={styles.statLabel}>Enrolled Students</p>
+            <div className={styles.detailsContainer}>
+              {/* Course Info Banner */}
+              <div className={styles.courseInfoBanner}>
+                <div>
+                  <p className={styles.courseInfoName}>{rosterData.course.title}</p>
+                  <p className={styles.courseInfoCode}>{rosterData.course.course_code}</p>
+                </div>
               </div>
-              <div className={styles.statCard}>
-                <p className={styles.statValue}>{Object.keys(rosterData.department_breakdown).length}</p>
-                <p className={styles.statLabel}>Departments</p>
-              </div>
-            </div>
 
-            {Object.keys(rosterData.department_breakdown).length > 0 && (
-              <div className={styles.breakdownCard}>
-                <p className={styles.breakdownTitle}>Department Breakdown</p>
-                {Object.entries(rosterData.department_breakdown).map(([dept, count]) => (
-                  <div key={dept} className={styles.breakdownRow}>
-                    <span className={styles.breakdownDept}>{dept}</span>
-                    <span className={styles.breakdownCount}>{count} students</span>
-                  </div>
-                ))}
+              <div className={styles.statsRow}>
+                <div className={styles.statCard}>
+                  <p className={styles.statValue}>{rosterData.total_students}</p>
+                  <p className={styles.statLabel}>Enrolled Students</p>
+                </div>
+                <div className={styles.statCard}>
+                  <p className={styles.statValue}>{Object.keys(rosterData.department_breakdown).length}</p>
+                  <p className={styles.statLabel}>Departments</p>
+                </div>
               </div>
-            )}
 
-            <div className={styles.sectionHeader}>
-              <div className={styles.sectionHeaderLeft}>
-                <p className={styles.sectionTitle}>
-                  Class Roster ({tableDeptFilter === 'all' ? rosterData.total_students : displayedStudents.length})
-                </p>
-                {deptOptions.length > 1 && (
-                  <select
-                    className={styles.tableFilterSelect}
-                    value={tableDeptFilter}
-                    onChange={e => setTableDeptFilter(e.target.value)}
-                    title="Filter table display by department"
-                  >
-                    <option value="all">All Departments ({rosterData.total_students})</option>
-                    {deptOptions.map(d => (
-                      <option key={d.key} value={d.key}>
-                        {d.name} ({d.count})
-                      </option>
-                    ))}
-                  </select>
+              {Object.keys(rosterData.department_breakdown).length > 0 && (
+                <div className={styles.breakdownCard}>
+                  <p className={styles.breakdownTitle}>Department Breakdown</p>
+                  {Object.entries(rosterData.department_breakdown).map(([dept, count]) => (
+                    <div key={dept} className={styles.breakdownRow}>
+                      <span className={styles.breakdownDept}>{dept}</span>
+                      <span className={styles.breakdownCount}>{count} students</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionHeaderLeft}>
+                  <p className={styles.sectionTitle}>
+                    Class Roster ({tableDeptFilter === 'all' ? rosterData.total_students : displayedStudents.length})
+                  </p>
+                  {deptOptions.length > 1 && (
+                    <select
+                      className={styles.tableFilterSelect}
+                      value={tableDeptFilter}
+                      onChange={e => setTableDeptFilter(e.target.value)}
+                      title="Filter table display by department"
+                    >
+                      <option value="all">All Departments ({rosterData.total_students})</option>
+                      {deptOptions.map(d => (
+                        <option key={d.key} value={d.key}>
+                          {d.name} ({d.count})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {rosterData.total_students > 0 && (
+                  <button className={styles.downloadBtn} onClick={handleOpenPdfModal}>
+                    📄 Download Attendance Sheet
+                  </button>
                 )}
               </div>
 
-              {rosterData.total_students > 0 && (
-                <button className={styles.downloadBtn} onClick={handleOpenPdfModal}>
-                  📄 Download Attendance Sheet
-                </button>
-              )}
-            </div>
-
-            <div className={styles.tableWrapper}>
-              {rosterData.total_students === 0 ? (
-                <div className={styles.emptyState}>
-                  <div className={styles.emptyIcon}>📭</div>
-                  <p className={styles.emptyTitle}>No students enrolled</p>
-                  <p className={styles.emptySubtitle}>No students have selected this course yet.</p>
-                </div>
-              ) : displayedStudents.length === 0 ? (
-                <div className={styles.emptyState}>
-                  <div className={styles.emptyIcon}>🔍</div>
-                  <p className={styles.emptyTitle}>No matching students</p>
-                  <p className={styles.emptySubtitle}>No students enrolled from the selected department.</p>
-                </div>
-              ) : (
-                <table className={styles.table}>
-                  <thead className={styles.tableHead}>
-                    <tr><th>#</th><th>Name</th><th>Department</th></tr>
-                  </thead>
-                  <tbody>
-                    {displayedStudents.map((student, index) => (
-                      <tr key={student.id} className={styles.tableRow}>
-                        <td>{index + 1}</td>
-                        <td>{student.full_name}</td>
-                        <td><span className={styles.deptBadge}>{student.department_code || student.department}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <div className={styles.tableWrapper}>
+                {rosterData.total_students === 0 ? (
+                  <div className={styles.emptyState}>
+                    <div className={styles.emptyIcon}>📭</div>
+                    <p className={styles.emptyTitle}>No students enrolled</p>
+                    <p className={styles.emptySubtitle}>No students have selected this course yet.</p>
+                  </div>
+                ) : displayedStudents.length === 0 ? (
+                  <div className={styles.emptyState}>
+                    <div className={styles.emptyIcon}>🔍</div>
+                    <p className={styles.emptyTitle}>No matching students</p>
+                    <p className={styles.emptySubtitle}>No students enrolled from the selected department.</p>
+                  </div>
+                ) : (
+                  <table className={styles.table}>
+                    <thead className={styles.tableHead}>
+                      <tr><th>#</th><th>Name</th><th>Department</th></tr>
+                    </thead>
+                    <tbody>
+                      {displayedStudents.map((student, index) => (
+                        <tr key={student.id} className={styles.tableRow}>
+                          <td>{index + 1}</td>
+                          <td>{student.full_name}</td>
+                          <td><span className={styles.deptBadge}>{student.department_code || student.department}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           </>
         )}
