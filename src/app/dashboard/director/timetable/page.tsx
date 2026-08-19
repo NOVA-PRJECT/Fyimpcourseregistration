@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import * as XLSX from 'xlsx';
 import styles from './timetable.module.css';
 
 interface TimetableEntry {
@@ -62,54 +63,149 @@ export default function CampusDirectorTimetablePage() {
   const [jobStats, setJobStats] = useState<Record<string, any> | null>(null);
 
   // Timetable data state
-  const [entries, setEntries] = useState<TimetableEntry[]>([]);
-  const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
-  const [activeDeptId, setActiveDeptId] = useState<string>('');
+  const [allEntries, setAllEntries] = useState<TimetableEntry[]>([]);
+  const [allConflicts, setAllConflicts] = useState<ConflictItem[]>([]);
   const [departments, setDepartments] = useState<{ id: string; name: string; code?: string }[]>([]);
+  const [selectedDeptId, setSelectedDeptId] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
+
+  // Export Modal state (completely separated from UI selectedDeptId)
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [exportType, setExportType] = useState<'excel' | 'pdf'>('excel');
+  const [exportTargetDept, setExportTargetDept] = useState<string>('all');
+  const [printTargetDept, setPrintTargetDept] = useState<string>('all');
 
   // Feedback banners
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [isValidating, setIsValidating] = useState(false);
 
-  // 1. Load initial data and department list
-  const fetchEntries = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/timetable/entries?academicYear=${academicYear}&semester=${semester}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      setEntries(data.entries || []);
-      setConflicts(data.conflicts || []);
+  const CACHE_KEY = `fyimp:timetable:${academicYear}:${semester}`;
 
-      if (data.departments && data.departments.length > 0) {
-        setDepartments(data.departments);
-        setActiveDeptId((current) => {
-          if (!current || !data.departments.some((d: { id: string }) => d.id === current)) {
-            return data.departments[0].id;
-          }
-          return current;
-        });
+  // Core fetch function with optional forceRefresh
+  const fetchEntries = useCallback(
+    async (forceRefresh = false) => {
+      if (!academicYear || !semester) return;
+
+      if (forceRefresh) {
+        try {
+          sessionStorage.removeItem(CACHE_KEY);
+        } catch {
+          /* ignore */
+        }
       } else {
-        // Extract unique departments from entries fallback
-        const deptMap = new Map<string, string>();
-        (data.entries || []).forEach((e: TimetableEntry) => {
-          if (e.departmentId) deptMap.set(e.departmentId, e.departmentName);
-        });
-
-        const deptList = Array.from(deptMap.entries()).map(([id, name]) => ({ id, name }));
-        setDepartments(deptList);
-        if (deptList.length > 0 && !activeDeptId) {
-          setActiveDeptId(deptList[0].id);
+        // Try cache first
+        try {
+          const cached = sessionStorage.getItem(CACHE_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            setAllEntries(parsed.entries ?? []);
+            setAllConflicts(parsed.conflicts ?? []);
+            setDepartments(parsed.departments ?? []);
+            return;
+          }
+        } catch {
+          // Cache read failed — proceed to fetch
         }
       }
-    } catch (err) {
-      console.error('Failed to load entries:', err);
-    }
-  }, [academicYear, semester, activeDeptId]);
 
-  // 2. Poll job status when running or queued
+      setLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch(`/api/timetable/entries?academicYear=${academicYear}&semester=${semester}`);
+        if (!res.ok) throw new Error(`Failed to load timetable (${res.status})`);
+        const data = await res.json();
+
+        const entriesList = data.entries ?? [];
+        const conflictsList = data.conflicts ?? [];
+        let deptList = data.departments ?? [];
+
+        if (!deptList || deptList.length === 0) {
+          const deptMap = new Map<string, string>();
+          entriesList.forEach((e: TimetableEntry) => {
+            if (e.departmentId) deptMap.set(e.departmentId, e.departmentName);
+          });
+          deptList = Array.from(deptMap.entries()).map(([id, name]) => ({ id, name }));
+        }
+
+        setAllEntries(entriesList);
+        setAllConflicts(conflictsList);
+        setDepartments(deptList);
+
+        try {
+          sessionStorage.setItem(
+            CACHE_KEY,
+            JSON.stringify({
+              entries: entriesList,
+              conflicts: conflictsList,
+              departments: deptList,
+            })
+          );
+        } catch {
+          // sessionStorage write failed (quota) — continue without cache
+        }
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [academicYear, semester, CACHE_KEY]
+  );
+
+  // Invalidate cache and force fresh API fetch
+  const invalidateCache = useCallback(() => {
+    fetchEntries(true);
+  }, [fetchEntries]);
+
+  // Selector change effect: Reset banners & fetch job status for newly selected year/semester
+  useEffect(() => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setJobError(null);
+    setError(null);
+    setJobStatus('idle');
+    setJobProgress(0);
+    setJobId(null);
+    setStepMessage(null);
+    setJobStats(null);
+
+    if (!academicYear || !semester) return;
+
+    fetch(`/api/timetable/job-status?academicYear=${academicYear}&semester=${semester}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.status && data.status !== 'idle') {
+          setJobStatus(data.status);
+          setJobProgress(data.progress || 0);
+          if (data.stepMessage) setStepMessage(data.stepMessage);
+          if (data.stats) setJobStats(data.stats);
+          if (data.status === 'failed') {
+            setJobError(data.errorMessage || data.error || 'Generation job failed');
+          }
+        }
+      })
+      .catch(() => {});
+  }, [academicYear, semester]);
+
+  // Single fetch on mount / selector change with sessionStorage cache
+  useEffect(() => {
+    fetchEntries(false);
+  }, [fetchEntries]);
+
+  // Set default selected department once data loads
+  useEffect(() => {
+    if (departments.length > 0 && (!selectedDeptId || !departments.some((d) => d.id === selectedDeptId))) {
+      setSelectedDeptId(departments[0].id);
+    } else if (allEntries.length > 0 && !selectedDeptId) {
+      setSelectedDeptId(allEntries[0].departmentId);
+    }
+  }, [allEntries, departments, selectedDeptId]);
+
+  // Poll job status when running or queued
   useEffect(() => {
     if (jobStatus !== 'running' && jobStatus !== 'queued') return;
 
@@ -127,7 +223,7 @@ export default function CampusDirectorTimetablePage() {
         if (data.status === 'completed') {
           clearInterval(interval);
           setSuccessMsg('Timetable generated successfully!');
-          fetchEntries();
+          invalidateCache();
         } else if (data.status === 'failed') {
           clearInterval(interval);
           setJobError(data.errorMessage || data.error || 'Generation job failed');
@@ -138,12 +234,7 @@ export default function CampusDirectorTimetablePage() {
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [jobStatus, academicYear, semester, fetchEntries]);
-
-  // Fetch entries when semester/year changes
-  useEffect(() => {
-    fetchEntries();
-  }, [fetchEntries]);
+  }, [jobStatus, academicYear, semester, invalidateCache]);
 
   // Handle Generate Timetable
   async function handleGenerate() {
@@ -172,79 +263,153 @@ export default function CampusDirectorTimetablePage() {
     }
   }
 
-  // Handle Publish
-  async function handlePublish() {
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    setIsPublishing(true);
+  // Open Export Modal for Excel or PDF (Default dropdown is ALWAYS 'all')
+  function handleOpenExportModal(type: 'excel' | 'pdf') {
+    setExportType(type);
+    setExportTargetDept('all'); // Strictly 'all' under any circumstances!
+    setShowExportModal(true);
+  }
 
-    try {
-      const res = await fetch('/api/timetable/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ academicYear, semester }),
+  // Confirm Export from Modal (Does NOT mutate UI active tab selectedDeptId!)
+  function handleConfirmExport() {
+    const targetDept = exportTargetDept;
+    setShowExportModal(false);
+
+    if (exportType === 'excel') {
+      const wb = XLSX.utils.book_new();
+
+      // Combine departments from state and allEntries
+      const deptMap = new Map<string, { id: string; name: string; code: string }>();
+
+      departments.forEach((d) => {
+        deptMap.set(d.id, { id: d.id, name: d.name, code: d.code || d.name });
       });
 
-      const data = await res.json();
-      setIsPublishing(false);
+      allEntries.forEach((e) => {
+        if (e.departmentId && !deptMap.has(e.departmentId)) {
+          deptMap.set(e.departmentId, {
+            id: e.departmentId,
+            name: e.departmentName || 'Department',
+            code: e.departmentName || 'Dept',
+          });
+        }
+      });
 
-      if (!res.ok) {
-        setErrorMsg(data.error || 'Failed to publish timetable');
-        if (data.conflicts) setConflicts(data.conflicts);
-        return;
+      const deptsToExport = targetDept === 'all'
+        ? Array.from(deptMap.values())
+        : Array.from(deptMap.values()).filter((d) => d.id === targetDept);
+
+      const usedSheetNames = new Set<string>();
+      function getUniqueSheetName(rawName: string): string {
+        let clean = rawName.replace(/[:\\/?*\[\]]/g, '').trim().substring(0, 30);
+        if (!clean) clean = 'Sheet';
+        let unique = clean;
+        let counter = 1;
+        while (usedSheetNames.has(unique.toLowerCase())) {
+          const suffix = `_${counter}`;
+          unique = clean.substring(0, 30 - suffix.length) + suffix;
+          counter++;
+        }
+        usedSheetNames.add(unique.toLowerCase());
+        return unique;
       }
 
-      setSuccessMsg('Timetable published successfully!');
-      fetchEntries();
-    } catch {
-      setIsPublishing(false);
-      setErrorMsg('Network error publishing timetable');
+      // If exporting ALL, add All Departments Stacked Sheet first with 5 rows per department and 10 row gaps!
+      if (targetDept === 'all') {
+        const allSheetRows: string[][] = [
+          ['KANNUR UNIVERSITY — ALL DEPARTMENTS TIMETABLE OVERVIEW'],
+          [`Academic Year: ${academicYear} | Semester: ${semester}`],
+          [],
+        ];
+
+        deptsToExport.forEach((dept, idx) => {
+          const deptEntries = allEntries.filter((e) => e.departmentId === dept.id);
+
+          // Department Banner Row
+          allSheetRows.push([`DEPARTMENT: ${dept.name.toUpperCase()} (${dept.code || dept.name})`]);
+          allSheetRows.push(['Day / Period', ...PERIODS.map((p) => p.label)]);
+
+          // 5 Rows (Monday through Friday)
+          [1, 2, 3, 4, 5].forEach((dayNum) => {
+            const row: string[] = [DAYS_MAP[dayNum]];
+            PERIODS.forEach((p) => {
+              const entry = deptEntries.find((e) => e.day === dayNum && e.period === p.num);
+              if (entry) {
+                row.push(`${entry.courseCode} - ${entry.courseName}${entry.isLabBlock ? ' [LAB]' : ''}`);
+              } else {
+                row.push('—');
+              }
+            });
+            allSheetRows.push(row);
+          });
+
+          // Insert 10 blank rows as gap between departments
+          if (idx < deptsToExport.length - 1) {
+            for (let i = 0; i < 10; i++) {
+              allSheetRows.push([]);
+            }
+          }
+        });
+
+        const allWs = XLSX.utils.aoa_to_sheet(allSheetRows);
+        XLSX.utils.book_append_sheet(wb, allWs, getUniqueSheetName('All Departments'));
+      }
+
+      // Add 5x6 Matrix Sheet for each department
+      deptsToExport.forEach((dept) => {
+        const deptEntries = allEntries.filter((e) => e.departmentId === dept.id);
+        const sheetData: string[][] = [
+          [`KANNUR UNIVERSITY — ${dept.name.toUpperCase()} TIMETABLE`],
+          [`Academic Year: ${academicYear} | Semester: ${semester}`],
+          [],
+          ['Day / Period', ...PERIODS.map((p) => p.label)],
+        ];
+
+        [1, 2, 3, 4, 5].forEach((dayNum) => {
+          const row: string[] = [DAYS_MAP[dayNum]];
+          PERIODS.forEach((p) => {
+            const entry = deptEntries.find((e) => e.day === dayNum && e.period === p.num);
+            if (entry) {
+              row.push(`${entry.courseCode} - ${entry.courseName}${entry.isLabBlock ? ' [LAB]' : ''}`);
+            } else {
+              row.push('—');
+            }
+          });
+          sheetData.push(row);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+        const sheetName = getUniqueSheetName(dept.code || dept.name);
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      });
+
+      const selectedDeptObj = deptMap.get(targetDept);
+      const fileTag = targetDept === 'all' ? 'All_Departments' : (selectedDeptObj?.code || selectedDeptObj?.name || 'Department');
+      const filename = `FYIMP_Timetable_${fileTag}_${academicYear}_Sem${semester}.xlsx`;
+      XLSX.writeFile(wb, filename);
+    } else {
+      // PDF Export: Set dedicated print scope without changing UI tab selectedDeptId!
+      setPrintTargetDept(targetDept);
+      setTimeout(() => {
+        window.print();
+      }, 150);
     }
   }
 
-  // Handle Validate
-  async function handleValidate() {
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    setIsValidating(true);
+  // Derived client-side filtered entries for screen view
+  const visibleEntries = allEntries.filter((e) => !selectedDeptId || e.departmentId === selectedDeptId);
 
-    try {
-      const res = await fetch('/api/timetable/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ academicYear, semester }),
-      });
-
-      const data = await res.json();
-      setIsValidating(false);
-
-      if (!res.ok) {
-        setErrorMsg(data.error || 'Failed to re-validate timetable');
-        return;
-      }
-
-      if (data.newConflicts > 0) {
-        setErrorMsg(`Re-validation complete: Found ${data.newConflicts} new registration conflict(s).`);
-        fetchEntries();
-      } else {
-        setSuccessMsg('Re-validation complete: No conflicts detected.');
-      }
-    } catch {
-      setIsValidating(false);
-      setErrorMsg('Network error re-validating timetable');
-    }
+  // Tab switch handler
+  function handleDeptChange(deptId: string) {
+    setSelectedDeptId(deptId);
   }
-
-  // Filter entries for active department
-  const filteredEntries = entries.filter((e) => !activeDeptId || e.departmentId === activeDeptId);
 
   // Helper to find entry at day + period
   function getEntryAt(day: number, period: number): TimetableEntry | undefined {
-    return filteredEntries.find((e) => e.day === day && e.period === period);
+    return visibleEntries.find((e) => e.day === day && e.period === period);
   }
 
-  const isPublished = entries.length > 0 && entries.every((e) => e.status === 'published');
-  const hasUnresolvedConflicts = conflicts.length > 0;
+  const hasUnresolvedConflicts = allConflicts.length > 0;
 
   return (
     <div className={styles.pageWrapper}>
@@ -307,20 +472,24 @@ export default function CampusDirectorTimetablePage() {
               {jobStatus === 'running' || jobStatus === 'queued' ? 'Generating...' : '⚡ Generate Timetable'}
             </button>
 
-            {entries.length > 0 && !isPublished && (
-              <button
-                className={styles.publishBtn}
-                onClick={handlePublish}
-                disabled={isPublishing || hasUnresolvedConflicts}
-              >
-                {isPublishing ? 'Publishing...' : '🚀 Publish Timetable'}
-              </button>
-            )}
+            {allEntries.length > 0 && (
+              <>
+                <button
+                  className={styles.exportExcelBtn}
+                  onClick={() => handleOpenExportModal('excel')}
+                  title="Export timetable as Excel workbook (.xlsx)"
+                >
+                  📊 Export Excel (.xlsx)
+                </button>
 
-            {isPublished && (
-              <button className={styles.validateBtn} onClick={handleValidate} disabled={isValidating}>
-                {isValidating ? 'Validating...' : '🔍 Re-validate Schedule'}
-              </button>
+                <button
+                  className={styles.exportPdfBtn}
+                  onClick={() => handleOpenExportModal('pdf')}
+                  title="Export timetable as PDF"
+                >
+                  📄 Export PDF
+                </button>
+              </>
             )}
           </div>
 
@@ -418,14 +587,36 @@ export default function CampusDirectorTimetablePage() {
         {jobError && <div className={styles.bannerError}>❌ Timetable Generation Failed: {jobError}</div>}
         {successMsg && <div className={styles.bannerSuccess}>✓ {successMsg}</div>}
 
+        {/* Page-level Fetch Error State with Retry Button */}
+        {error && (
+          <div className={styles.bannerError} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>❌ {error}</span>
+            <button
+              style={{
+                background: '#ef4444',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.3rem 0.75rem',
+                borderRadius: '0.25rem',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '0.8rem',
+              }}
+              onClick={() => invalidateCache()}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Panel B: Conflicts Warning List */}
         {hasUnresolvedConflicts && (
           <div className={styles.bannerWarning}>
             <p style={{ fontWeight: 700, margin: '0 0 0.5rem 0' }}>
-              ⚠️ {conflicts.length} course(s) could not be scheduled due to student timetable conflicts:
+              ⚠️ {allConflicts.length} course(s) could not be scheduled due to student timetable conflicts:
             </p>
             <div className={styles.conflictsList}>
-              {conflicts.map((c, idx) => (
+              {allConflicts.map((c, idx) => (
                 <div key={idx} className={styles.conflictItem}>
                   <p style={{ fontWeight: 700, color: '#991b1b', margin: 0 }}>Course: {c.courseName}</p>
                   <p style={{ fontSize: '0.82rem', color: '#334155', margin: '0.3rem 0' }}>
@@ -440,16 +631,20 @@ export default function CampusDirectorTimetablePage() {
           </div>
         )}
 
-        {/* Panel A: Timetable Grid */}
-        {departments.length > 0 ? (
+        {/* Panel A: Timetable Grid Area */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '4rem', color: '#6366f1', background: '#ffffff', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+            <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Loading timetable data...</p>
+          </div>
+        ) : departments.length > 0 ? (
           <div>
             {/* Department Tabs */}
             <div className={styles.tabsContainer}>
               {departments.map((dept) => (
                 <button
                   key={dept.id}
-                  className={`${styles.tab} ${activeDeptId === dept.id ? styles.activeTab : ''}`}
-                  onClick={() => setActiveDeptId(dept.id)}
+                  className={`${styles.tab} ${selectedDeptId === dept.id ? styles.activeTab : ''}`}
+                  onClick={() => handleDeptChange(dept.id)}
                   onMouseEnter={(e) => setTooltip({ text: dept.name, x: e.clientX + 14, y: e.clientY + 14 })}
                   onMouseMove={(e) => setTooltip({ text: dept.name, x: e.clientX + 14, y: e.clientY + 14 })}
                   onMouseLeave={() => setTooltip(null)}
@@ -503,6 +698,121 @@ export default function CampusDirectorTimetablePage() {
           </div>
         )}
       </div>
+
+      {/* Dedicated PDF Print Section (Only visible during window.print()) */}
+      <div className={styles.printArea}>
+        {(printTargetDept === 'all'
+          ? (departments.length > 0 ? departments : Array.from(new Set(allEntries.map((e) => e.departmentId))).map((id) => ({ id, name: allEntries.find((e) => e.departmentId === id)?.departmentName || 'Department' })))
+          : departments.filter((d) => d.id === printTargetDept)
+        ).map((dept) => {
+          const deptEntries = allEntries.filter((e) => e.departmentId === dept.id);
+          return (
+            <div key={dept.id} className={styles.printDeptSection}>
+              <div className={styles.printHeader}>
+                <h2>KANNUR UNIVERSITY — {dept.name.toUpperCase()} TIMETABLE</h2>
+                <p>Academic Year: {academicYear} | Semester: {semester}</p>
+              </div>
+              <table className={styles.gridTable}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '15%' }}>Day / Period</th>
+                    {PERIODS.map((p) => (
+                      <th key={p.num}>{p.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[1, 2, 3, 4, 5].map((dayNum) => (
+                    <tr key={dayNum}>
+                      <td style={{ fontWeight: 700, background: '#f8fafc' }}>{DAYS_MAP[dayNum]}</td>
+                      {PERIODS.map((p) => {
+                        const entry = deptEntries.find((e) => e.day === dayNum && e.period === p.num);
+                        return (
+                          <td key={p.num}>
+                            {entry ? (
+                              <div className={styles.cellCourse}>
+                                <div className={styles.cellCourseCode}>{entry.courseCode}</div>
+                                <div className={styles.cellCourseTitle}>{entry.courseName}</div>
+                                {entry.isLabBlock && <span className={styles.labBadge}>Lab Block (2h)</span>}
+                              </div>
+                            ) : (
+                              <span style={{ color: '#cbd5e1' }}>—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Export Options Modal */}
+      {showExportModal && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>
+              {exportType === 'excel' ? '📊 Export Excel (.xlsx)' : '📄 Export PDF'}
+            </h3>
+            <p className={styles.modalSubtitle}>
+              Select which department schedule you want to export for Semester {semester} ({academicYear}):
+            </p>
+
+            <div className={styles.fieldGroup} style={{ marginTop: '1.25rem' }}>
+              <label className={styles.label}>Select Export Scope</label>
+              <select
+                className={styles.select}
+                style={{ width: '100%' }}
+                value={exportTargetDept}
+                onChange={(e) => setExportTargetDept(e.target.value)}
+              >
+                <option value="all">🌐 All Departments (Entire Campus)</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    🏢 {d.name} ({d.code || d.name})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                className={styles.modalCancelBtn}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #cbd5e1',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.375rem',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setShowExportModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                style={{
+                  background: exportType === 'excel' ? '#166534' : '#dc2626',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '0.5rem 1.25rem',
+                  borderRadius: '0.375rem',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+                onClick={handleConfirmExport}
+              >
+                {exportType === 'excel' ? 'Download Excel →' : 'Print / Export PDF →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Instant Pointer Mouse Tooltip */}
       {tooltip && (
