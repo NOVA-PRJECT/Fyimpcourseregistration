@@ -1,5 +1,6 @@
 /* =========================================
    CAMPUS DIRECTOR DASHBOARD — CSS MODULE
+   (Matched to HOD Dashboard Design System)
    ========================================= */
 
 .pageWrapper {
@@ -9,50 +10,6 @@
   background-color: #f0f2f5;
   display: flex;
   flex-direction: column;
-}
-/* Window status banners */
-.Banner {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  background: #f0faf4;
-  border: 1px solid #a8d5b5;
-  border-radius: 0.6rem;
-  padding: 0.65rem 0.9rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #1a6b3c;
-  margin-bottom: 1rem;
-}
-
-.windowClosedBanner {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  background: #fdf2f2;
-  border: 1px solid #f5c6c6;
-  border-radius: 0.6rem;
-  padding: 0.65rem 0.9rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #c0392b;
-  margin-bottom: 1rem;
-}
-
-.statusDot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: #2ecc71;
-  flex-shrink: 0;
-  animation: pulse 1.5s infinite;
-}
-
-.fieldHint {
-  font-size: 0.68rem;
-  color: #9ba1ab;
-  margin: 0.2rem 0 0 0;
-  line-height: 1.4;
 }
 
 /* ── TOP BAR ── */
@@ -120,7 +77,7 @@
   color: #ffffff;
 }
 
-/* ── INFO CARD ── */
+/* ── DIRECTOR INFO CARD ── */
 .infoCard {
   background: #ffffff;
   border-bottom: 1px solid #e2e5ea;
@@ -138,6 +95,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .detailBadge {
@@ -150,10 +108,58 @@
   border: 1px solid #dde1e7;
 }
 
-.detailBadge.roleBadge {
+.roleBadge {
   background: #002147;
   color: #ffffff;
   border-color: #002147;
+}
+
+/* ── FULL VIEWPORT WIDTH TAB BAR WITH EQUAL SPAN TABS ── */
+.tabBar {
+  display: flex;
+  width: 100%;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e5ea;
+  padding: 0;
+  box-sizing: border-box;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.tabBar::-webkit-scrollbar {
+  display: none;
+}
+
+.tabBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.75rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-bottom: 2.5px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.tabBtn:hover {
+  color: #002147;
+  background: #f8fafc;
+}
+
+.tabActive {
+  color: #002147;
+  border-bottom-color: #002147;
+  font-weight: 700;
+  background: #f0f4f8;
 }
 
 /* ── MAIN CONTENT ── */
@@ -163,177 +169,106 @@
   max-width: 48rem;
   width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
-/* Section title */
 .sectionTitle {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #9ba1ab;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.85rem 0;
+  text-align: center;
 }
 
-/* ── WINDOW CARD ── */
+/* Centered Cards & Containers */
 .windowCard {
   background: #ffffff;
   border: 1px solid #e2e5ea;
   border-radius: 0.75rem;
-  padding: 1.25rem;
+  padding: 1.5rem;
   margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
-.windowStatusRow {
+/* Window status banners */
+.Banner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-}
-
-.windowStatusLeft {
-  display: flex;
-  align-items: center;
+  justify-content: center;
   gap: 0.6rem;
+  background: #f0faf4;
+  border: 1px solid #a8d5b5;
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #1a6b3c;
+  margin-bottom: 1rem;
+  width: 100%;
+  max-width: 28rem;
 }
 
-.windowDot {
-  width: 0.6rem;
-  height: 0.6rem;
+.windowClosedBanner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  background: #fdf2f2;
+  border: 1px solid #f5c6c6;
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #c0392b;
+  margin-bottom: 1rem;
+  width: 100%;
+  max-width: 28rem;
+}
+
+.statusDot {
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.windowDot.open {
   background: #2ecc71;
+  flex-shrink: 0;
   animation: pulse 1.5s infinite;
 }
 
-.windowDot.closed {
-  background: #e74c3c;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.windowStatusText {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #002147;
-  margin: 0;
-}
-
-.windowDeadline {
-  font-size: 0.72rem;
-  color: #9ba1ab;
-  margin: 0.15rem 0 0 0;
-}
-
-/* Toggle switch */
-.toggleWrapper {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.toggleLabel {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #44474e;
-}
-
-.toggle {
-  position: relative;
-  width: 2.75rem;
-  height: 1.5rem;
-  cursor: pointer;
-}
-
-.toggle input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-  position: absolute;
-}
-
-.toggleSlider {
-  position: absolute;
-  inset: 0;
-  background: #dde1e7;
-  border-radius: 2rem;
-  transition: background 0.2s ease;
-}
-
-.toggleSlider::before {
-  content: '';
-  position: absolute;
-  width: 1.1rem;
-  height: 1.1rem;
-  left: 0.2rem;
-  top: 0.2rem;
-  background: #ffffff;
-  border-radius: 50%;
-  transition: transform 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-
-.toggle input:checked + .toggleSlider {
-  background: #2ecc71;
-}
-
-.toggle input:checked + .toggleSlider::before {
-  transform: translateX(1.25rem);
-}
-
-/* Form fields */
 .fieldGroup {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  margin-bottom: 1rem;
-}
-.readOnlyField {
-  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  width: 100%;
+  max-width: 28rem;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.65rem 0.85rem;
-  background: #f0f4f8;
-  border: 1.5px solid #dde1e7;
-  border-radius: 0.5rem;
-  font-size: 0.85rem;
-  color: #44474e;
-  font-weight: 600;
-}
-
-.autoLabel {
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: #1a6b3c;
-  background: #f0faf4;
-  border: 1px solid #a8d5b5;
-  border-radius: 2rem;
-  padding: 0.15rem 0.5rem;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.35rem;
+  width: 100%;
+  align-items: center;
 }
 
 .label {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 600;
   color: #44474e;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  text-align: center;
 }
 
 .input {
   width: 100%;
-  padding: 0.65rem 0.85rem;
+  padding: 0.6rem 0.85rem;
   font-family: inherit;
   font-size: 0.85rem;
   color: #191c1d;
@@ -343,6 +278,9 @@
   outline: none;
   transition: border-color 0.15s ease;
   -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  text-align: center;
 }
 
 .input:focus {
@@ -350,16 +288,41 @@
   background: #ffffff;
 }
 
-.inputRow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
+.fieldHint {
+  font-size: 0.68rem;
+  color: #9ba1ab;
+  margin: 0.2rem 0 0 0;
+  line-height: 1.4;
+  text-align: center;
 }
 
-/* Buttons */
-.primaryBtn {
+.readOnlyField {
+  background: #f8f9fa;
+  padding: 0.6rem 0.85rem;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  color: #44474e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   width: 100%;
-  padding: 0.75rem;
+  box-sizing: border-box;
+}
+
+.autoLabel {
+  font-size: 0.65rem;
+  background: #e0e4ec;
+  color: #44474e;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.3rem;
+  font-weight: 600;
+}
+
+/* Centered Buttons */
+.primaryBtn {
+  padding: 0.65rem 1.5rem;
   font-family: inherit;
   font-size: 0.82rem;
   font-weight: 700;
@@ -369,12 +332,10 @@
   border-radius: 0.5rem;
   cursor: pointer;
   transition: background 0.15s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .primaryBtn:hover:not(:disabled) {
@@ -386,88 +347,55 @@
   cursor: not-allowed;
 }
 
-/* Success banner */
-.successBanner {
-  background: #f0faf4;
-  border: 1px solid #a8d5b5;
-  border-radius: 0.6rem;
-  padding: 0.75rem 1rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #1a6b3c;
-  margin-bottom: 1rem;
-}
-
-/* Error banner */
 .errorBanner {
   background: #fdf2f2;
   border: 1px solid #f5c6c6;
-  border-radius: 0.6rem;
-  padding: 0.75rem 1rem;
-  font-size: 0.82rem;
   color: #c0392b;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
   margin-bottom: 1rem;
+  text-align: center;
+  width: 100%;
+  max-width: 28rem;
+  box-sizing: border-box;
 }
 
-/* Spinner */
+.successBanner {
+  background: #f0faf4;
+  border: 1px solid #a8d5b5;
+  color: #1a6b3c;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  text-align: center;
+  width: 100%;
+  max-width: 28rem;
+  box-sizing: border-box;
+}
+
 .spinner {
-  width: 1rem;
-  height: 1rem;
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.8rem;
   border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #ffffff;
   border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+  border-top-color: #fff;
+  animation: spin 0.8s linear infinite;
+  margin-right: 0.4rem;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-/* ── ADD FACULTY CARD ── */
-.facultyCard {
-  background: #ffffff;
-  border: 1px solid #e2e5ea;
-  border-radius: 0.75rem;
-  padding: 1.25rem;
-  margin-bottom: 1.25rem;
-}
-
-.roleSelect {
-  width: 100%;
-  padding: 0.65rem 0.85rem;
-  font-family: inherit;
-  font-size: 0.85rem;
-  color: #191c1d;
-  background: #f8f9fa;
-  border: 1.5px solid #dde1e7;
-  border-radius: 0.5rem;
-  outline: none;
-  cursor: pointer;
-  -webkit-appearance: none;
-}
-
-.roleSelect:focus {
-  border-color: #002147;
-  background: #ffffff;
-}
-
-.deptSelect {
-  width: 100%;
-  padding: 0.65rem 0.85rem;
-  font-family: inherit;
-  font-size: 0.85rem;
-  color: #191c1d;
-  background: #f8f9fa;
-  border: 1.5px solid #dde1e7;
-  border-radius: 0.5rem;
-  outline: none;
-  cursor: pointer;
-  -webkit-appearance: none;
-}
-
-.deptSelect:focus {
-  border-color: #002147;
-  background: #ffffff;
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.4; }
+  100% { opacity: 1; }
 }
 
 @media (min-width: 640px) {

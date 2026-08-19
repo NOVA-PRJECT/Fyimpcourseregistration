@@ -47,6 +47,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   const [courseCode, setCourseCode] = useState('')
   const [courseTitle, setCourseTitle] = useState('')
   const [courseCredits, setCourseCredits] = useState<number | '' | null>(null)
+  const [courseHoursPerWeek, setCourseHoursPerWeek] = useState<number | '' | null>(null)
+  const [courseIsLab, setCourseIsLab] = useState<boolean>(false)
   const [courseCategory, setCourseCategory] = useState<string | null>(null)
   const [courseTag, setCourseTag] = useState('')
   const [savingCourse, setSavingCourse] = useState(false)
@@ -213,13 +215,15 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     setSavingCourse(true)
     setError('')
 
+    const finalHours = courseHoursPerWeek !== null && courseHoursPerWeek !== '' ? Number(courseHoursPerWeek) : Number(courseCredits)
+
     const isEdit = !!editCourse
     const res = await fetch('/api/hod/courses', {
       method: isEdit ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(isEdit
-        ? { id: editCourse.id, course_code: courseCode.trim().toUpperCase(), title: courseTitle.trim(), credits: courseCredits, category: courseCategory, tag: courseTag.trim() }
-        : { course_code: courseCode.trim().toUpperCase(), title: courseTitle.trim(), semester, credits: courseCredits, category: courseCategory, tag: courseTag.trim() }
+        ? { id: editCourse.id, course_code: courseCode.trim().toUpperCase(), title: courseTitle.trim(), credits: courseCredits, hours_per_week: finalHours, is_lab: courseIsLab, category: courseCategory, tag: courseTag.trim() }
+        : { course_code: courseCode.trim().toUpperCase(), title: courseTitle.trim(), semester, credits: courseCredits, hours_per_week: finalHours, is_lab: courseIsLab, category: courseCategory, tag: courseTag.trim() }
       ),
     })
     const data = await res.json()
@@ -230,7 +234,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       setTimeout(() => setSuccess(''), 1000)
       setShowAddCourse(false)
       setEditCourse(null)
-      setCourseCode(''); setCourseTitle(''); setCourseCredits(null); setCourseCategory(null); setCourseTag('')
+      setCourseCode(''); setCourseTitle(''); setCourseCredits(null); setCourseHoursPerWeek(null); setCourseIsLab(false); setCourseCategory(null); setCourseTag('')
       fetchCourses()
     }
     setSavingCourse(false)
@@ -598,6 +602,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                   setCourseCode('')
                   setCourseTitle('')
                   setCourseCredits(null)
+                  setCourseHoursPerWeek(null)
+                  setCourseIsLab(false)
                   setCourseCategory(null)
                   setCourseTag('')
                   setEditCourse(null)
@@ -622,7 +628,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                 ) : (
                   <table className={styles.table}>
                     <thead className={styles.tableHead}>
-                      <tr><th>Code</th><th>Title</th><th>Cr</th><th>Cat</th><th>Tag</th><th></th></tr>
+                      <tr><th>Code</th><th>Title</th><th>Cr</th><th>Hrs/Wk</th><th>Lab?</th><th>Cat</th><th>Tag</th><th></th></tr>
                     </thead>
                     <tbody>
                       {courses.map(course => (
@@ -630,6 +636,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                           <td style={{ fontSize: '0.68rem', fontFamily: 'monospace' }}>{course.course_code}</td>
                           <td style={{ fontSize: '0.78rem' }}>{course.title}</td>
                           <td>{course.credits}</td>
+                          <td>{course.hours_per_week ?? course.credits}</td>
+                          <td>{course.is_lab ? '🧪 Yes' : 'No'}</td>
                           <td><span className={styles.codeBadge}>{course.category}</span></td>
                           <td style={{ fontSize: '0.68rem', color: '#9ba1ab' }}>{course.tag ?? '—'}</td>
                           <td>
@@ -639,6 +647,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                                 setCourseCode(course.course_code)
                                 setCourseTitle(course.title)
                                 setCourseCredits(course.credits)
+                                setCourseHoursPerWeek(course.hours_per_week ?? course.credits)
+                                setCourseIsLab(Boolean(course.is_lab))
                                 setCourseCategory(course.category)
                                 setCourseTag(course.tag ?? '')
                                 setError(''); setSuccess('')
@@ -700,11 +710,32 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                     <input type="text" className={styles.input} placeholder="e.g. POOL-A or MDC-1"
                       value={courseTag} onChange={e => setCourseTag(e.target.value.toUpperCase())} />
                   </div>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Hours Per Week</label>
+                    <input type="number" className={styles.input} min={1} max={20}
+                      placeholder={courseCredits ? `${courseCredits} (Default)` : 'e.g. 3'}
+                      value={courseHoursPerWeek ?? ''}
+                      onChange={e => {
+                        const val = e.target.value
+                        setCourseHoursPerWeek(val === '' ? null : Number(val))
+                      }} />
+                  </div>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Is Lab Course?</label>
+                    <select
+                      className={styles.input}
+                      value={courseIsLab ? 'true' : 'false'}
+                      onChange={e => setCourseIsLab(e.target.value === 'true')}
+                    >
+                      <option value="false">No — Regular Lecture</option>
+                      <option value="true">Yes — Lab Course (Requires 2-hour block)</option>
+                    </select>
+                  </div>
                 </div>
                 {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{error}</div>}
                 <div className={styles.modalActions}>
                   <button className={styles.modalCancelBtn}
-                    onClick={() => { setShowAddCourse(false); setEditCourse(null); setCourseCode(''); setCourseTitle(''); setCourseCredits(null); setCourseCategory(null); setCourseTag(''); setError('') }}
+                    onClick={() => { setShowAddCourse(false); setEditCourse(null); setCourseCode(''); setCourseTitle(''); setCourseCredits(null); setCourseHoursPerWeek(null); setCourseIsLab(false); setCourseCategory(null); setCourseTag(''); setError('') }}
                     disabled={savingCourse}>Cancel</button>
                   <button className={styles.modalConfirmBtn} onClick={handleSaveCourse} disabled={savingCourse}>
                     {savingCourse ? 'Saving...' : editCourse ? 'Save Changes →' : 'Add Course →'}

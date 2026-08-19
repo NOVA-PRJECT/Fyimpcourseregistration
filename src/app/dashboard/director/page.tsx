@@ -10,6 +10,8 @@ export default function DirectorDashboard() {
   useBfcacheGuard()
   const router = useRouter()
 
+  const [activeTab, setActiveTab] = useState<'registration' | 'timetable' | 'promotion'>('registration')
+
   const [directorName, setDirectorName] = useState('')
   const [campusName, setCampusName] = useState('')
   const [campusId, setCampusId] = useState('')
@@ -28,19 +30,49 @@ export default function DirectorDashboard() {
   const [promoting, setPromoting] = useState(false)
   const [promoteSuccess, setPromoteSuccess] = useState('')
   const [promoteError, setPromoteError] = useState('')
-  const [promoteStep, setPromoteStep] = useState<0 | 1 | 2>(0) // 0=hidden 1=step1 2=step2
+  const [promoteStep, setPromoteStep] = useState<0 | 1 | 2>(0)
   const [loggingOut, setLoggingOut] = useState(false)
   const [lastPromotedAt, setLastPromotedAt] = useState<string | null>(null)
 
-
-  // Derived window status from deadline alone
+  // Derived window status
   const windowIsOpen = currentDeadline !== null && new Date() < new Date(currentDeadline)
 
   useEffect(() => {
+    // Check sessionStorage cache first to avoid re-fetching on navigation back
+    const cached = typeof window !== 'undefined' ? sessionStorage.getItem('fyimp_director_settings_cache') : null
+    if (cached) {
+      try {
+        const data = JSON.parse(cached)
+        setDirectorName(data.directorName || '')
+        setCampusId(data.campusId || '')
+        setCampusName(data.campusName || '')
+
+        if (data.settings) {
+          setCurrentDeadline(data.settings.deadline)
+          setDeadline(
+            data.settings.deadline
+              ? new Date(data.settings.deadline).toISOString().slice(0, 16)
+              : ''
+          )
+          setMinCredits(data.settings.min_credits ?? 18)
+          setMaxCredits(data.settings.max_credits ?? 26)
+          setLastPromotedAt(data.settings.last_promoted_at ?? null)
+        }
+        setLoadingDirector(false)
+        return
+      } catch {
+        // Fall back to fetch if parse fails
+      }
+    }
+
     async function loadData() {
       const response = await fetch('/api/director/settings')
       const data = await response.json()
       if (!response.ok) { router.push('/login'); return }
+
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('fyimp_director_settings_cache', JSON.stringify(data))
+      }
 
       setDirectorName(data.directorName)
       setCampusId(data.campusId)
@@ -108,6 +140,18 @@ export default function DirectorDashboard() {
     setCurrentDeadline(deadlineDate.toISOString())
     setWindowSuccess(data.message)
     setSavingWindow(false)
+
+    // Update cached settings
+    if (typeof window !== 'undefined') {
+      const cached = sessionStorage.getItem('fyimp_director_settings_cache')
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached)
+          parsed.settings = { ...(parsed.settings || {}), deadline: deadlineDate.toISOString() }
+          sessionStorage.setItem('fyimp_director_settings_cache', JSON.stringify(parsed))
+        } catch {}
+      }
+    }
   }
 
   // Promote students
@@ -129,16 +173,22 @@ export default function DirectorDashboard() {
       return
     }
 
+    const nowIso = new Date().toISOString()
     setPromoteSuccess(`${data.message}${data.graduated_count > 0 ? ` (${data.graduated_count} students graduated and removed)` : ''}`)
-    setLastPromotedAt(new Date().toISOString())
+    setLastPromotedAt(nowIso)
     setPromoting(false)
     setPromoteStep(0)
+
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('fyimp_director_settings_cache')
+    }
   }
-
-
 
   async function handleLogout() {
     setLoggingOut(true)
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('fyimp_director_settings_cache')
+    }
     await fetch('/api/auth/logout', { method: 'POST' })
     window.location.href = '/login'
   }
@@ -177,174 +227,218 @@ export default function DirectorDashboard() {
         )}
       </div>
 
+      {/* Tab Bar */}
+      <div className={styles.tabBar}>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'registration' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('registration')}
+        >
+          📅 Registration Window
+        </button>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'timetable' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('timetable')}
+        >
+          ⚡ Timetable Generator
+        </button>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'promotion' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('promotion')}
+        >
+          🎓 Semester Promotion
+        </button>
+      </div>
+
       {/* Main Content */}
       <div className={styles.mainContent}>
 
-        {/* ── REGISTRATION WINDOW ── */}
-        <p className={styles.sectionTitle}>Registration Window</p>
+        {/* ── TAB 1: REGISTRATION WINDOW ── */}
+        {activeTab === 'registration' && (
+          <div>
+            <p className={styles.sectionTitle}>Registration Window Management</p>
 
-        {windowError && <div className={styles.errorBanner}>{windowError}</div>}
-        {windowSuccess && <div className={styles.successBanner}>✓ {windowSuccess}</div>}
+            {windowError && <div className={styles.errorBanner}>{windowError}</div>}
+            {windowSuccess && <div className={styles.successBanner}>✓ {windowSuccess}</div>}
 
-        <div className={styles.windowCard}>
+            <div className={styles.windowCard}>
 
-          {/* Live Status Banner */}
-          <div className={windowIsOpen ? styles.Banner : styles.windowClosedBanner}>
-            {windowIsOpen ? (
-              <>
-                <span className={styles.statusDot} />
-                Open — closes {new Date(currentDeadline!).toLocaleString('en-IN')}
-              </>
-            ) : (
-              <>
-                ⛔ Closed
-                {currentDeadline
-                  ? ` — deadline was ${new Date(currentDeadline).toLocaleString('en-IN')}`
-                  : ' — no deadline set yet'}
-              </>
-            )}
-          </div>
-
-          <div className={styles.fieldGroup}>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Registration Deadline</label>
-              <input
-                type="datetime-local"
-                className={styles.input}
-                value={deadline}
-                onChange={e => setDeadline(e.target.value)}
-              />
-              <p className={styles.fieldHint}>
-                Window opens immediately and closes automatically at this date and time.
-              </p>
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Academic Year</label>
-              <div className={styles.readOnlyField}>
-                {getAcademicYear()}
-                <span className={styles.autoLabel}>Auto</span>
+              {/* Live Status Banner */}
+              <div className={windowIsOpen ? styles.Banner : styles.windowClosedBanner}>
+                {windowIsOpen ? (
+                  <>
+                    <span className={styles.statusDot} />
+                    Open — closes {new Date(currentDeadline!).toLocaleString('en-IN')}
+                  </>
+                ) : (
+                  <>
+                    ⛔ Closed
+                    {currentDeadline
+                      ? ` — deadline was ${new Date(currentDeadline).toLocaleString('en-IN')}`
+                      : ' — no deadline set yet'}
+                  </>
+                )}
               </div>
-            </div>
 
+              <div className={styles.fieldGroup}>
 
+                <div className={styles.field}>
+                  <label className={styles.label}>Registration Deadline</label>
+                  <input
+                    type="datetime-local"
+                    className={styles.input}
+                    value={deadline}
+                    onChange={e => setDeadline(e.target.value)}
+                  />
+                  <p className={styles.fieldHint}>
+                    Window opens immediately and closes automatically at this date and time.
+                  </p>
+                </div>
 
-          </div>
+                <div className={styles.field}>
+                  <label className={styles.label}>Academic Year</label>
+                  <div className={styles.readOnlyField}>
+                    {getAcademicYear()}
+                    <span className={styles.autoLabel}>Auto</span>
+                  </div>
+                </div>
 
-          <button
-            className={styles.primaryBtn}
-            onClick={handleSaveWindow}
-            disabled={savingWindow}
-          >
-            {savingWindow
-              ? <><span className={styles.spinner} /> Saving...</>
-              : 'Save Settings →'
-            }
-          </button>
-
-        </div>
-
-        {/* ── SEMESTER PROMOTION ── */}
-        <p className={styles.sectionTitle}>Semester Promotion</p>
-
-        {promoteError && <div className={styles.errorBanner}>{promoteError}</div>}
-        {promoteSuccess && <div className={styles.successBanner}>✓ {promoteSuccess}</div>}
-
-        <div className={styles.windowCard}>
-          <p style={{ fontSize: '0.82rem', color: '#44474e', margin: '0 0 1rem 0' }}>
-            Promote all students in this campus to the next semester.
-            Students in their final semester (10) will be removed from the system.
-            This action cannot be undone.
-          </p>
-
-          {/* Step 0: Just show the button */}
-          {promoteStep === 0 && (
-            <button
-              className={styles.primaryBtn}
-              onClick={() => setPromoteStep(1)}
-              style={{ background: '#c9a227', color: '#002147' }}
-            >
-              Promote All Students →
-            </button>
-          )}
-
-          {/* Step 1: Show last promotion time and ask to continue */}
-          {promoteStep === 1 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              <div style={{ background: '#fff8e6', border: '1px solid #f5d78c', borderRadius: '0.6rem', padding: '0.9rem 1rem' }}>
-                <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#8b6914', margin: '0 0 0.3rem' }}>
-                  📅 Last Promotion
-                </p>
-                <p style={{ fontSize: '0.85rem', color: '#44474e', margin: 0 }}>
-                  {lastPromotedAt
-                    ? new Date(lastPromotedAt).toLocaleString('en-IN', {
-                        day: 'numeric', month: 'long', year: 'numeric',
-                        hour: '2-digit', minute: '2-digit',
-                      })
-                    : 'Never promoted on this system'}
-                </p>
               </div>
-              <p style={{ fontSize: '0.82rem', color: '#44474e', margin: 0 }}>
-                Please verify the date above before continuing. Only proceed if you intend to start a new semester now.
+
+              <button
+                className={styles.primaryBtn}
+                onClick={handleSaveWindow}
+                disabled={savingWindow}
+              >
+                {savingWindow
+                  ? <><span className={styles.spinner} /> Saving...</>
+                  : 'Save Settings →'
+                }
+              </button>
+
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 2: TIMETABLE GENERATOR ── */}
+        {activeTab === 'timetable' && (
+          <div>
+            <p className={styles.sectionTitle}>Timetable Generation & Management</p>
+            <div className={styles.windowCard}>
+              <p style={{ fontSize: '0.85rem', color: '#44474e', margin: '0 0 1rem 0' }}>
+                Generate, publish, and re-validate automated timetables for all departments in {campusName || 'this campus'}.
               </p>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                className={styles.primaryBtn}
+                onClick={() => router.push('/dashboard/director/timetable')}
+                style={{ background: '#002147' }}
+              >
+                Open Timetable Generator Dashboard →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 3: SEMESTER PROMOTION ── */}
+        {activeTab === 'promotion' && (
+          <div>
+            <p className={styles.sectionTitle}>Semester Promotion</p>
+
+            {promoteError && <div className={styles.errorBanner}>{promoteError}</div>}
+            {promoteSuccess && <div className={styles.successBanner}>✓ {promoteSuccess}</div>}
+
+            <div className={styles.windowCard}>
+              <p style={{ fontSize: '0.82rem', color: '#44474e', margin: '0 0 1rem 0' }}>
+                Promote all students in this campus to the next semester.
+                Students in their final semester (10) will be removed from the system.
+                This action cannot be undone.
+              </p>
+
+              {/* Step 0: Just show the button */}
+              {promoteStep === 0 && (
                 <button
                   className={styles.primaryBtn}
-                  onClick={() => setPromoteStep(2)}
+                  onClick={() => setPromoteStep(1)}
                   style={{ background: '#c9a227', color: '#002147' }}
                 >
-                  Continue →
+                  Promote All Students →
                 </button>
-                <button
-                  className={styles.primaryBtn}
-                  onClick={() => setPromoteStep(0)}
-                  style={{ background: '#9ba1ab' }}
-                >
-                  Cancel
-                </button>
-              </div>
+              )}
+
+              {/* Step 1: Show last promotion time and ask to continue */}
+              {promoteStep === 1 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  <div style={{ background: '#fff8e6', border: '1px solid #f5d78c', borderRadius: '0.6rem', padding: '0.9rem 1rem' }}>
+                    <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#8b6914', margin: '0 0 0.3rem' }}>
+                      📅 Last Promotion
+                    </p>
+                    <p style={{ fontSize: '0.85rem', color: '#44474e', margin: 0 }}>
+                      {lastPromotedAt
+                        ? new Date(lastPromotedAt).toLocaleString('en-IN', {
+                            day: 'numeric', month: 'long', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit',
+                          })
+                        : 'Never promoted on this system'}
+                    </p>
+                  </div>
+                  <p style={{ fontSize: '0.82rem', color: '#44474e', margin: 0 }}>
+                    Please verify the date above before continuing. Only proceed if you intend to start a new semester now.
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                    <button
+                      className={styles.primaryBtn}
+                      onClick={() => setPromoteStep(2)}
+                      style={{ background: '#c9a227', color: '#002147' }}
+                    >
+                      Continue →
+                    </button>
+                    <button
+                      className={styles.primaryBtn}
+                      onClick={() => setPromoteStep(0)}
+                      style={{ background: '#9ba1ab' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Explicit confirmation */}
+              {promoteStep === 2 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', alignItems: 'center' }}>
+                  <div style={{ background: '#fdf2f2', border: '1px solid #f5c6c6', borderRadius: '0.6rem', padding: '0.9rem 1rem', width: '100%', maxWidth: '28rem', boxSizing: 'border-box' }}>
+                    <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#c0392b', margin: 0 }}>
+                      ⚠️ Has the next semester officially started?
+                    </p>
+                    <p style={{ fontSize: '0.78rem', color: '#44474e', margin: '0.35rem 0 0' }}>
+                      This will increment every student's semester by 1 and permanently remove Semester 10 graduates.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                    <button
+                      className={styles.primaryBtn}
+                      onClick={handlePromoteStudents}
+                      disabled={promoting}
+                      style={{ background: '#c0392b' }}
+                    >
+                      {promoting
+                        ? <><span className={styles.spinner} /> Promoting...</>
+                        : 'Yes, Start New Semester →'
+                      }
+                    </button>
+                    <button
+                      className={styles.primaryBtn}
+                      onClick={() => setPromoteStep(0)}
+                      disabled={promoting}
+                      style={{ background: '#9ba1ab' }}
+                    >
+                      No, Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-
-          {/* Step 2: Explicit confirmation */}
-          {promoteStep === 2 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              <div style={{ background: '#fdf2f2', border: '1px solid #f5c6c6', borderRadius: '0.6rem', padding: '0.9rem 1rem' }}>
-                <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#c0392b', margin: 0 }}>
-                  ⚠️ Has the next semester officially started?
-                </p>
-                <p style={{ fontSize: '0.78rem', color: '#44474e', margin: '0.35rem 0 0' }}>
-                  This will increment every student's semester by 1 and permanently remove Semester 10 graduates.
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button
-                  className={styles.primaryBtn}
-                  onClick={handlePromoteStudents}
-                  disabled={promoting}
-                  style={{ background: '#c0392b' }}
-                >
-                  {promoting
-                    ? <><span className={styles.spinner} /> Promoting...</>
-                    : 'Yes, Start New Semester →'
-                  }
-                </button>
-                <button
-                  className={styles.primaryBtn}
-                  onClick={() => setPromoteStep(0)}
-                  disabled={promoting}
-                  style={{ background: '#9ba1ab' }}
-                >
-                  No, Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-
-
+          </div>
+        )}
 
       </div>
     </div>

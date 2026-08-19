@@ -12,6 +12,8 @@ const CourseSchema = z.object({
   title: z.string().min(1, 'Title is required').max(150, 'Title must not exceed 150 characters'),
   semester: z.number().int().min(1).max(10),
   credits: z.number().int().min(1),
+  hours_per_week: z.number().int().min(1).max(20).optional(),
+  is_lab: z.boolean().optional(),
   category: z.enum(['DSC','DSE','MDC','VAC','SEC','AEC','MOC','MOOC','INT','RPH','FWD','DSS','DMP','CIP']),
   tag: z.string().optional().or(z.literal('')),
 })
@@ -21,6 +23,8 @@ const UpdateCourseSchema = z.object({
   course_code: z.string().min(1, 'Course code is required').max(20, 'Course code must not exceed 20 characters'),
   title: z.string().min(1, 'Title is required').max(150, 'Title must not exceed 150 characters'),
   credits: z.number().int().min(1),
+  hours_per_week: z.number().int().min(1).max(20).optional(),
+  is_lab: z.boolean().optional(),
   category: z.enum(['DSC','DSE','MDC','VAC','SEC','AEC','MOC','MOOC','INT','RPH','FWD','DSS','DMP','CIP']),
   tag: z.string().optional().or(z.literal('')),
 })
@@ -87,6 +91,8 @@ export async function POST(request: NextRequest) {
       department_id: auth.department_id,
       semester: parsed.data.semester,
       credits: parsed.data.credits,
+      hours_per_week: parsed.data.hours_per_week ?? parsed.data.credits,
+      is_lab: parsed.data.is_lab ?? false,
       category: parsed.data.category,
       tag: parsed.data.tag || null,
     })
@@ -134,6 +140,8 @@ export async function PUT(request: NextRequest) {
       course_code: rest.course_code,
       title: rest.title,
       credits: rest.credits,
+      hours_per_week: rest.hours_per_week ?? rest.credits,
+      is_lab: rest.is_lab ?? false,
       category: rest.category,
       tag: rest.tag || null,
     })

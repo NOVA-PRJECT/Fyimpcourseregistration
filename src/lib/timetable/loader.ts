@@ -1,0 +1,266 @@
+import { SupabaseClient } from '@supabase/supabase-js';
+import { CourseNode, SlotId } from './types';
+
+export async function loadGenerationInput(
+  supabase: SupabaseClient,
+  academicYear: string,
+  semester: number,
+  campusId?: string,
+  onProgress?: (progress: number, stepMessage: string, stats?: Record<string, any>) => Promise<void> | void
+): Promise<{
+  courses: CourseNode[];
+  slotMap: Map<number, Map<number, SlotId>>;
+  studentDeptMap: Map<string, string>;
+  stats: {
+    registrationCount: number;
+    studentCount: number;
+    departmentCount: number;
+    courseCount: number;
+    crossDeptCourseCount: number;
+    slotCount: number;
+  };
+}> {
+  await onProgress?.(5, '🔍 Reading student course registrations from database...');
+
+  // Query 1: Fetch student registrations
+  let regQuery = supabase
+    .from('student_registrations')
+    .select(`
+      student_id,
+      campus_id,
+      semester,
+      academic_year,
+      slot_1_course_id,
+      slot_2_course_id,
+      slot_3_course_id,
+      slot_4_course_id,
+      slot_5_course_id,
+      slot_6_course_id
+    `)
+    .eq('academic_year', academicYear)
+    .eq('semester', semester);
+
+  if (campusId) {
+    regQuery = regQuery.eq('campus_id', campusId);
+  }
+
+  const { data: rawRegistrations, error: regError } = await regQuery;
+
+  if (regError) {
+    console.error('loadGenerationInput student_registrations error:', regError);
+    throw new Error(`Database error while reading student registrations: ${regError.message}`);
+  }
+
+  if (!rawRegistrations || rawRegistrations.length === 0) {
+    throw new Error('No student registrations found for this academic year and semester. Ensure students have submitted their course registrations.');
+  }
+
+  await onProgress?.(
+    10,
+    `📥 Loaded ${rawRegistrations.length} student registration submissions...`,
+    { registrationCount: rawRegistrations.length }
+  );
+
+  // Extract all student-to-course pairs from slots 1..6
+  const studentCoursePairs: Array<{ studentId: string; courseId: string }> = [];
+  const allCourseIds = new Set<string>();
+
+  for (const reg of rawRegistrations) {
+    const slots = [
+      reg.slot_1_course_id,
+      reg.slot_2_course_id,
+      reg.slot_3_course_id,
+      reg.slot_4_course_id,
+      reg.slot_5_course_id,
+      reg.slot_6_course_id,
+    ];
+    for (const courseId of slots) {
+      if (courseId) {
+        studentCoursePairs.push({ studentId: reg.student_id, courseId });
+        allCourseIds.add(courseId);
+      }
+    }
+  }
+
+  if (allCourseIds.size === 0) {
+    throw new Error('No course selections found in student registrations for this semester.');
+  }
+
+  // Query 2: Fetch student to department mapping
+  const studentDeptMap = new Map<string, string>();
+  const allStudentIds = Array.from(new Set(rawRegistrations.map((r: any) => r.student_id).filter(Boolean)));
+
+  if (allStudentIds.length > 0) {
+    // Primary query: students table for department_id
+    const { data: studentDepts } = await supabase
+      .from('students')
+      .select('id, department_id')
+      .in('id', allStudentIds);
+
+    for (const row of studentDepts ?? []) {
+      if (row.department_id) studentDeptMap.set(row.id, row.department_id);
+    }
+
+    // Fallback query: users table for any unmapped student_ids
+    const unmappedIds = allStudentIds.filter((id) => !studentDeptMap.has(id));
+    if (unmappedIds.length > 0) {
+      const { data: userDepts } = await supabase
+        .from('users')
+        .select('id, department_id, dep')
+        .in('id', unmappedIds);
+
+      for (const row of userDepts ?? []) {
+        const deptId = row.department_id || row.dep;
+        if (deptId) studentDeptMap.set(row.id, deptId);
+      }
+    }
+  }
+
+  const deptCount = new Set(Array.from(studentDeptMap.values())).size;
+  await onProgress?.(
+    18,
+    `🏢 Mapped ${studentDeptMap.size} enrolled students across ${deptCount} campus departments...`,
+    {
+      registrationCount: rawRegistrations.length,
+      studentCount: studentDeptMap.size,
+      departmentCount: deptCount,
+    }
+  );
+
+  // Query 3: Fetch courses metadata
+  const { data: rawCourses, error: courseError } = await supabase
+    .from('courses')
+    .select('id, department_id, hours_per_week, is_lab')
+    .in('id', Array.from(allCourseIds));
+
+  if (courseError) {
+    console.error('loadGenerationInput courses error:', courseError);
+    throw new Error(`Database error while reading courses: ${courseError.message}`);
+  }
+
+  const courseMetaMap = new Map<string, { departmentId: string; hoursPerWeek: number; isLab: boolean }>();
+  for (const c of rawCourses || []) {
+    courseMetaMap.set(c.id, {
+      departmentId: c.department_id,
+      hoursPerWeek: c.hours_per_week ?? 3,
+      isLab: Boolean(c.is_lab),
+    });
+  }
+
+  // Group student enrollments by course_id and track student department IDs
+  const courseGroupMap = new Map<
+    string,
+    {
+      departmentId: string;
+      hoursPerWeek: number;
+      isLab: boolean;
+      studentIds: Set<string>;
+      studentDeptIds: Set<string>;
+    }
+  >();
+
+  for (const pair of studentCoursePairs) {
+    const meta = courseMetaMap.get(pair.courseId);
+    if (!meta) continue;
+
+    let group = courseGroupMap.get(pair.courseId);
+    if (!group) {
+      group = {
+        departmentId: meta.departmentId,
+        hoursPerWeek: meta.hoursPerWeek,
+        isLab: meta.isLab,
+        studentIds: new Set<string>(),
+        studentDeptIds: new Set<string>(),
+      };
+      courseGroupMap.set(pair.courseId, group);
+    }
+    group.studentIds.add(pair.studentId);
+    const sDept = studentDeptMap.get(pair.studentId);
+    if (sDept) {
+      group.studentDeptIds.add(sDept);
+    } else if (meta.departmentId) {
+      group.studentDeptIds.add(meta.departmentId);
+    }
+  }
+
+  const courses: CourseNode[] = [];
+
+  for (const [courseId, group] of courseGroupMap.entries()) {
+    if (group.studentIds.size === 0) continue;
+
+    courses.push({
+      courseId,
+      departmentId: group.departmentId,
+      hoursPerWeek: group.hoursPerWeek,
+      isLab: group.isLab,
+      remainingHours: group.hoursPerWeek,
+      isCrossDept: group.studentDeptIds.size > 1,
+      studentIds: group.studentIds,
+      conflictsWith: new Set<string>(),
+    });
+  }
+
+  if (courses.length === 0) {
+    throw new Error('No active courses found for the registered students in this campus.');
+  }
+
+  const crossDeptCourseCount = courses.filter((c) => c.isCrossDept).length;
+  await onProgress?.(
+    25,
+    `📚 Prepared ${courses.length} active courses (${crossDeptCourseCount} cross-department)...`,
+    {
+      registrationCount: rawRegistrations.length,
+      studentCount: studentDeptMap.size,
+      departmentCount: deptCount,
+      courseCount: courses.length,
+      crossDeptCourseCount,
+    }
+  );
+
+  // Query 4: Fetch time slots
+  const { data: rawSlots, error: slotError } = await supabase
+    .from('time_slots')
+    .select('id, day_of_week, period_number')
+    .order('day_of_week')
+    .order('period_number');
+
+  if (slotError) {
+    console.error('loadGenerationInput time_slots error:', slotError);
+    throw new Error(`Database error while reading time slots: ${slotError.message}`);
+  }
+
+  if (!rawSlots || rawSlots.length === 0) {
+    throw new Error('System time slot configurations are missing. Please contact the administrator.');
+  }
+
+  const slotMap = new Map<number, Map<number, SlotId>>();
+
+  for (const slot of rawSlots || []) {
+    let dayMap = slotMap.get(slot.day_of_week);
+    if (!dayMap) {
+      dayMap = new Map<number, SlotId>();
+      slotMap.set(slot.day_of_week, dayMap);
+    }
+    dayMap.set(slot.period_number, slot.id);
+  }
+
+  let slotCount = 0;
+  slotMap.forEach((dayMap) => (slotCount += dayMap.size));
+
+  const stats = {
+    registrationCount: rawRegistrations.length,
+    studentCount: studentDeptMap.size,
+    departmentCount: deptCount,
+    courseCount: courses.length,
+    crossDeptCourseCount,
+    slotCount,
+  };
+
+  await onProgress?.(
+    30,
+    `⏰ Verified ${slotCount} weekly time slots. Ready for conflict graph analysis...`,
+    stats
+  );
+
+  return { courses, slotMap, studentDeptMap, stats };
+}
