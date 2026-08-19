@@ -130,7 +130,7 @@ export async function loadGenerationInput(
   // Query 3: Fetch courses metadata
   const { data: rawCourses, error: courseError } = await supabase
     .from('courses')
-    .select('id, department_id, hours_per_week, is_lab')
+    .select('id, department_id, theory_hours_per_week, practical_hours_per_week')
     .in('id', Array.from(allCourseIds));
 
   if (courseError) {
@@ -138,12 +138,12 @@ export async function loadGenerationInput(
     throw new Error(`Database error while reading courses: ${courseError.message}`);
   }
 
-  const courseMetaMap = new Map<string, { departmentId: string; hoursPerWeek: number; isLab: boolean }>();
+  const courseMetaMap = new Map<string, { departmentId: string; theoryHours: number; practicalHours: number }>();
   for (const c of rawCourses || []) {
     courseMetaMap.set(c.id, {
       departmentId: c.department_id,
-      hoursPerWeek: c.hours_per_week ?? 3,
-      isLab: Boolean(c.is_lab),
+      theoryHours: c.theory_hours_per_week ?? 0,
+      practicalHours: c.practical_hours_per_week ?? 0,
     });
   }
 
@@ -152,8 +152,8 @@ export async function loadGenerationInput(
     string,
     {
       departmentId: string;
-      hoursPerWeek: number;
-      isLab: boolean;
+      theoryHours: number;
+      practicalHours: number;
       studentIds: Set<string>;
       studentDeptIds: Set<string>;
     }
@@ -167,8 +167,8 @@ export async function loadGenerationInput(
     if (!group) {
       group = {
         departmentId: meta.departmentId,
-        hoursPerWeek: meta.hoursPerWeek,
-        isLab: meta.isLab,
+        theoryHours: meta.theoryHours,
+        practicalHours: meta.practicalHours,
         studentIds: new Set<string>(),
         studentDeptIds: new Set<string>(),
       };
@@ -187,13 +187,15 @@ export async function loadGenerationInput(
 
   for (const [courseId, group] of courseGroupMap.entries()) {
     if (group.studentIds.size === 0) continue;
+    if (group.theoryHours === 0 && group.practicalHours === 0) continue;
 
     courses.push({
       courseId,
       departmentId: group.departmentId,
-      hoursPerWeek: group.hoursPerWeek,
-      isLab: group.isLab,
-      remainingHours: group.hoursPerWeek,
+      theoryHours: group.theoryHours,
+      practicalHours: group.practicalHours,
+      remainingTheoryHours: group.theoryHours,
+      remainingPracticalHours: group.practicalHours,
       isCrossDept: group.studentDeptIds.size > 1,
       studentIds: group.studentIds,
       conflictsWith: new Set<string>(),

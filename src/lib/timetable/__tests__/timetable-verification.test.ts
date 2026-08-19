@@ -18,17 +18,18 @@ function buildSyntheticSlotMap(): Map<number, Map<number, SlotId>> {
 function createCourse(
   courseId: string,
   departmentId: string,
-  hoursPerWeek: number,
-  isLab: boolean,
+  theoryHours: number,
+  practicalHours: number,
   studentIds: string[],
   isCrossDept: boolean = false
 ): CourseNode {
   return {
     courseId,
     departmentId,
-    hoursPerWeek,
-    isLab,
-    remainingHours: hoursPerWeek,
+    theoryHours,
+    practicalHours,
+    remainingTheoryHours: theoryHours,
+    remainingPracticalHours: practicalHours,
     isCrossDept,
     studentIds: new Set(studentIds),
     conflictsWith: new Set<string>(),
@@ -69,10 +70,10 @@ describe('Timetable System End-to-End Verification', () => {
     it('schedules multi-department courses with lab blocks and 0 conflicts', () => {
       const slotMap = buildSyntheticSlotMap();
       const courses = [
-        createCourse('CS101', 'dept_cs', 3, false, ['s1', 's2', 's3']),
-        createCourse('CS102_LAB', 'dept_cs', 2, true, ['s1', 's2']),
-        createCourse('EC201', 'dept_ec', 4, false, ['s4', 's5']),
-        createCourse('MATH301', 'dept_cs', 3, false, ['s1', 's4'], true), // Cross-dept
+        createCourse('CS101', 'dept_cs', 3, 0, ['s1', 's2', 's3']),
+        createCourse('CS102_LAB', 'dept_cs', 0, 2, ['s1', 's2']),
+        createCourse('EC201', 'dept_ec', 4, 0, ['s4', 's5']),
+        createCourse('MATH301', 'dept_cs', 3, 0, ['s1', 's4'], true), // Cross-dept
       ];
 
       const result = generateTimetable(courses, slotMap);
@@ -96,24 +97,23 @@ describe('Timetable System End-to-End Verification', () => {
 
       // Create 32 1-hour courses sharing student 'shared_student' (only 30 slots available)
       for (let i = 1; i <= 32; i++) {
-        courses.push(createCourse(`COURSE_${i}`, 'dept_1', 1, false, ['shared_student']));
+        courses.push(createCourse(`COURSE_${i}`, 'dept_1', 1, 0, ['shared_student']));
       }
 
       const result = generateTimetable(courses, slotMap);
 
       expect(result.conflicts.length).toBeGreaterThan(0);
       const conflict = result.conflicts[0];
-      expect(conflict.reason).toContain('Could not allocate');
-      expect(conflict.reason).toContain('because');
+      expect(conflict.reason).toContain('could not be placed');
       expect(conflict.conflictingStudentCount).toBeGreaterThan(0);
     });
 
     it('ensures no student has overlapping classes assigned at the same slot', () => {
       const slotMap = buildSyntheticSlotMap();
       const courses = [
-        createCourse('C1', 'dept1', 5, false, ['student_x']),
-        createCourse('C2', 'dept1', 5, false, ['student_x']),
-        createCourse('C3', 'dept1', 5, false, ['student_x']),
+        createCourse('C1', 'dept1', 5, 0, ['student_x']),
+        createCourse('C2', 'dept1', 5, 0, ['student_x']),
+        createCourse('C3', 'dept1', 5, 0, ['student_x']),
       ];
 
       const result = generateTimetable(courses, slotMap);

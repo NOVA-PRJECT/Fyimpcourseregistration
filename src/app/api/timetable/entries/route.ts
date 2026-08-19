@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
       department_id,
       time_slot_id,
       is_lab_block,
+      session_type,
       status,
       courses (
         id,
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
     startTime: entry.time_slots?.start_time,
     endTime: entry.time_slots?.end_time,
     isLabBlock: entry.is_lab_block,
+    sessionType: entry.session_type || 'theory',
     status: entry.status,
   }));
 
@@ -153,7 +155,8 @@ export async function GET(request: NextRequest) {
 
   const formattedDepartments = (allDepartmentsData || []).map((d: any) => ({
     id: d.id,
-    name: d.code ? `${d.name} (${d.code})` : d.name,
+    name: d.name,
+    code: d.code || d.name,
   }));
 
   return NextResponse.json({

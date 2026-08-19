@@ -3,9 +3,10 @@ export type SlotId = string; // uuid of time_slots row
 export interface CourseNode {
   courseId: string;
   departmentId: string;
-  hoursPerWeek: number;
-  isLab: boolean;
-  remainingHours: number;
+  theoryHours: number;
+  practicalHours: number;
+  remainingTheoryHours: number;
+  remainingPracticalHours: number;
   isCrossDept: boolean; // true if students come from >1 department
   studentIds: Set<string>;
   conflictsWith: Set<string>; // courseIds that share at least one student
@@ -16,6 +17,7 @@ export interface SlotAssignment {
   departmentId: string;
   timeSlotId: SlotId;
   isLabBlock: boolean; // true = this entry represents a 2hr lab block
+  sessionType: 'theory' | 'practical';
 }
 
 export interface GenerationResult {
@@ -26,6 +28,7 @@ export interface GenerationResult {
 export interface UnresolvableCourse {
   courseId: string;
   departmentId: string;
+  sessionType: 'theory' | 'practical';
   blockingCourseIds: string[];
   conflictingStudentCount: number;
   reason: string;

@@ -17,6 +17,7 @@ interface TimetableEntry {
   startTime: string;
   endTime: string;
   isLabBlock: boolean;
+  sessionType?: 'theory' | 'practical';
   status: string;
 }
 
@@ -64,7 +65,8 @@ export default function CampusDirectorTimetablePage() {
   const [entries, setEntries] = useState<TimetableEntry[]>([]);
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [activeDeptId, setActiveDeptId] = useState<string>('');
-  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [departments, setDepartments] = useState<{ id: string; name: string; code?: string }[]>([]);
+  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
 
   // Feedback banners
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -448,9 +450,11 @@ export default function CampusDirectorTimetablePage() {
                   key={dept.id}
                   className={`${styles.tab} ${activeDeptId === dept.id ? styles.activeTab : ''}`}
                   onClick={() => setActiveDeptId(dept.id)}
-                  title={dept.name}
+                  onMouseEnter={(e) => setTooltip({ text: dept.name, x: e.clientX + 14, y: e.clientY + 14 })}
+                  onMouseMove={(e) => setTooltip({ text: dept.name, x: e.clientX + 14, y: e.clientY + 14 })}
+                  onMouseLeave={() => setTooltip(null)}
                 >
-                  <span className={styles.tabText}>{dept.name}</span>
+                  {dept.code || dept.name}
                 </button>
               ))}
             </div>
@@ -499,6 +503,22 @@ export default function CampusDirectorTimetablePage() {
           </div>
         )}
       </div>
+
+      {/* Instant Pointer Mouse Tooltip */}
+      {tooltip && (
+        <div
+          className={styles.mouseTooltip}
+          style={{
+            left: `${tooltip.x}px`,
+            top: `${tooltip.y}px`,
+            position: 'fixed',
+            pointerEvents: 'none',
+            zIndex: 1000,
+          }}
+        >
+          {tooltip.text}
+        </div>
+      )}
     </div>
   );
 }

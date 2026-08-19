@@ -12,8 +12,8 @@ const CourseSchema = z.object({
   title: z.string().min(1, 'Title is required').max(150, 'Title must not exceed 150 characters'),
   semester: z.number().int().min(1).max(10),
   credits: z.number().int().min(1),
-  hours_per_week: z.number().int().min(1).max(20).optional(),
-  is_lab: z.boolean().optional(),
+  theory_hours_per_week: z.number().int().min(0).max(20).optional(),
+  practical_hours_per_week: z.number().int().min(0).max(20).optional(),
   category: z.enum(['DSC','DSE','MDC','VAC','SEC','AEC','MOC','MOOC','INT','RPH','FWD','DSS','DMP','CIP']),
   tag: z.string().optional().or(z.literal('')),
 })
@@ -23,8 +23,8 @@ const UpdateCourseSchema = z.object({
   course_code: z.string().min(1, 'Course code is required').max(20, 'Course code must not exceed 20 characters'),
   title: z.string().min(1, 'Title is required').max(150, 'Title must not exceed 150 characters'),
   credits: z.number().int().min(1),
-  hours_per_week: z.number().int().min(1).max(20).optional(),
-  is_lab: z.boolean().optional(),
+  theory_hours_per_week: z.number().int().min(0).max(20).optional(),
+  practical_hours_per_week: z.number().int().min(0).max(20).optional(),
   category: z.enum(['DSC','DSE','MDC','VAC','SEC','AEC','MOC','MOOC','INT','RPH','FWD','DSS','DMP','CIP']),
   tag: z.string().optional().or(z.literal('')),
 })
@@ -82,6 +82,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
   }
 
+  const theoryHours = parsed.data.theory_hours_per_week ?? parsed.data.credits;
+  const practicalHours = parsed.data.practical_hours_per_week ?? 0;
+
   const supabase = await getSupabaseServerClient()
   const { error } = await supabase
     .from('courses')
@@ -91,8 +94,8 @@ export async function POST(request: NextRequest) {
       department_id: auth.department_id,
       semester: parsed.data.semester,
       credits: parsed.data.credits,
-      hours_per_week: parsed.data.hours_per_week ?? parsed.data.credits,
-      is_lab: parsed.data.is_lab ?? false,
+      theory_hours_per_week: theoryHours,
+      practical_hours_per_week: practicalHours,
       category: parsed.data.category,
       tag: parsed.data.tag || null,
     })
@@ -132,6 +135,9 @@ export async function PUT(request: NextRequest) {
 
   const { id, ...rest } = parsed.data
 
+  const theoryHours = rest.theory_hours_per_week ?? rest.credits;
+  const practicalHours = rest.practical_hours_per_week ?? 0;
+
   const supabase = await getSupabaseServerClient()
 
   const { data, error } = await supabase
@@ -140,8 +146,8 @@ export async function PUT(request: NextRequest) {
       course_code: rest.course_code,
       title: rest.title,
       credits: rest.credits,
-      hours_per_week: rest.hours_per_week ?? rest.credits,
-      is_lab: rest.is_lab ?? false,
+      theory_hours_per_week: theoryHours,
+      practical_hours_per_week: practicalHours,
       category: rest.category,
       tag: rest.tag || null,
     })
@@ -164,7 +170,7 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json({ success: true, message: 'Course updated successfully' })
 }
 
-// DELETE — delete course
+// DELETE — remove course
 export async function DELETE(request: NextRequest) {
   const auth = await verifyHod()
   if (!auth.success) return handleAuthError(auth)
@@ -186,24 +192,17 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
   }
 
-  const { course_id } = parsed.data
-
   const supabase = await getSupabaseServerClient()
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('courses')
     .delete()
-    .eq('id', course_id)
+    .eq('id', parsed.data.course_id)
     .eq('department_id', auth.department_id)
-    .select()
 
   if (error) {
-    logServerError('/api/hod/courses', error, { userId: auth.userId, method: 'DELETE', courseId: course_id })
+    logServerError('/api/hod/courses', error, { userId: auth.userId, method: 'DELETE', courseId: parsed.data.course_id })
     return NextResponse.json({ error: 'Failed to delete course' }, { status: 500 })
-  }
-
-  if (!data || data.length === 0) {
-    return NextResponse.json({ error: 'Course not found' }, { status: 404 })
   }
 
   return NextResponse.json({ success: true, message: 'Course deleted successfully' })

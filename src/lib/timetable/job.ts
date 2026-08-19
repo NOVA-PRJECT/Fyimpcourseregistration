@@ -103,7 +103,7 @@ export async function runGenerationJob(
     // 6. Deduplicate & Upsert new draft assignments
     const uniqueAssignmentMap = new Map<string, typeof result.assignments[0]>();
     for (const a of result.assignments) {
-      const key = `${academicYear}:${semester}:${a.courseId}:${a.timeSlotId}:${a.departmentId}`;
+      const key = `${academicYear}:${semester}:${a.courseId}:${a.timeSlotId}:${a.departmentId}:${a.sessionType}`;
       uniqueAssignmentMap.set(key, a);
     }
     const deduplicatedAssignments = Array.from(uniqueAssignmentMap.values());
@@ -123,6 +123,7 @@ export async function runGenerationJob(
         department_id: a.departmentId,
         time_slot_id: a.timeSlotId,
         is_lab_block: a.isLabBlock,
+        session_type: a.sessionType,
         status: 'draft',
         generated_by: triggeredBy,
         generated_at: nowIso,

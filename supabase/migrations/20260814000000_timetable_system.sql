@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS timetable_entries (
   department_id uuid NOT NULL REFERENCES departments(id),
   time_slot_id uuid NOT NULL REFERENCES time_slots(id),
   is_lab_block boolean NOT NULL DEFAULT false,
+  session_type text NOT NULL DEFAULT 'theory'
+                  CHECK (session_type IN ('theory', 'practical')),
   status text NOT NULL DEFAULT 'draft'
                   CHECK (status IN ('draft','published','conflict')),
   generated_by uuid REFERENCES auth.users(id),

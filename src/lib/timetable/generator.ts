@@ -1,7 +1,6 @@
 import {
   CourseNode,
   GenerationResult,
-  LAB_BLOCK_PAIRS,
   SlotAssignment,
   SlotId,
   UnresolvableCourse,
@@ -32,12 +31,14 @@ function countSharedStudents(a: CourseNode, b: CourseNode): number {
 
 function canPlace(
   course: CourseNode,
-  slotId: SlotId,
+  slotIds: SlotId[],
   studentSlotMap: Map<string, Set<SlotId>>
 ): boolean {
   for (const studentId of course.studentIds) {
-    if (studentSlotMap.get(studentId)?.has(slotId)) {
-      return false;
+    const occupied = studentSlotMap.get(studentId);
+    if (!occupied) continue;
+    for (const slotId of slotIds) {
+      if (occupied.has(slotId)) return false;
     }
   }
   return true;
@@ -45,29 +46,28 @@ function canPlace(
 
 function place(
   course: CourseNode,
-  slotId: SlotId,
-  isLabBlock: boolean,
-  assignments: SlotAssignment[],
+  slotIds: SlotId[],
+  sessionType: 'theory' | 'practical',
+  studentDeptMap: Map<string, string>,
   studentSlotMap: Map<string, Set<SlotId>>,
-  courseAssignedDays: Map<string, Set<number>>,
-  day: number,
-  studentDeptMap: Map<string, string>
-) {
-  const affectedDeptIds = new Set<string>();
+  assignments: SlotAssignment[]
+): void {
+  const affectedDeptIds = new Set<string>([course.departmentId]);
   for (const studentId of course.studentIds) {
     const deptId = studentDeptMap.get(studentId);
     if (deptId) affectedDeptIds.add(deptId);
   }
-  // Always include the owning department even if no students mapped
-  affectedDeptIds.add(course.departmentId);
 
   for (const deptId of affectedDeptIds) {
-    assignments.push({
-      courseId: course.courseId,
-      departmentId: deptId,
-      timeSlotId: slotId,
-      isLabBlock,
-    });
+    for (const slotId of slotIds) {
+      assignments.push({
+        courseId: course.courseId,
+        departmentId: deptId,
+        timeSlotId: slotId,
+        isLabBlock: sessionType === 'practical',
+        sessionType,
+      });
+    }
   }
 
   for (const studentId of course.studentIds) {
@@ -76,15 +76,10 @@ function place(
       studentSet = new Set();
       studentSlotMap.set(studentId, studentSet);
     }
-    studentSet.add(slotId);
+    for (const slotId of slotIds) {
+      studentSet.add(slotId);
+    }
   }
-
-  let daySet = courseAssignedDays.get(course.courseId);
-  if (!daySet) {
-    daySet = new Set();
-    courseAssignedDays.set(course.courseId, daySet);
-  }
-  daySet.add(day);
 }
 
 export function generateTimetable(
@@ -104,7 +99,7 @@ export function generateTimetable(
   const assignments: SlotAssignment[] = [];
   const conflicts: UnresolvableCourse[] = [];
   const studentSlotMap = new Map<string, Set<SlotId>>();
-  const courseAssignedDays = new Map<string, Set<number>>();
+  const theoryAssignedDays = new Map<string, Set<number>>();
 
   // 1. Build conflict graph
   let conflictEdgesCount = 0;
@@ -124,7 +119,10 @@ export function generateTimetable(
     { conflictEdgesCount }
   );
 
-  const totalHours = courses.reduce((sum, c) => sum + c.hoursPerWeek, 0);
+  const totalHours = courses.reduce(
+    (sum, c) => sum + c.theoryHours + c.practicalHours,
+    0
+  );
 
   // 2. Split into phases
   const phase1 = courses.filter((c) => !c.isCrossDept);
@@ -134,28 +132,25 @@ export function generateTimetable(
     {
       name: 'Single-Department Courses',
       courses: phase1,
-      periods: [1, 2, 3, 4, 5, 6],
-      labPairs: [
-        [1, 2],
-        [2, 3],
-        [4, 5],
-        [5, 6],
-      ] as [number, number][],
+      theoryPeriods: [1, 2, 3, 4, 5, 6], // Morning first [1,2,3], then [4,5,6]
     },
     {
       name: 'Cross-Department Courses',
       courses: phase2,
-      periods: [4, 5, 1, 2, 3, 6],
-      labPairs: [
-        [4, 5],
-        [5, 6],
-        [1, 2],
-        [2, 3],
-      ] as [number, number][],
+      theoryPeriods: [4, 5, 1, 2, 3, 6], // Afternoon first [4,5], then [1,2,3,6]
     },
   ];
 
   const days = [1, 2, 3, 4, 5];
+
+  // Practical lab block pairs ordered: Afternoon first [(4,5), (5,6)], then Morning [(1,2), (2,3)]
+  // P3+P4 is ALWAYS illegal (crosses lunch).
+  const practicalLabPairOrders: [number, number][] = [
+    [4, 5],
+    [5, 6],
+    [1, 2],
+    [2, 3],
+  ];
 
   for (const phase of phases) {
     const deptMap = new Map<string, CourseNode[]>();
@@ -174,96 +169,61 @@ export function generateTimetable(
 
     const deptKeys = Array.from(deptMap.keys());
 
-    while (phase.courses.some((c) => c.remainingHours > 0)) {
+    while (
+      phase.courses.some(
+        (c) => c.remainingTheoryHours > 0 || c.remainingPracticalHours > 0
+      )
+    ) {
       let anyPlacedInRound = false;
 
       for (const deptId of deptKeys) {
         const deptCourses = deptMap.get(deptId) || [];
-        const course = deptCourses.find((c) => c.remainingHours > 0);
+        const course = deptCourses.find(
+          (c) => c.remainingTheoryHours > 0 || c.remainingPracticalHours > 0
+        );
         if (!course) continue;
 
-        let placed = false;
-        const usedDays = courseAssignedDays.get(course.courseId) || new Set();
+        let placedInThisRound = false;
 
-        const sortedDays = [
-          ...days.filter((d) => !usedDays.has(d)),
-          ...days.filter((d) => usedDays.has(d)),
-        ];
+        // Priority 1: Theory placement
+        if (course.remainingTheoryHours > 0) {
+          const usedDays = theoryAssignedDays.get(course.courseId) || new Set();
+          const sortedDays = [
+            ...days.filter((d) => !usedDays.has(d)),
+            ...days.filter((d) => usedDays.has(d)),
+          ];
 
-        if (course.isLab && course.remainingHours >= 2) {
-          for (const [pA, pB] of phase.labPairs) {
-            if (placed) break;
-            for (const day of sortedDays) {
-              const slotA = slotMap.get(day)?.get(pA);
-              const slotB = slotMap.get(day)?.get(pB);
-              if (
-                slotA &&
-                slotB &&
-                canPlace(course, slotA, studentSlotMap) &&
-                canPlace(course, slotB, studentSlotMap)
-              ) {
-                place(course, slotA, true, assignments, studentSlotMap, courseAssignedDays, day, studentDeptMap);
-                place(course, slotB, true, assignments, studentSlotMap, courseAssignedDays, day, studentDeptMap);
-                course.remainingHours -= 2;
-                placed = true;
-                anyPlacedInRound = true;
-                break;
-              }
-            }
-          }
-        } else {
           for (const day of sortedDays) {
-            if (placed) break;
-            for (const period of phase.periods) {
-              const slot = slotMap.get(day)?.get(period);
-              if (slot && canPlace(course, slot, studentSlotMap)) {
-                place(course, slot, false, assignments, studentSlotMap, courseAssignedDays, day, studentDeptMap);
-                course.remainingHours -= 1;
-                placed = true;
+            if (placedInThisRound) break;
+            for (const period of phase.theoryPeriods) {
+              const slotId = slotMap.get(day)?.get(period);
+              if (slotId && canPlace(course, [slotId], studentSlotMap)) {
+                place(
+                  course,
+                  [slotId],
+                  'theory',
+                  studentDeptMap,
+                  studentSlotMap,
+                  assignments
+                );
+                course.remainingTheoryHours -= 1;
+
+                let daySet = theoryAssignedDays.get(course.courseId);
+                if (!daySet) {
+                  daySet = new Set();
+                  theoryAssignedDays.set(course.courseId, daySet);
+                }
+                daySet.add(day);
+
+                placedInThisRound = true;
                 anyPlacedInRound = true;
                 break;
               }
             }
           }
-        }
 
-        if (placed) {
-          const currentlyPlacedHours = totalHours - courses.reduce((sum, c) => sum + c.remainingHours, 0);
-          const pct = Math.min(75, 40 + Math.floor((currentlyPlacedHours / Math.max(1, totalHours)) * 35));
-          onProgressSync?.(
-            pct,
-            `🧠 Allocated ${currentlyPlacedHours}/${totalHours} course hours into grid slots...`,
-            { placedHours: currentlyPlacedHours, totalHours, conflictEdgesCount }
-          );
-        }
-
-        if (!placed) {
-          const blockingCourseIds = new Set<string>();
-          let totalConflictingStudents = 0;
-
-          for (const otherCourse of courses) {
-            if (otherCourse.courseId === course.courseId) continue;
-            if (sharesStudents(course, otherCourse)) {
-              blockingCourseIds.add(otherCourse.courseId);
-              totalConflictingStudents += countSharedStudents(course, otherCourse);
-            }
-          }
-
-          conflicts.push({
-            courseId: course.courseId,
-            departmentId: course.departmentId,
-            blockingCourseIds: Array.from(blockingCourseIds),
-            conflictingStudentCount: totalConflictingStudents,
-            reason: `Could not allocate ${course.remainingHours} hour(s) for course ${course.courseId} because enrolled students have overlapping classes in all available time slots.`,
-          });
-
-          course.remainingHours = 0;
-        }
-      }
-
-      if (!anyPlacedInRound) {
-        for (const course of phase.courses) {
-          if (course.remainingHours > 0) {
+          if (!placedInThisRound) {
+            // Theory slot could not be placed after checking all slots
             const blockingCourseIds = new Set<string>();
             let totalConflictingStudents = 0;
 
@@ -271,19 +231,162 @@ export function generateTimetable(
               if (otherCourse.courseId === course.courseId) continue;
               if (sharesStudents(course, otherCourse)) {
                 blockingCourseIds.add(otherCourse.courseId);
-                totalConflictingStudents += countSharedStudents(course, otherCourse);
+                totalConflictingStudents += countSharedStudents(
+                  course,
+                  otherCourse
+                );
               }
             }
 
             conflicts.push({
               courseId: course.courseId,
               departmentId: course.departmentId,
+              sessionType: 'theory',
               blockingCourseIds: Array.from(blockingCourseIds),
               conflictingStudentCount: totalConflictingStudents,
-              reason: `Could not allocate ${course.remainingHours} hour(s) for course ${course.courseId} because all valid weekly time slots are fully occupied.`,
+              reason:
+                'Theory slot could not be placed — student conflict across all available slots',
             });
 
-            course.remainingHours = 0;
+            course.remainingTheoryHours = 0;
+          }
+        }
+        // Priority 2: Practical placement
+        else if (course.remainingPracticalHours > 0) {
+          for (const [pA, pB] of practicalLabPairOrders) {
+            if (placedInThisRound) break;
+            for (const day of days) {
+              const slotA = slotMap.get(day)?.get(pA);
+              const slotB = slotMap.get(day)?.get(pB);
+              if (
+                slotA &&
+                slotB &&
+                canPlace(course, [slotA, slotB], studentSlotMap)
+              ) {
+                place(
+                  course,
+                  [slotA, slotB],
+                  'practical',
+                  studentDeptMap,
+                  studentSlotMap,
+                  assignments
+                );
+                course.remainingPracticalHours -= 2;
+                if (course.remainingPracticalHours < 0) {
+                  course.remainingPracticalHours = 0;
+                }
+
+                placedInThisRound = true;
+                anyPlacedInRound = true;
+                break;
+              }
+            }
+          }
+
+          if (!placedInThisRound) {
+            // Practical block could not be placed after checking all lab blocks
+            const blockingCourseIds = new Set<string>();
+            let totalConflictingStudents = 0;
+
+            for (const otherCourse of courses) {
+              if (otherCourse.courseId === course.courseId) continue;
+              if (sharesStudents(course, otherCourse)) {
+                blockingCourseIds.add(otherCourse.courseId);
+                totalConflictingStudents += countSharedStudents(
+                  course,
+                  otherCourse
+                );
+              }
+            }
+
+            conflicts.push({
+              courseId: course.courseId,
+              departmentId: course.departmentId,
+              sessionType: 'practical',
+              blockingCourseIds: Array.from(blockingCourseIds),
+              conflictingStudentCount: totalConflictingStudents,
+              reason:
+                'Practical block could not be placed — student conflict across all lab blocks',
+            });
+
+            course.remainingPracticalHours = 0;
+          }
+        }
+
+        if (placedInThisRound) {
+          const remainingTotal = courses.reduce(
+            (sum, c) => sum + c.remainingTheoryHours + c.remainingPracticalHours,
+            0
+          );
+          const currentlyPlacedHours = totalHours - remainingTotal;
+          const pct = Math.min(
+            75,
+            40 + Math.floor((currentlyPlacedHours / Math.max(1, totalHours)) * 35)
+          );
+          onProgressSync?.(
+            pct,
+            `🧠 Allocated ${currentlyPlacedHours}/${totalHours} course hours into grid slots (${phase.name})...`,
+            { placedHours: currentlyPlacedHours, totalHours, conflictEdgesCount }
+          );
+        }
+      }
+
+      if (!anyPlacedInRound) {
+        for (const course of phase.courses) {
+          if (course.remainingTheoryHours > 0) {
+            const blockingCourseIds = new Set<string>();
+            let totalConflictingStudents = 0;
+
+            for (const otherCourse of courses) {
+              if (otherCourse.courseId === course.courseId) continue;
+              if (sharesStudents(course, otherCourse)) {
+                blockingCourseIds.add(otherCourse.courseId);
+                totalConflictingStudents += countSharedStudents(
+                  course,
+                  otherCourse
+                );
+              }
+            }
+
+            conflicts.push({
+              courseId: course.courseId,
+              departmentId: course.departmentId,
+              sessionType: 'theory',
+              blockingCourseIds: Array.from(blockingCourseIds),
+              conflictingStudentCount: totalConflictingStudents,
+              reason:
+                'Theory slot could not be placed — student conflict across all available slots',
+            });
+
+            course.remainingTheoryHours = 0;
+          }
+
+          if (course.remainingPracticalHours > 0) {
+            const blockingCourseIds = new Set<string>();
+            let totalConflictingStudents = 0;
+
+            for (const otherCourse of courses) {
+              if (otherCourse.courseId === course.courseId) continue;
+              if (sharesStudents(course, otherCourse)) {
+                blockingCourseIds.add(otherCourse.courseId);
+                totalConflictingStudents += countSharedStudents(
+                  course,
+                  otherCourse
+                );
+              }
+            }
+
+            conflicts.push({
+              courseId: course.courseId,
+              departmentId: course.departmentId,
+              sessionType: 'practical',
+              blockingCourseIds: Array.from(blockingCourseIds),
+              conflictingStudentCount: totalConflictingStudents,
+              reason:
+                'Practical block could not be placed — student conflict across all lab blocks',
+            });
+
+            course.remainingPracticalHours = 0;
           }
         }
         break;
@@ -291,7 +394,11 @@ export function generateTimetable(
     }
   }
 
-  const finalPlacedHours = totalHours - courses.reduce((sum, c) => sum + c.remainingHours, 0);
+  const finalRemainingTotal = courses.reduce(
+    (sum, c) => sum + c.remainingTheoryHours + c.remainingPracticalHours,
+    0
+  );
+  const finalPlacedHours = totalHours - finalRemainingTotal;
 
   return {
     assignments,
