@@ -424,6 +424,31 @@
   font-family: inherit;
 }
 
+.searchBarWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.searchInput {
+  padding: 0.4rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: #191c1d;
+  background: #ffffff;
+  border: 1px solid #dde1e7;
+  border-radius: 0.4rem;
+  outline: none;
+  width: 100%;
+  max-width: 15rem;
+  transition: border-color 0.15s ease;
+}
+
+.searchInput:focus {
+  border-color: #002147;
+}
+
 .codeBadge {
   font-size: 0.65rem;
   font-weight: 700;
@@ -443,6 +468,82 @@
   color: #ffffff;
   border-radius: 2rem;
   white-space: nowrap;
+}
+
+.rolePillDirector {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  border-radius: 2rem;
+  white-space: nowrap;
+}
+
+.rolePillHod {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 2rem;
+  white-space: nowrap;
+}
+
+.rolePillStaff {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: 2rem;
+  white-space: nowrap;
+}
+
+/* ── FACULTY ROLE GROUPS ── */
+.facultyGroup {
+  margin-bottom: 1.5rem;
+}
+
+.facultyGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-bottom: none;
+  border-radius: 0.75rem 0.75rem 0 0;
+}
+
+.facultyGroupTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #002147;
+  margin: 0;
+}
+
+.countBadge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: 1rem;
+  background: #f0f4f8;
+  color: #44474e;
+  border: 1px solid #dde1e7;
+}
+
+.facultyTableWrapper {
+  background: #ffffff;
+  border: 1px solid #e2e5ea;
+  border-radius: 0 0 0.75rem 0.75rem;
+  overflow-x: auto;
 }
 
 .editBtn {

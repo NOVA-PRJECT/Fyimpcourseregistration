@@ -55,6 +55,7 @@ export default function SuperAdminDashboard() {
 
   // Departments state
   const [departments, setDepartments] = useState<Department[]>([])
+  const [deptSearch, setDeptSearch] = useState('')
   const [loadingDepts, setLoadingDepts] = useState(false)
   const [showAddDept, setShowAddDept] = useState(false)
   const [editDept, setEditDept] = useState<Department | null>(null)
@@ -444,6 +445,16 @@ export default function SuperAdminDashboard() {
               </button>
             </div>
 
+            <div className={styles.searchBarWrapper}>
+              <input
+                type="text"
+                className={styles.searchInput}
+                placeholder="🔍 Search department..."
+                value={deptSearch}
+                onChange={e => setDeptSearch(e.target.value)}
+              />
+            </div>
+
             <div className={styles.tableWrapper}>
               {loadingDepts ? (
                 <div className={styles.loadingState}>
@@ -456,37 +467,54 @@ export default function SuperAdminDashboard() {
                   <p className={styles.emptyTitle}>No departments yet</p>
                   <p className={styles.emptySubtitle}>Add campuses first, then add departments.</p>
                 </div>
-              ) : (
-                <table className={styles.table}>
-                  <thead className={styles.tableHead}>
-                    <tr><th>#</th><th>Name</th><th>Code</th><th>Campus</th><th>Actions</th></tr>
-                  </thead>
-                  <tbody>
-                    {departments.map((dept, i) => (
-                      <tr key={dept.id} className={styles.tableRow}>
-                        <td>{i + 1}</td>
-                        <td>{dept.name}</td>
-                        <td><span className={styles.codeBadge}>{dept.code}</span></td>
-                        <td>{dept.campuses?.name ?? '—'}</td>
-                        <td>
-                          <div className={styles.actionBtns}>
-                            <button className={styles.editBtn} onClick={() => {
-                              setEditDept(dept)
-                              setDeptName(dept.name)
-                              setDeptCode(dept.code)
-                              setDeptCampusId(dept.campus_id)
-                              clearMessages()
-                            }}>✏️</button>
-                            <button className={styles.deleteBtn} onClick={() => {
-                              setDeleteDept(dept); clearMessages()
-                            }}>🗑️</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              ) : (() => {
+                const filteredDepts = departments.filter(d =>
+                  d.name.toLowerCase().includes(deptSearch.toLowerCase()) ||
+                  d.code.toLowerCase().includes(deptSearch.toLowerCase())
+                )
+
+                if (filteredDepts.length === 0) {
+                  return (
+                    <div className={styles.emptyState}>
+                      <div className={styles.emptyIcon}>🔍</div>
+                      <p className={styles.emptyTitle}>No matching departments</p>
+                      <p className={styles.emptySubtitle}>No department found matching &quot;{deptSearch}&quot;.</p>
+                    </div>
+                  )
+                }
+
+                return (
+                  <table className={styles.table}>
+                    <thead className={styles.tableHead}>
+                      <tr><th>#</th><th>Name</th><th>Code</th><th>Campus</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody>
+                      {filteredDepts.map((dept, i) => (
+                        <tr key={dept.id} className={styles.tableRow}>
+                          <td>{i + 1}</td>
+                          <td>{dept.name}</td>
+                          <td><span className={styles.codeBadge}>{dept.code}</span></td>
+                          <td>{dept.campuses?.name ?? '—'}</td>
+                          <td>
+                            <div className={styles.actionBtns}>
+                              <button className={styles.editBtn} onClick={() => {
+                                setEditDept(dept)
+                                setDeptName(dept.name)
+                                setDeptCode(dept.code)
+                                setDeptCampusId(dept.campus_id)
+                                clearMessages()
+                              }}>✏️</button>
+                              <button className={styles.deleteBtn} onClick={() => {
+                                setDeleteDept(dept); clearMessages()
+                              }}>🗑️</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+              })()}
             </div>
           </>
         )}
@@ -495,54 +523,193 @@ export default function SuperAdminDashboard() {
         {activeTab === 'faculty' && (
           <>
             <div className={styles.sectionHeader}>
-              <p className={styles.sectionTitle}>Faculty</p>
+              <p className={styles.sectionTitle}>Faculty Management</p>
               <button className={styles.addBtn} onClick={() => { setShowAddFaculty(true); clearMessages() }}>
                 + Add Faculty
               </button>
             </div>
 
-            <div className={styles.tableWrapper}>
-              {loadingFaculty ? (
+            {loadingFaculty ? (
+              <div className={styles.tableWrapper}>
                 <div className={styles.loadingState}>
                   <div className={styles.spinner} />
                   <p className={styles.loadingText}>Loading faculty...</p>
                 </div>
-              ) : faculty.length === 0 ? (
+              </div>
+            ) : faculty.length === 0 ? (
+              <div className={styles.tableWrapper}>
                 <div className={styles.emptyState}>
                   <div className={styles.emptyIcon}>👤</div>
                   <p className={styles.emptyTitle}>No faculty yet</p>
                   <p className={styles.emptySubtitle}>Add faculty members to manage the portal.</p>
                 </div>
-              ) : (
-                <table className={styles.table}>
-                  <thead className={styles.tableHead}>
-                    <tr><th>#</th><th>Name</th><th>Role</th><th>Dept</th><th>Actions</th></tr>
-                  </thead>
-                  <tbody>
-                    {faculty.map((f, i) => (
-                      <tr key={f.id} className={styles.tableRow}>
-                        <td>{i + 1}</td>
-                        <td>
-                          <p style={{ margin: 0, fontWeight: 600, fontSize: '0.82rem' }}>{f.full_name}</p>
-                          <p style={{ margin: 0, fontSize: '0.68rem', color: '#9ba1ab' }}>{f.email}</p>
-                        </td>
-                        <td><span className={styles.rolePill}>{roleLabel(f.role)}</span></td>
-                        <td>{f.departments?.name ?? '—'}</td>
-                        <td>
-                          <div className={styles.actionBtns}>
-                            {/* ← NEW edit button */}
-                            <button className={styles.editBtn} onClick={() => openEditFaculty(f)}>✏️</button>
-                            <button className={styles.deleteBtn} onClick={() => {
-                              setDeleteFaculty(f); clearMessages()
-                            }}>🗑️</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+              </div>
+            ) : (
+              <>
+                {/* Group 1: Campus Directors */}
+                {(() => {
+                  const directors = faculty.filter(f => f.role === 'campus_director')
+                  return (
+                    <div className={styles.facultyGroup}>
+                      <div className={styles.facultyGroupHeader}>
+                        <h4 className={styles.facultyGroupTitle}>
+                          🏢 Campus Directors
+                        </h4>
+                        <span className={styles.countBadge}>{directors.length}</span>
+                      </div>
+                      <div className={styles.facultyTableWrapper}>
+                        {directors.length === 0 ? (
+                          <p style={{ padding: '1.25rem 1rem', color: '#9ba1ab', textAlign: 'center', fontSize: '0.8rem', margin: 0 }}>
+                            No Campus Directors assigned yet.
+                          </p>
+                        ) : (
+                          <table className={styles.table}>
+                            <thead className={styles.tableHead}>
+                              <tr>
+                                <th>#</th>
+                                <th>Name & Email</th>
+                                <th>Campus</th>
+                                <th>Role</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {directors.map((f, i) => (
+                                <tr key={f.id} className={styles.tableRow}>
+                                  <td>{i + 1}</td>
+                                  <td>
+                                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.82rem' }}>{f.full_name}</p>
+                                    <p style={{ margin: 0, fontSize: '0.68rem', color: '#9ba1ab' }}>{f.email}</p>
+                                  </td>
+                                  <td>{f.campuses?.name ?? '—'}</td>
+                                  <td><span className={styles.rolePillDirector}>Campus Director</span></td>
+                                  <td>
+                                    <div className={styles.actionBtns}>
+                                      <button className={styles.editBtn} onClick={() => openEditFaculty(f)}>✏️</button>
+                                      <button className={styles.deleteBtn} onClick={() => { setDeleteFaculty(f); clearMessages() }}>🗑️</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Group 2: Heads of Department (HODs) */}
+                {(() => {
+                  const hods = faculty.filter(f => f.role === 'hod')
+                  return (
+                    <div className={styles.facultyGroup}>
+                      <div className={styles.facultyGroupHeader}>
+                        <h4 className={styles.facultyGroupTitle}>
+                          🎓 Heads of Department (HODs)
+                        </h4>
+                        <span className={styles.countBadge}>{hods.length}</span>
+                      </div>
+                      <div className={styles.facultyTableWrapper}>
+                        {hods.length === 0 ? (
+                          <p style={{ padding: '1.25rem 1rem', color: '#9ba1ab', textAlign: 'center', fontSize: '0.8rem', margin: 0 }}>
+                            No Heads of Department (HODs) assigned yet.
+                          </p>
+                        ) : (
+                          <table className={styles.table}>
+                            <thead className={styles.tableHead}>
+                              <tr>
+                                <th>#</th>
+                                <th>Name & Email</th>
+                                <th>Campus</th>
+                                <th>Department</th>
+                                <th>Role</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {hods.map((f, i) => (
+                                <tr key={f.id} className={styles.tableRow}>
+                                  <td>{i + 1}</td>
+                                  <td>
+                                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.82rem' }}>{f.full_name}</p>
+                                    <p style={{ margin: 0, fontSize: '0.68rem', color: '#9ba1ab' }}>{f.email}</p>
+                                  </td>
+                                  <td>{f.campuses?.name ?? '—'}</td>
+                                  <td>{f.departments?.name ?? '—'}</td>
+                                  <td><span className={styles.rolePillHod}>HOD</span></td>
+                                  <td>
+                                    <div className={styles.actionBtns}>
+                                      <button className={styles.editBtn} onClick={() => openEditFaculty(f)}>✏️</button>
+                                      <button className={styles.deleteBtn} onClick={() => { setDeleteFaculty(f); clearMessages() }}>🗑️</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Group 3: Teaching Staff */}
+                {(() => {
+                  const staff = faculty.filter(f => f.role === 'teaching_staff' || (f.role !== 'campus_director' && f.role !== 'hod'))
+                  return (
+                    <div className={styles.facultyGroup}>
+                      <div className={styles.facultyGroupHeader}>
+                        <h4 className={styles.facultyGroupTitle}>
+                          👨‍🏫 Teaching Staff
+                        </h4>
+                        <span className={styles.countBadge}>{staff.length}</span>
+                      </div>
+                      <div className={styles.facultyTableWrapper}>
+                        {staff.length === 0 ? (
+                          <p style={{ padding: '1.25rem 1rem', color: '#9ba1ab', textAlign: 'center', fontSize: '0.8rem', margin: 0 }}>
+                            No Teaching Staff members assigned yet.
+                          </p>
+                        ) : (
+                          <table className={styles.table}>
+                            <thead className={styles.tableHead}>
+                              <tr>
+                                <th>#</th>
+                                <th>Name & Email</th>
+                                <th>Campus</th>
+                                <th>Department</th>
+                                <th>Role</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {staff.map((f, i) => (
+                                <tr key={f.id} className={styles.tableRow}>
+                                  <td>{i + 1}</td>
+                                  <td>
+                                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.82rem' }}>{f.full_name}</p>
+                                    <p style={{ margin: 0, fontSize: '0.68rem', color: '#9ba1ab' }}>{f.email}</p>
+                                  </td>
+                                  <td>{f.campuses?.name ?? '—'}</td>
+                                  <td>{f.departments?.name ?? '—'}</td>
+                                  <td><span className={styles.rolePillStaff}>Teaching Staff</span></td>
+                                  <td>
+                                    <div className={styles.actionBtns}>
+                                      <button className={styles.editBtn} onClick={() => openEditFaculty(f)}>✏️</button>
+                                      <button className={styles.deleteBtn} onClick={() => { setDeleteFaculty(f); clearMessages() }}>🗑️</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+              </>
+            )}
           </>
         )}
 
