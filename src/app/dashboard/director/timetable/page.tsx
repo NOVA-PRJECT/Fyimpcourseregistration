@@ -111,8 +111,6 @@ export default function CampusDirectorTimetablePage() {
   // ETC Countdown Timer
   const [etcSeconds, setEtcSeconds] = useState<number>(180);
   const etcIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const generationStartRef = useRef<number>(0);
-  const lastProgressRef = useRef<number>(0);
 
   // Timetable data state
   const [allEntries, setAllEntries] = useState<TimetableEntry[]>([]);
@@ -471,107 +469,30 @@ export default function CampusDirectorTimetablePage() {
     return () => clearInterval(interval);
   }, [jobStatus, academicYear, semester, invalidateCache]);
 
-  // ── ETC Countdown: Pipeline-Aware Estimation ─────────────────────────────
-  //
-  // Real pipeline timing from job.ts + ai-generator.ts:
-  //   Queued  (0-5%)  : ~5s  - job queued in Redis/DB
-  //   Loading (5-20%) : ~15s - loadGenerationInput DB queries
-  //   AI Prep (20-40%): ~10s - build prompt, send to Gemini
-  //   AI Call (40-68%): 30-180s - Gemini generates; simulated +3% every 4s
-  //   Validate(68-75%): ~5s  - deterministic validator + parse
-  //   DB Write(75-100%): ~10s - clear old entries, insert new, record conflicts
-  //
-  // Total realistic range: 75s - 225s (1:15 to 3:45)
-  //
-  // Strategy: when progress is in the AI call band (40-68%), time budget is
-  // derived from the simulated rate (3% / 4s = 0.75%/s) to stay accurate.
-  // Any time the countdown hits 0 while job is still running, add 45s.
-
-  function estimateRemainingSeconds(progress: number): number {
-    if (progress >= 100) return 0;
-
-    // Phase budgets (seconds)
-    const phases = [
-      { from: 0,  to: 5,   budget: 5   },   // Queued
-      { from: 5,  to: 20,  budget: 15  },   // Load input
-      { from: 20, to: 40,  budget: 10  },   // Prompt build + send
-      { from: 40, to: 68,  budget: 140 },   // AI call (most of the time)
-      { from: 68, to: 75,  budget: 5   },   // Parse + validate
-      { from: 75, to: 85,  budget: 5   },   // Clear DB
-      { from: 85, to: 100, budget: 10  },   // DB insert + conflicts
-    ];
-
-    let totalRemaining = 0;
-    for (const phase of phases) {
-      if (progress >= phase.to) continue; // Phase done
-      const phaseRange = phase.to - phase.from;
-      const progressInPhase = Math.max(0, progress - phase.from);
-      const fractionLeft = (phaseRange - progressInPhase) / phaseRange;
-      totalRemaining += fractionLeft * phase.budget;
-    }
-    return Math.max(5, Math.round(totalRemaining));
-  }
-
-  // Main ETC effect: starts/stops the 1-second ticker
+  // ETC Countdown: starts at 3:00 when overlay opens, counts down, stops when overlay closes
   useEffect(() => {
-    const isActive = showGenerationOverlay && (jobStatus === 'running' || jobStatus === 'queued');
-
-    if (isActive) {
+    if (showGenerationOverlay && (jobStatus === 'running' || jobStatus === 'queued')) {
       if (etcIntervalRef.current) clearInterval(etcIntervalRef.current);
-
       etcIntervalRef.current = setInterval(() => {
-        setEtcSeconds((prev) => {
-          if (prev <= 1) {
-            // Still running after estimated time — add 45s (AI can take up to 180s)
-            return 45;
-          }
-          return prev - 1;
-        });
+        setEtcSeconds((prev) => (prev > 0 ? prev - 1 : 0));
       }, 1000);
     } else {
       if (etcIntervalRef.current) {
         clearInterval(etcIntervalRef.current);
         etcIntervalRef.current = null;
       }
-      if (jobStatus === 'completed' || jobStatus === 'failed') {
-        setEtcSeconds(0);
-      }
     }
-
     return () => {
       if (etcIntervalRef.current) clearInterval(etcIntervalRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showGenerationOverlay, jobStatus]);
-
-  // Recalibrate ETC whenever progress advances
-  useEffect(() => {
-    if (jobStatus !== 'running' && jobStatus !== 'queued') return;
-    if (jobProgress <= 0 || jobProgress >= 100) return;
-
-    // Only recalibrate if progress actually moved forward
-    if (jobProgress <= lastProgressRef.current) return;
-    lastProgressRef.current = jobProgress;
-
-    const newEst = estimateRemainingSeconds(jobProgress);
-    setEtcSeconds((prev) => {
-      // Only update if the new estimate is within reason:
-      // never shorten by more than 30s in one jump (avoid jumpy UI)
-      if (newEst < prev - 30) return prev - 30;
-      return newEst;
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobProgress, jobStatus]);
 
   // Handle Generate Timetable
   async function handleGenerate() {
     setErrorMsg(null);
     setSuccessMsg(null);
     setJobError(null);
-    // Reset ETC — initial total estimate = 180s (realistic for Gemini AI + DB)
-    setEtcSeconds(180);
-    generationStartRef.current = Date.now();
-    lastProgressRef.current = 0;
+    setEtcSeconds(180); // 3 minutes, independent of progress
     setShowGenerationOverlay(true);
 
     try {
@@ -1239,70 +1160,46 @@ export default function CampusDirectorTimetablePage() {
               </div>
             </div>
 
-            {/* ETC Countdown — shown while running/queued */}
-            {(jobStatus === 'running' || jobStatus === 'queued') && (() => {
-              // Phase label derived from actual progress milestones in job.ts
-              const phaseLabel =
-                jobProgress < 5  ? 'Queuing job...' :
-                jobProgress < 20 ? 'Loading course & student data...' :
-                jobProgress < 40 ? 'Building AI scheduling prompt...' :
-                jobProgress < 68 ? '🧠 Gemini AI is generating the schedule...' :
-                jobProgress < 75 ? 'Validating AI schedule...' :
-                jobProgress < 85 ? 'Clearing old timetable entries...' :
-                                   'Saving new timetable to database...';
-
-              const phaseNote =
-                jobProgress >= 40 && jobProgress < 68
-                  ? 'AI call can take 30–180s depending on load'
-                  : jobProgress >= 68 && jobProgress < 100
-                  ? 'Almost there!'
-                  : '';
-
-              return (
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  marginTop: '1rem',
-                  padding: '0.8rem 1.25rem',
-                  background: 'rgba(99,102,241,0.12)',
-                  borderRadius: '0.6rem',
-                  border: '1px solid rgba(99,102,241,0.25)',
-                  width: '100%',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                      <span style={{ fontSize: '1.1rem' }}>⏱</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                        <span style={{ fontSize: '0.65rem', color: '#a5b4fc', letterSpacing: '0.05em', fontWeight: 600 }}>ESTIMATED TIME REMAINING</span>
-                        <span style={{
-                          fontSize: '1.6rem',
-                          fontWeight: 800,
-                          color: etcSeconds <= 15 ? '#f87171' : etcSeconds <= 45 ? '#fb923c' : '#c4b5fd',
-                          fontVariantNumeric: 'tabular-nums',
-                          letterSpacing: '0.03em',
-                          lineHeight: 1.1,
-                        }}>
-                          {etcSeconds > 0
-                            ? `${Math.floor(etcSeconds / 60).toString().padStart(2, '0')}:${(etcSeconds % 60).toString().padStart(2, '0')}`
-                            : 'Finishing up...'}
-                        </span>
-                      </div>
-                    </div>
-                    {jobProgress >= 68 && (
-                      <span style={{ fontSize: '0.7rem', color: '#34d399', fontWeight: 700, background: 'rgba(52,211,153,0.15)', padding: '0.2rem 0.6rem', borderRadius: '0.3rem' }}>Almost done!</span>
-                    )}
-                  </div>
-                  <div style={{ width: '100%', borderTop: '1px solid rgba(99,102,241,0.2)', paddingTop: '0.4rem', textAlign: 'center' }}>
-                    <span style={{ fontSize: '0.72rem', color: '#818cf8', fontStyle: 'italic' }}>{phaseLabel}</span>
-                    {phaseNote && (
-                      <span style={{ fontSize: '0.65rem', color: '#64748b', marginLeft: '0.5rem' }}>({phaseNote})</span>
-                    )}
+            {/* ETC Countdown — independent 3-min timer, stops when overlay closes */}
+            {(jobStatus === 'running' || jobStatus === 'queued') && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginTop: '1rem',
+                padding: '0.75rem 1.25rem',
+                background: 'rgba(99,102,241,0.12)',
+                borderRadius: '0.6rem',
+                border: '1px solid rgba(99,102,241,0.25)',
+                width: '100%',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <span style={{ fontSize: '1.1rem' }}>⏱</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '0.65rem', color: '#a5b4fc', letterSpacing: '0.05em', fontWeight: 600 }}>
+                      ESTIMATED TIME REMAINING
+                    </span>
+                    <span style={{
+                      fontSize: '1.7rem',
+                      fontWeight: 800,
+                      color: etcSeconds <= 30 ? '#f87171' : etcSeconds <= 60 ? '#fb923c' : '#c4b5fd',
+                      fontVariantNumeric: 'tabular-nums',
+                      letterSpacing: '0.04em',
+                      lineHeight: 1.1,
+                    }}>
+                      {etcSeconds > 0
+                        ? `${Math.floor(etcSeconds / 60).toString().padStart(2, '0')}:${(etcSeconds % 60).toString().padStart(2, '0')}`
+                        : 'Finishing up...'}
+                    </span>
                   </div>
                 </div>
-              );
-            })()}
+                {etcSeconds <= 30 && etcSeconds > 0 && (
+                  <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700, background: 'rgba(52,211,153,0.15)', padding: '0.25rem 0.6rem', borderRadius: '0.3rem' }}>
+                    Almost done!
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Footer Buttons for Failed or Completed States */}
             {(jobStatus === 'failed' || jobStatus === 'completed') && (
