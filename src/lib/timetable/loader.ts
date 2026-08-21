@@ -1,8 +1,34 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { CAMPUS_SYNC_EXCLUSIVE, CourseNode, ParallelGroup, SlotId } from './types';
+import { CourseNode, ParallelGroup, SlotId, SlotLookup, SlotMap } from './types';
 
 /**
- * Auto-detect parallel groups from live registration data (Update 05 & Update 06).
+ * Build human-readable conflict summary in plain English for each course.
+ */
+function buildConflictSummary(
+  courseId: string,
+  allCourses: CourseNode[],
+  courseCodeMap: Map<string, string>
+): string {
+  const conflicts: string[] = [];
+  const thisCourse = allCourses.find((c) => c.courseId === courseId);
+  if (!thisCourse) return 'No conflicts with other courses';
+
+  for (const other of allCourses) {
+    if (other.courseId === courseId) continue;
+    const sharedCount = [...thisCourse.studentIds].filter((s) => other.studentIds.has(s)).length;
+    if (sharedCount > 0) {
+      const otherCode = courseCodeMap.get(other.courseId) ?? other.courseId;
+      conflicts.push(`${otherCode} (${sharedCount} shared students)`);
+    }
+  }
+
+  return conflicts.length > 0
+    ? `Conflicts with: ${conflicts.join(', ')}`
+    : 'No conflicts with other courses';
+}
+
+/**
+ * Auto-detect parallel groups from live registration data.
  * Courses taken by the same student department batch in the same category with
  * matching theory/practical hour structures and zero student overlap across ALL pairs
  * are treated as elective alternatives and grouped to share identical time slots.
@@ -16,11 +42,6 @@ export function detectParallelGroups(
   // Group courses by student batch department + category + matching hours structure
   const buckets = new Map<string, CourseNode[]>();
   for (const course of courses) {
-    // CSE categories are handled in Pre-Phase 0, not parallel groups
-    if ((CAMPUS_SYNC_EXCLUSIVE as readonly string[]).includes(course.category)) {
-      continue;
-    }
-
     const studentDepts = new Set<string>();
     for (const studentId of course.studentIds) {
       const deptId = studentDeptMap.get(studentId);
@@ -47,7 +68,6 @@ export function detectParallelGroups(
     const deptId = key.split(':')[0];
 
     // Check if ALL pairs in this bucket have zero student overlap.
-    // If any pair shares even one student, they are not true alternatives.
     let allZeroOverlap = true;
 
     outer:
@@ -67,6 +87,7 @@ export function detectParallelGroups(
         groupId: crypto.randomUUID(), // runtime only — never stored in DB
         departmentId: deptId,
         courseIds: bucket.map((c) => c.courseId),
+        courseCodes: bucket.map((c) => c.courseCode),
       });
     }
   }
@@ -82,7 +103,8 @@ export async function loadGenerationInput(
   onProgress?: (progress: number, stepMessage: string, stats?: Record<string, any>) => Promise<void> | void
 ): Promise<{
   courses: CourseNode[];
-  slotMap: Map<number, Map<number, SlotId>>;
+  slotMap: SlotMap;
+  slotLookup: SlotLookup;
   studentDeptMap: Map<string, string>;
   parallelGroups: ParallelGroup[];
   stats: {
@@ -189,6 +211,14 @@ export async function loadGenerationInput(
   }
 
   const deptCount = new Set(Array.from(studentDeptMap.values())).size;
+
+  // Query 2b: Fetch all departments for name mapping
+  const { data: rawDepts } = await supabase.from('departments').select('id, name, code');
+  const deptNameMap = new Map<string, string>();
+  for (const d of rawDepts ?? []) {
+    deptNameMap.set(d.id, d.name);
+  }
+
   await onProgress?.(
     18,
     `🏢 Mapped ${studentDeptMap.size} enrolled students across ${deptCount} campus departments...`,
@@ -202,7 +232,7 @@ export async function loadGenerationInput(
   // Query 3: Fetch courses metadata
   const { data: rawCourses, error: courseError } = await supabase
     .from('courses')
-    .select('id, department_id, theory_hours_per_week, practical_hours_per_week, category')
+    .select('id, title, course_code, department_id, theory_hours_per_week, practical_hours_per_week, category')
     .in('id', Array.from(allCourseIds));
 
   if (courseError) {
@@ -214,15 +244,25 @@ export async function loadGenerationInput(
     string,
     {
       departmentId: string;
+      departmentName: string;
+      courseCode: string;
+      courseTitle: string;
       theoryHours: number;
       practicalHours: number;
       category: string;
     }
   >();
 
+  const courseCodeMap = new Map<string, string>();
+
   for (const c of rawCourses || []) {
+    const code = (c.course_code || 'N/A').trim();
+    courseCodeMap.set(c.id, code);
     courseMetaMap.set(c.id, {
       departmentId: c.department_id,
+      departmentName: deptNameMap.get(c.department_id) || 'Department',
+      courseCode: code,
+      courseTitle: (c.title || 'Course').trim(),
       theoryHours: c.theory_hours_per_week ?? 3,
       practicalHours: c.practical_hours_per_week ?? 0,
       category: (c.category || 'General').trim(),
@@ -234,6 +274,9 @@ export async function loadGenerationInput(
     string,
     {
       departmentId: string;
+      departmentName: string;
+      courseCode: string;
+      courseTitle: string;
       theoryHours: number;
       practicalHours: number;
       category: string;
@@ -250,6 +293,9 @@ export async function loadGenerationInput(
     if (!group) {
       group = {
         departmentId: meta.departmentId,
+        departmentName: meta.departmentName,
+        courseCode: meta.courseCode,
+        courseTitle: meta.courseTitle,
         theoryHours: meta.theoryHours,
         practicalHours: meta.practicalHours,
         category: meta.category,
@@ -275,19 +321,25 @@ export async function loadGenerationInput(
     courses.push({
       courseId,
       departmentId: group.departmentId,
+      departmentName: group.departmentName,
+      courseCode: group.courseCode,
+      courseTitle: group.courseTitle,
       category: group.category,
       theoryHours: group.theoryHours,
       practicalHours: group.practicalHours,
-      remainingTheoryHours: group.theoryHours,
-      remainingPracticalHours: group.practicalHours,
       isCrossDept: group.studentDeptIds.size > 1,
       studentIds: group.studentIds,
-      conflictsWith: new Set<string>(),
+      conflictSummary: '', // computed below once all courses are populated
     });
   }
 
   if (courses.length === 0) {
     throw new Error('No active courses found for the registered students in this campus.');
+  }
+
+  // Compute plain-English conflict summary for each CourseNode
+  for (const course of courses) {
+    course.conflictSummary = buildConflictSummary(course.courseId, courses, courseCodeMap);
   }
 
   const crossDeptCourseCount = courses.filter((c) => c.isCrossDept).length;
@@ -319,7 +371,8 @@ export async function loadGenerationInput(
     throw new Error('System time slot configurations are missing. Please contact the administrator.');
   }
 
-  const slotMap = new Map<number, Map<number, SlotId>>();
+  const slotMap: SlotMap = new Map();
+  const slotLookup: SlotLookup = new Map();
 
   for (const slot of rawSlots || []) {
     let dayMap = slotMap.get(slot.day_of_week);
@@ -328,6 +381,7 @@ export async function loadGenerationInput(
       slotMap.set(slot.day_of_week, dayMap);
     }
     dayMap.set(slot.period_number, slot.id);
+    slotLookup.set(slot.id, { day: slot.day_of_week, period: slot.period_number });
   }
 
   let slotCount = 0;
@@ -347,9 +401,9 @@ export async function loadGenerationInput(
 
   await onProgress?.(
     30,
-    `⏰ Verified ${slotCount} weekly time slots & detected ${parallelGroups.length} parallel group(s). Ready for conflict graph analysis...`,
+    `⏰ Verified ${slotCount} weekly time slots & detected ${parallelGroups.length} parallel group(s). Ready for AI scheduling...`,
     stats
   );
 
-  return { courses, slotMap, studentDeptMap, parallelGroups, stats };
+  return { courses, slotMap, slotLookup, studentDeptMap, parallelGroups, stats };
 }

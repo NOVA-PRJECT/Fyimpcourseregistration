@@ -1,8 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Redis } from '@upstash/redis';
-import { generateTimetable } from './generator';
+import { runAIGeneration } from './generator';
 import { loadGenerationInput } from './loader';
 import { supabaseAdmin } from '../../core/database/supabaseAdmin';
+import { DynamicConstraint } from './types';
+import { formatAIErrorMessage } from './ai-generator';
 
 export async function runGenerationJob(
   jobId: string,
@@ -11,7 +13,8 @@ export async function runGenerationJob(
   triggeredBy: string,
   supabase: SupabaseClient,
   redis: Redis,
-  campusId?: string
+  campusId?: string,
+  dynamicConstraints: DynamicConstraint[] = []
 ): Promise<void> {
   const redisKey = `timetable:job:${academicYear}:${semester}${campusId ? `:${campusId}` : ''}`;
   const dbClient = supabaseAdmin || supabase;
@@ -41,35 +44,63 @@ export async function runGenerationJob(
       .update({ status: 'running', started_at: new Date().toISOString() })
       .eq('id', jobId);
 
-    await reportProgress(0, '🚀 Starting automated timetable generation job...');
+    await reportProgress(5, '🚀 Starting AI-powered timetable generation job...');
 
-    // 2. Load input data with live status callback
-    const { courses, slotMap, studentDeptMap, parallelGroups, stats: loadStats } = await loadGenerationInput(
-      dbClient,
-      academicYear,
-      semester,
-      campusId,
-      async (p, msg, st) => {
-        await reportProgress(p, msg, st || {});
+    // 2. Load input data with live status callback (20%)
+    const { courses, slotMap, slotLookup, studentDeptMap, parallelGroups, stats: loadStats } =
+      await loadGenerationInput(
+        dbClient,
+        academicYear,
+        semester,
+        campusId,
+        async (p, msg, st) => {
+          await reportProgress(Math.min(20, p), msg, st || {});
+        }
+      );
+
+    await reportProgress(20, '📚 Input loaded. Preparing AI timetable scheduling prompt...', loadStats);
+
+    // 3. Send to AI scheduler with animated progress
+    let simulatedProgress = 40;
+    const progressInterval = setInterval(() => {
+      if (simulatedProgress < 68) {
+        simulatedProgress += 3;
+        const messages = [
+          '🧠 Gemini AI is evaluating student schedule conflict graphs...',
+          '🧠 Gemini AI is assigning parallel elective groups and 2-hour lab blocks...',
+          '🧠 Gemini AI is balancing weekly day spread across departments...',
+          '🧠 Gemini AI is validating hard constraints and lunch break...',
+        ];
+        const msgIdx = Math.floor((simulatedProgress - 40) / 7) % messages.length;
+        reportProgress(simulatedProgress, messages[msgIdx], loadStats).catch(() => {});
       }
-    );
+    }, 4000);
 
-    // 3. Run algorithm with live progress sync
-    const result = generateTimetable(
-      courses,
-      slotMap,
-      studentDeptMap,
-      parallelGroups,
-      (p, msg, st) => {
-        reportProgress(p, msg, { ...loadStats, ...st }).catch(() => {});
-      }
-    );
+    let result;
+    try {
+      result = await runAIGeneration(
+        courses,
+        parallelGroups,
+        slotMap,
+        slotLookup,
+        studentDeptMap,
+        dynamicConstraints,
+        async (p, msg) => {
+          await reportProgress(p, msg, loadStats);
+        },
+        semester
+      );
+    } finally {
+      clearInterval(progressInterval);
+    }
 
-    // 4. Clear existing timetable entries for this academicYear, semester & campus
+    await reportProgress(75, '✨ AI schedule generated and verified via deterministic validator.', loadStats);
+
+    // 4. Clear existing timetable entries for this academicYear, semester & campus (85%)
     await reportProgress(
-      78,
+      85,
       `🧹 Clearing prior schedule entries for Semester ${semester} (${academicYear})...`,
-      { ...loadStats, ...result.stats }
+      loadStats
     );
 
     let deleteEntriesQuery = dbClient
@@ -98,26 +129,17 @@ export async function runGenerationJob(
       .from('timetable_conflicts')
       .delete()
       .eq('academic_year', academicYear)
-      .eq('semester', semester)
-      .eq('resolved', false);
+      .eq('semester', semester);
 
-    // 6. Deduplicate & Upsert new draft assignments
-    const uniqueAssignmentMap = new Map<string, typeof result.assignments[0]>();
-    for (const a of result.assignments) {
-      const key = `${academicYear}:${semester}:${a.courseId}:${a.timeSlotId}:${a.departmentId}:${a.sessionType}`;
-      uniqueAssignmentMap.set(key, a);
-    }
-    const deduplicatedAssignments = Array.from(uniqueAssignmentMap.values());
+    // 6. Bulk insert new assignments (90%)
+    await reportProgress(
+      90,
+      `💾 Writing ${result.assignments.length} generated schedule entries to database...`,
+      { ...loadStats, placedEntries: result.assignments.length, conflictsCount: result.conflicts.length }
+    );
 
-    if (deduplicatedAssignments.length > 0) {
-      await reportProgress(
-        85,
-        `💾 Saving ${deduplicatedAssignments.length} timetable entries across department grids...`,
-        { ...loadStats, ...result.stats, savedEntriesCount: deduplicatedAssignments.length }
-      );
-
-      const nowIso = new Date().toISOString();
-      const insertRows = deduplicatedAssignments.map((a) => ({
+    if (result.assignments.length > 0) {
+      const entryRows = result.assignments.map((a) => ({
         academic_year: academicYear,
         semester,
         course_id: a.courseId,
@@ -126,24 +148,20 @@ export async function runGenerationJob(
         is_lab_block: a.isLabBlock,
         session_type: a.sessionType,
         status: 'draft',
-        generated_by: triggeredBy,
-        generated_at: nowIso,
       }));
 
-      // Upsert in chunks of 500
+      // Insert in chunks of 500
       const CHUNK_SIZE = 500;
-      for (let i = 0; i < insertRows.length; i += CHUNK_SIZE) {
-        const chunk = insertRows.slice(i, i + CHUNK_SIZE);
-        const { error: insertErr } = await dbClient
-          .from('timetable_entries')
-          .upsert(chunk, { onConflict: 'academic_year,semester,course_id,time_slot_id,department_id' });
+      for (let i = 0; i < entryRows.length; i += CHUNK_SIZE) {
+        const chunk = entryRows.slice(i, i + CHUNK_SIZE);
+        const { error: insertErr } = await dbClient.from('timetable_entries').insert(chunk);
         if (insertErr) {
-          throw new Error(`Failed to insert timetable entries: ${insertErr.message}`);
+          throw new Error(`Failed to save timetable entries: ${insertErr.message}`);
         }
       }
     }
 
-    // 7. Insert conflicts if any
+    // 7. Record unresolved conflicts if any
     if (result.conflicts.length > 0) {
       const conflictRows = result.conflicts.map((c) => ({
         academic_year: academicYear,
@@ -162,66 +180,55 @@ export async function runGenerationJob(
       }
     }
 
-    // 8. Mark completed with full final stats
-    const finalMessage = result.conflicts.length > 0
-      ? `⚠️ Timetable generated with ${result.assignments.length} entries. ${result.conflicts.length} course(s) require conflict resolution.`
-      : `🎉 Timetable generated successfully! ${result.assignments.length} entries created across all departments with 0 conflicts.`;
-
+    // 8. Mark complete (100%)
     await dbClient
       .from('timetable_generation_jobs')
       .update({
         status: 'completed',
         progress: 100,
         completed_at: new Date().toISOString(),
+        error_message: null,
       })
       .eq('id', jobId);
 
-    await redis.set(
-      redisKey,
-      JSON.stringify({
-        status: 'completed',
-        progress: 100,
-        stepMessage: finalMessage,
-        stats: { ...loadStats, ...result.stats, savedEntriesCount: deduplicatedAssignments.length },
-        jobId,
-      }),
-      { ex: 3600 }
-    );
-  } catch (err: unknown) {
-    console.error('Background generation job error:', err);
-    const safeMessage = sanitizeJobErrorMessage(err);
+    const completionMsg =
+      result.conflicts.length === 0
+        ? `🎉 AI Timetable generated successfully with ${result.assignments.length} entries. Zero conflicts!`
+        : `⚠️ AI Timetable generated with ${result.assignments.length} entries. ${result.conflicts.length} course(s) require conflict resolution.`;
+
+    const finalPayload = {
+      status: 'completed',
+      progress: 100,
+      stepMessage: completionMsg,
+      stats: {
+        ...loadStats,
+        savedEntriesCount: result.assignments.length,
+        conflictsCount: result.conflicts.length,
+      },
+      jobId,
+    };
+    await redis.set(redisKey, JSON.stringify(finalPayload), { ex: 3600 });
+  } catch (err: any) {
+    console.error('Timetable generation job failed:', err);
+
+    const friendlyError = formatAIErrorMessage(err.message || String(err));
+
     await dbClient
       .from('timetable_generation_jobs')
-      .update({ status: 'failed', error_message: safeMessage })
+      .update({
+        status: 'failed',
+        error_message: friendlyError,
+        completed_at: new Date().toISOString(),
+      })
       .eq('id', jobId);
 
-    await redis.set(
-      redisKey,
-      JSON.stringify({ status: 'failed', errorMessage: safeMessage, jobId }),
-      { ex: 3600 }
-    );
+    const failPayload = {
+      status: 'failed',
+      progress: 0,
+      stepMessage: `Generation failed: ${friendlyError}`,
+      errorMessage: friendlyError,
+      jobId,
+    };
+    await redis.set(redisKey, JSON.stringify(failPayload), { ex: 3600 });
   }
-}
-
-export function sanitizeJobErrorMessage(err: unknown): string {
-  const rawMsg = err instanceof Error ? err.message : String(err || '');
-
-  // Keep explicit user domain errors intact
-  if (
-    rawMsg.includes('No student registrations found') ||
-    rawMsg.includes('No approved student registrations found') ||
-    rawMsg.includes('No course selections found') ||
-    rawMsg.includes('No active courses found') ||
-    rawMsg.includes('System time slot configurations are missing')
-  ) {
-    return rawMsg;
-  }
-
-  // Handle RLS policy errors
-  if (rawMsg.toLowerCase().includes('row-level security') || rawMsg.toLowerCase().includes('permission denied')) {
-    return 'Access control restriction prevented schedule generation. Please refresh your session and try again.';
-  }
-
-  // Handle raw database or PostgREST errors safely without leaking internal structure
-  return 'Database processing error occurred during timetable generation. Please try again or contact system support.';
 }

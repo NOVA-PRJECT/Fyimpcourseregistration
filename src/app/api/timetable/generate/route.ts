@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
   }
 
-  const { academicYear, semester } = parsed.data;
+  const { academicYear, semester, dynamicConstraints } = parsed.data;
   const supabase = await getSupabaseServerClient();
   const dbClient = supabaseAdmin || supabase;
 
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 3. Create job row in DB via dbClient (bypassing restrictive write RLS)
+  // 3. Create job row in DB via dbClient
   const { data: newJob, error: insertError } = await dbClient
     .from('timetable_generation_jobs')
     .insert({
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
 
   const redis = getRedisClient();
 
-  // 4. Trigger background processing
+  // 4. Trigger background processing with dynamicConstraints
   runGenerationJob(
     newJob.id,
     academicYear,
@@ -109,7 +109,8 @@ export async function POST(request: NextRequest) {
     auth.userId,
     dbClient,
     redis,
-    auth.campusId
+    auth.campusId,
+    dynamicConstraints
   ).catch((err) => console.error('Background generation job error:', err));
 
   return NextResponse.json({ jobId: newJob.id, status: 'queued' }, { status: 202 });

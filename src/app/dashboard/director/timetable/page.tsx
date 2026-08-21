@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
@@ -35,6 +35,28 @@ interface ConflictItem {
   conflictingStudentCount: number;
 }
 
+interface DynamicConstraint {
+  id: string;
+  text: string;
+  category?: 'hard' | 'soft';
+}
+
+interface BaseConstraintsData {
+  schedule: {
+    days: string[];
+    periods: Array<{ number: number; start: string; end: string; label: string; extended?: boolean }>;
+    lunch: { start: string; end: string };
+    extended_period_policy: string;
+  };
+  universal_hard_constraints: string[];
+  universal_soft_constraints: string[];
+  semester_constraints: Record<string, { hard_constraints?: string[]; soft_constraints?: string[] }>;
+  hard_constraints: string[];
+  soft_constraints: string[];
+  selected_semester_hard: string[];
+  selected_semester_soft: string[];
+}
+
 const DAYS_MAP: Record<number, string> = {
   1: 'Monday',
   2: 'Tuesday',
@@ -44,12 +66,12 @@ const DAYS_MAP: Record<number, string> = {
 };
 
 const PERIODS = [
-  { num: 1, label: 'P1 (09:30 - 10:30)' },
-  { num: 2, label: 'P2 (10:30 - 11:30)' },
-  { num: 3, label: 'P3 (11:30 - 12:30)' },
-  { num: 4, label: 'P4 (13:30 - 14:30)' },
-  { num: 5, label: 'P5 (14:30 - 15:30)' },
-  { num: 6, label: 'P6 (15:30 - 16:30)' },
+  { num: 1, label: 'P1', time: '09:30 - 10:30' },
+  { num: 2, label: 'P2', time: '10:30 - 11:30' },
+  { num: 3, label: 'P3', time: '11:30 - 12:30' },
+  { num: 4, label: 'P4', time: '13:30 - 14:30' },
+  { num: 5, label: 'P5', time: '14:30 - 15:30' },
+  { num: 6, label: 'P6', time: '15:30 - 16:30' },
 ];
 
 export default function CampusDirectorTimetablePage() {
@@ -59,13 +81,38 @@ export default function CampusDirectorTimetablePage() {
   const [semester, setSemester] = useState(1);
   const [registrationClosed, setRegistrationClosed] = useState(true);
 
-  // Job status state
+  // Dynamic Constraints & Base Rules Modal State
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [rulesActiveTab, setRulesActiveTab] = useState<'custom' | 'base'>('custom');
+
+  // Custom Constraints (CRUD with Hard/Soft Selector)
+  const [dynamicConstraints, setDynamicConstraints] = useState<DynamicConstraint[]>([]);
+  const [newConstraintText, setNewConstraintText] = useState('');
+  const [newCustomCategory, setNewCustomCategory] = useState<'hard' | 'soft'>('hard');
+  const [editingConstraintId, setEditingConstraintId] = useState<string | null>(null);
+  const [editingConstraintText, setEditingConstraintText] = useState('');
+  const [editingConstraintCategory, setEditingConstraintCategory] = useState<'hard' | 'soft'>('hard');
+
+  // Base Rules (Existing Base Rules CRUD - Edit/Delete/Reset)
+  const [baseConstraints, setBaseConstraints] = useState<BaseConstraintsData | null>(null);
+  const [editingBaseRule, setEditingBaseRule] = useState<{ scope: 'universal' | 'semester'; category: 'hard' | 'soft'; index: number } | null>(null);
+  const [editingBaseRuleText, setEditingBaseRuleText] = useState('');
+  const [savingBaseRules, setSavingBaseRules] = useState(false);
+  const [baseRulesFilterScope, setBaseRulesFilterScope] = useState<'all' | 'universal' | 'semester'>('all');
+
+  // Generation Overlay & Job status state
+  const [showGenerationOverlay, setShowGenerationOverlay] = useState(false);
   const [jobStatus, setJobStatus] = useState<'idle' | 'queued' | 'running' | 'completed' | 'failed'>('idle');
   const [jobProgress, setJobProgress] = useState(0);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
   const [stepMessage, setStepMessage] = useState<string | null>(null);
-  const [jobStats, setJobStats] = useState<Record<string, any> | null>(null);
+
+  // ETC Countdown Timer
+  const [etcSeconds, setEtcSeconds] = useState<number>(180);
+  const etcIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const generationStartRef = useRef<number>(0);
+  const lastProgressRef = useRef<number>(0);
 
   // Timetable data state
   const [allEntries, setAllEntries] = useState<TimetableEntry[]>([]);
@@ -76,9 +123,8 @@ export default function CampusDirectorTimetablePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
 
-  // Export Modal state (completely separated from UI selectedDeptId)
+  // Export Modal state
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [exportType, setExportType] = useState<'excel' | 'pdf'>('excel');
   const [exportTargetDept, setExportTargetDept] = useState<string>('all');
@@ -88,7 +134,218 @@ export default function CampusDirectorTimetablePage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Live fetch function directly from API (no stale cache)
+  // Fetch base constraints for the active semester
+  const fetchBaseConstraints = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/timetable/constraints?semester=${semester}`);
+      if (res.ok) {
+        const data = await res.json();
+        setBaseConstraints(data);
+      }
+    } catch {}
+  }, [semester]);
+
+  useEffect(() => {
+    fetchBaseConstraints();
+  }, [fetchBaseConstraints]);
+
+  // Load dynamic constraints from sessionStorage on year/semester change
+  useEffect(() => {
+    const storageKey = `fyimp:constraints:${academicYear}:${semester}`;
+    const saved = sessionStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        setDynamicConstraints(JSON.parse(saved));
+      } catch {
+        setDynamicConstraints([]);
+      }
+    } else {
+      setDynamicConstraints([]);
+    }
+  }, [academicYear, semester]);
+
+  // Save dynamic constraints to sessionStorage
+  const updateDynamicConstraints = useCallback(
+    (updater: (prev: DynamicConstraint[]) => DynamicConstraint[]) => {
+      setDynamicConstraints((prev) => {
+        const next = updater(prev);
+        const storageKey = `fyimp:constraints:${academicYear}:${semester}`;
+        sessionStorage.setItem(storageKey, JSON.stringify(next));
+        return next;
+      });
+    },
+    [academicYear, semester]
+  );
+
+  // ── Custom Rules CRUD ───────────────────────────────────────────────────────
+  function handleAddCustomConstraint() {
+    if (!newConstraintText.trim()) return;
+    const constraint: DynamicConstraint = {
+      id: crypto.randomUUID(),
+      text: newConstraintText.trim(),
+      category: newCustomCategory,
+    };
+    updateDynamicConstraints((prev) => [...prev, constraint]);
+    setNewConstraintText('');
+  }
+
+  function handleStartEditCustomConstraint(constraint: DynamicConstraint) {
+    setEditingConstraintId(constraint.id);
+    setEditingConstraintText(constraint.text);
+    setEditingConstraintCategory(constraint.category || 'hard');
+  }
+
+  function handleSaveEditCustomConstraint(id: string) {
+    if (!editingConstraintText.trim()) return;
+    updateDynamicConstraints((prev) =>
+      prev.map((c) =>
+        c.id === id
+          ? { ...c, text: editingConstraintText.trim(), category: editingConstraintCategory }
+          : c
+      )
+    );
+    setEditingConstraintId(null);
+    setEditingConstraintText('');
+  }
+
+  function handleDeleteCustomConstraint(id: string) {
+    updateDynamicConstraints((prev) => prev.filter((c) => c.id !== id));
+  }
+
+  // ── Base Rules CRUD ─────────────────────────────────────────────────────────
+  async function persistBaseRules(payload: {
+    universal_hard_constraints?: string[];
+    universal_soft_constraints?: string[];
+    semester_constraints?: Record<string, { hard_constraints?: string[]; soft_constraints?: string[] }>;
+  }) {
+    setSavingBaseRules(true);
+    try {
+      const res = await fetch('/api/timetable/constraints', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        await fetchBaseConstraints();
+      }
+    } catch (e) {
+      console.error('Failed to save base constraints:', e);
+    } finally {
+      setSavingBaseRules(false);
+    }
+  }
+
+  function handleStartEditBaseRule(scope: 'universal' | 'semester', category: 'hard' | 'soft', index: number, text: string) {
+    setEditingBaseRule({ scope, category, index });
+    setEditingBaseRuleText(text);
+  }
+
+  async function handleSaveEditBaseRule() {
+    if (!editingBaseRule || !editingBaseRuleText.trim() || !baseConstraints) return;
+    const { scope, category, index } = editingBaseRule;
+    const semKey = String(semester);
+    const currentSemObj = baseConstraints.semester_constraints?.[semKey] || { hard_constraints: [], soft_constraints: [] };
+
+    if (scope === 'universal') {
+      const payload = {
+        universal_hard_constraints:
+          category === 'hard'
+            ? baseConstraints.universal_hard_constraints.map((t, i) => (i === index ? editingBaseRuleText.trim() : t))
+            : baseConstraints.universal_hard_constraints,
+        universal_soft_constraints:
+          category === 'soft'
+            ? baseConstraints.universal_soft_constraints.map((t, i) => (i === index ? editingBaseRuleText.trim() : t))
+            : baseConstraints.universal_soft_constraints,
+        semester_constraints: baseConstraints.semester_constraints,
+      };
+      await persistBaseRules(payload);
+    } else {
+      const updatedSemObj = {
+        hard_constraints:
+          category === 'hard'
+            ? (currentSemObj.hard_constraints || []).map((t, i) => (i === index ? editingBaseRuleText.trim() : t))
+            : currentSemObj.hard_constraints || [],
+        soft_constraints:
+          category === 'soft'
+            ? (currentSemObj.soft_constraints || []).map((t, i) => (i === index ? editingBaseRuleText.trim() : t))
+            : currentSemObj.soft_constraints || [],
+      };
+      const payload = {
+        universal_hard_constraints: baseConstraints.universal_hard_constraints,
+        universal_soft_constraints: baseConstraints.universal_soft_constraints,
+        semester_constraints: {
+          ...baseConstraints.semester_constraints,
+          [semKey]: updatedSemObj,
+        },
+      };
+      await persistBaseRules(payload);
+    }
+
+    setEditingBaseRule(null);
+    setEditingBaseRuleText('');
+  }
+
+  async function handleDeleteBaseRule(scope: 'universal' | 'semester', category: 'hard' | 'soft', index: number) {
+    if (!baseConstraints) return;
+    const semKey = String(semester);
+    const currentSemObj = baseConstraints.semester_constraints?.[semKey] || { hard_constraints: [], soft_constraints: [] };
+
+    if (scope === 'universal') {
+      const payload = {
+        universal_hard_constraints:
+          category === 'hard'
+            ? baseConstraints.universal_hard_constraints.filter((_, i) => i !== index)
+            : baseConstraints.universal_hard_constraints,
+        universal_soft_constraints:
+          category === 'soft'
+            ? baseConstraints.universal_soft_constraints.filter((_, i) => i !== index)
+            : baseConstraints.universal_soft_constraints,
+        semester_constraints: baseConstraints.semester_constraints,
+      };
+      await persistBaseRules(payload);
+    } else {
+      const updatedSemObj = {
+        hard_constraints:
+          category === 'hard'
+            ? (currentSemObj.hard_constraints || []).filter((_, i) => i !== index)
+            : currentSemObj.hard_constraints || [],
+        soft_constraints:
+          category === 'soft'
+            ? (currentSemObj.soft_constraints || []).filter((_, i) => i !== index)
+            : currentSemObj.soft_constraints || [],
+      };
+      const payload = {
+        universal_hard_constraints: baseConstraints.universal_hard_constraints,
+        universal_soft_constraints: baseConstraints.universal_soft_constraints,
+        semester_constraints: {
+          ...baseConstraints.semester_constraints,
+          [semKey]: updatedSemObj,
+        },
+      };
+      await persistBaseRules(payload);
+    }
+  }
+
+  async function handleResetBaseRules() {
+    if (!confirm('Are you sure you want to reset all base rules in constraints.base.json to factory defaults?')) return;
+    setSavingBaseRules(true);
+    try {
+      const res = await fetch('/api/timetable/constraints', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reset: true }),
+      });
+      if (res.ok) {
+        await fetchBaseConstraints();
+      }
+    } catch (e) {
+      console.error('Reset error:', e);
+    } finally {
+      setSavingBaseRules(false);
+    }
+  }
+
+  // Live fetch function directly from API
   const fetchEntries = useCallback(
     async (forceRefresh = false) => {
       if (!academicYear || !semester) return;
@@ -130,7 +387,7 @@ export default function CampusDirectorTimetablePage() {
     fetchEntries(true);
   }, [fetchEntries]);
 
-  // Selector change effect: Reset banners & fetch job status for newly selected year/semester
+  // Selector change effect: Reset banners & fetch job status
   useEffect(() => {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -140,7 +397,7 @@ export default function CampusDirectorTimetablePage() {
     setJobProgress(0);
     setJobId(null);
     setStepMessage(null);
-    setJobStats(null);
+    setShowGenerationOverlay(false);
 
     if (!academicYear || !semester) return;
 
@@ -151,7 +408,6 @@ export default function CampusDirectorTimetablePage() {
           setJobStatus(data.status);
           setJobProgress(data.progress || 0);
           if (data.stepMessage) setStepMessage(data.stepMessage);
-          if (data.stats) setJobStats(data.stats);
           if (data.status === 'failed') {
             setJobError(data.errorMessage || data.error || 'Generation job failed');
           }
@@ -165,10 +421,15 @@ export default function CampusDirectorTimetablePage() {
     fetchEntries(true);
   }, [fetchEntries]);
 
-  // Set default selected department once data loads
+  // Set default selected department once data loads (prefer first department with active entries)
   useEffect(() => {
     if (departments.length > 0 && (!selectedDeptId || (selectedDeptId !== 'VIEW_ALL_CONFLICTS' && !departments.some((d) => d.id === selectedDeptId)))) {
-      setSelectedDeptId(departments[0].id);
+      const deptWithEntries = departments.find((d) => allEntries.some((e) => e.departmentId === d.id));
+      if (deptWithEntries) {
+        setSelectedDeptId(deptWithEntries.id);
+      } else {
+        setSelectedDeptId(departments[0].id);
+      }
     } else if (allEntries.length > 0 && !selectedDeptId) {
       setSelectedDeptId(allEntries[0].departmentId);
     }
@@ -187,12 +448,17 @@ export default function CampusDirectorTimetablePage() {
         setJobStatus(data.status);
         setJobProgress(data.progress || 0);
         if (data.stepMessage) setStepMessage(data.stepMessage);
-        if (data.stats) setJobStats(data.stats);
 
         if (data.status === 'completed') {
           clearInterval(interval);
           setSuccessMsg(data.stepMessage || 'Timetable generated successfully!');
+          const storageKey = `fyimp:constraints:${academicYear}:${semester}`;
+          sessionStorage.removeItem(storageKey);
           invalidateCache();
+
+          setTimeout(() => {
+            setShowGenerationOverlay(false);
+          }, 1500);
         } else if (data.status === 'failed') {
           clearInterval(interval);
           setJobError(data.errorMessage || data.error || 'Generation job failed');
@@ -205,22 +471,124 @@ export default function CampusDirectorTimetablePage() {
     return () => clearInterval(interval);
   }, [jobStatus, academicYear, semester, invalidateCache]);
 
+  // ── ETC Countdown: Pipeline-Aware Estimation ─────────────────────────────
+  //
+  // Real pipeline timing from job.ts + ai-generator.ts:
+  //   Queued  (0-5%)  : ~5s  - job queued in Redis/DB
+  //   Loading (5-20%) : ~15s - loadGenerationInput DB queries
+  //   AI Prep (20-40%): ~10s - build prompt, send to Gemini
+  //   AI Call (40-68%): 30-180s - Gemini generates; simulated +3% every 4s
+  //   Validate(68-75%): ~5s  - deterministic validator + parse
+  //   DB Write(75-100%): ~10s - clear old entries, insert new, record conflicts
+  //
+  // Total realistic range: 75s - 225s (1:15 to 3:45)
+  //
+  // Strategy: when progress is in the AI call band (40-68%), time budget is
+  // derived from the simulated rate (3% / 4s = 0.75%/s) to stay accurate.
+  // Any time the countdown hits 0 while job is still running, add 45s.
+
+  function estimateRemainingSeconds(progress: number): number {
+    if (progress >= 100) return 0;
+
+    // Phase budgets (seconds)
+    const phases = [
+      { from: 0,  to: 5,   budget: 5   },   // Queued
+      { from: 5,  to: 20,  budget: 15  },   // Load input
+      { from: 20, to: 40,  budget: 10  },   // Prompt build + send
+      { from: 40, to: 68,  budget: 140 },   // AI call (most of the time)
+      { from: 68, to: 75,  budget: 5   },   // Parse + validate
+      { from: 75, to: 85,  budget: 5   },   // Clear DB
+      { from: 85, to: 100, budget: 10  },   // DB insert + conflicts
+    ];
+
+    let totalRemaining = 0;
+    for (const phase of phases) {
+      if (progress >= phase.to) continue; // Phase done
+      const phaseRange = phase.to - phase.from;
+      const progressInPhase = Math.max(0, progress - phase.from);
+      const fractionLeft = (phaseRange - progressInPhase) / phaseRange;
+      totalRemaining += fractionLeft * phase.budget;
+    }
+    return Math.max(5, Math.round(totalRemaining));
+  }
+
+  // Main ETC effect: starts/stops the 1-second ticker
+  useEffect(() => {
+    const isActive = showGenerationOverlay && (jobStatus === 'running' || jobStatus === 'queued');
+
+    if (isActive) {
+      if (etcIntervalRef.current) clearInterval(etcIntervalRef.current);
+
+      etcIntervalRef.current = setInterval(() => {
+        setEtcSeconds((prev) => {
+          if (prev <= 1) {
+            // Still running after estimated time — add 45s (AI can take up to 180s)
+            return 45;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (etcIntervalRef.current) {
+        clearInterval(etcIntervalRef.current);
+        etcIntervalRef.current = null;
+      }
+      if (jobStatus === 'completed' || jobStatus === 'failed') {
+        setEtcSeconds(0);
+      }
+    }
+
+    return () => {
+      if (etcIntervalRef.current) clearInterval(etcIntervalRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showGenerationOverlay, jobStatus]);
+
+  // Recalibrate ETC whenever progress advances
+  useEffect(() => {
+    if (jobStatus !== 'running' && jobStatus !== 'queued') return;
+    if (jobProgress <= 0 || jobProgress >= 100) return;
+
+    // Only recalibrate if progress actually moved forward
+    if (jobProgress <= lastProgressRef.current) return;
+    lastProgressRef.current = jobProgress;
+
+    const newEst = estimateRemainingSeconds(jobProgress);
+    setEtcSeconds((prev) => {
+      // Only update if the new estimate is within reason:
+      // never shorten by more than 30s in one jump (avoid jumpy UI)
+      if (newEst < prev - 30) return prev - 30;
+      return newEst;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobProgress, jobStatus]);
+
   // Handle Generate Timetable
   async function handleGenerate() {
     setErrorMsg(null);
     setSuccessMsg(null);
     setJobError(null);
+    // Reset ETC — initial total estimate = 180s (realistic for Gemini AI + DB)
+    setEtcSeconds(180);
+    generationStartRef.current = Date.now();
+    lastProgressRef.current = 0;
+    setShowGenerationOverlay(true);
 
     try {
       const res = await fetch('/api/timetable/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ academicYear, semester }),
+        body: JSON.stringify({
+          academicYear,
+          semester,
+          dynamicConstraints,
+        }),
       });
 
       const data = await res.json();
       if (!res.ok) {
         setErrorMsg(data.error || 'Failed to start timetable generation');
+        setJobError(data.error || 'Failed to start timetable generation');
         return;
       }
 
@@ -229,17 +597,18 @@ export default function CampusDirectorTimetablePage() {
       setJobProgress(5);
     } catch {
       setErrorMsg('Network error starting timetable generation');
+      setJobError('Network error starting timetable generation');
     }
   }
 
-  // Open Export Modal for Excel or PDF (Default dropdown is ALWAYS 'all')
+  // Open Export Modal for Excel or PDF
   function handleOpenExportModal(type: 'excel' | 'pdf') {
     setExportType(type);
-    setExportTargetDept('all'); // Strictly 'all' under any circumstances!
+    setExportTargetDept('all');
     setShowExportModal(true);
   }
 
-  // Confirm Export from Modal (Does NOT mutate UI active tab selectedDeptId!)
+  // Confirm Export from Modal
   function handleConfirmExport() {
     const targetDept = exportTargetDept;
     setShowExportModal(false);
@@ -247,7 +616,6 @@ export default function CampusDirectorTimetablePage() {
     if (exportType === 'excel') {
       const wb = XLSX.utils.book_new();
 
-      // Combine departments from state and allEntries
       const deptMap = new Map<string, { id: string; name: string; code: string }>();
 
       departments.forEach((d) => {
@@ -283,7 +651,6 @@ export default function CampusDirectorTimetablePage() {
         return unique;
       }
 
-      // If exporting ALL, add All Departments Stacked Sheet first with 5 rows per department and 10 row gaps!
       if (targetDept === 'all') {
         const allSheetRows: string[][] = [
           ['KANNUR UNIVERSITY — ALL DEPARTMENTS TIMETABLE OVERVIEW'],
@@ -294,11 +661,9 @@ export default function CampusDirectorTimetablePage() {
         deptsToExport.forEach((dept, idx) => {
           const deptEntries = allEntries.filter((e) => e.departmentId === dept.id);
 
-          // Department Banner Row
           allSheetRows.push([`DEPARTMENT: ${dept.name.toUpperCase()} (${dept.code || dept.name})`]);
-          allSheetRows.push(['Day / Period', ...PERIODS.map((p) => p.label)]);
+          allSheetRows.push(['Day / Period', ...PERIODS.map((p) => `${p.label} (${p.time})`)]);
 
-          // 5 Rows (Monday through Friday)
           [1, 2, 3, 4, 5].forEach((dayNum) => {
             const row: string[] = [DAYS_MAP[dayNum]];
             PERIODS.forEach((p) => {
@@ -315,9 +680,8 @@ export default function CampusDirectorTimetablePage() {
             allSheetRows.push(row);
           });
 
-          // Insert 10 blank rows as gap between departments
           if (idx < deptsToExport.length - 1) {
-            for (let i = 0; i < 10; i++) {
+            for (let i = 0; i < 6; i++) {
               allSheetRows.push([]);
             }
           }
@@ -327,14 +691,13 @@ export default function CampusDirectorTimetablePage() {
         XLSX.utils.book_append_sheet(wb, allWs, getUniqueSheetName('All Departments'));
       }
 
-      // Add 5x6 Matrix Sheet for each department
       deptsToExport.forEach((dept) => {
         const deptEntries = allEntries.filter((e) => e.departmentId === dept.id);
         const sheetData: string[][] = [
           [`KANNUR UNIVERSITY — ${dept.name.toUpperCase()} TIMETABLE`],
           [`Academic Year: ${academicYear} | Semester: ${semester}`],
           [],
-          ['Day / Period', ...PERIODS.map((p) => p.label)],
+          ['Day / Period', ...PERIODS.map((p) => `${p.label} (${p.time})`)],
         ];
 
         [1, 2, 3, 4, 5].forEach((dayNum) => {
@@ -363,7 +726,6 @@ export default function CampusDirectorTimetablePage() {
       const filename = `FYIMP_Timetable_${fileTag}_${academicYear}_Sem${semester}.xlsx`;
       XLSX.writeFile(wb, filename);
     } else {
-      // PDF Export: Set dedicated print scope without changing UI tab selectedDeptId!
       setPrintTargetDept(targetDept);
       setTimeout(() => {
         window.print();
@@ -371,23 +733,28 @@ export default function CampusDirectorTimetablePage() {
     }
   }
 
-  // Derived client-side filtered entries for screen view
-  const visibleEntries = allEntries.filter((e) => !selectedDeptId || e.departmentId === selectedDeptId);
+  // Flexible Department Filter (matches both UUID and Department Code)
+  const visibleEntries = allEntries.filter((e) => {
+    if (!selectedDeptId || selectedDeptId === 'VIEW_ALL_CONFLICTS') return true;
+    if (e.departmentId === selectedDeptId) return true;
+    const activeDept = departments.find((d) => d.id === selectedDeptId);
+    if (activeDept && activeDept.code && e.departmentCode) {
+      return activeDept.code.toUpperCase() === e.departmentCode.toUpperCase();
+    }
+    return false;
+  });
 
-  // Tab switch handler
   function handleDeptChange(deptId: string) {
     setSelectedDeptId(deptId);
   }
 
-  // Helper to find entries at day + period (supports stacked parallel courses)
   function getEntriesAt(day: number, period: number): TimetableEntry[] {
-    return visibleEntries.filter((e) => e.day === day && e.period === period);
+    return visibleEntries.filter((e) => Number(e.day) === Number(day) && Number(e.period) === Number(period));
   }
 
   const hasUnresolvedConflicts = allConflicts.length > 0;
   const isViewingConflictsSection = selectedDeptId === 'VIEW_ALL_CONFLICTS';
 
-  // Filtered conflicts based on conflictDeptFilter
   const displayedConflicts = conflictDeptFilter === 'all'
     ? allConflicts
     : allConflicts.filter((c) => c.departmentId === conflictDeptFilter);
@@ -403,7 +770,7 @@ export default function CampusDirectorTimetablePage() {
           <Image src="/logo.png" alt="KU" width={28} height={28} />
           <div>
             <p className={styles.topBarTitle}>Timetable Management</p>
-            <p className={styles.topBarSubtitle}>Campus Director Dashboard</p>
+            <p className={styles.topBarSubtitle}>Campus Director Dashboard (AI-Powered Engine)</p>
           </div>
         </div>
         <button className={styles.backBtn} onClick={() => router.push('/dashboard/director')}>
@@ -415,160 +782,85 @@ export default function CampusDirectorTimetablePage() {
         {/* Controls Card */}
         <div className={styles.headerCard}>
           <div className={styles.controlsRow}>
-            <div className={styles.fieldGroup}>
-              <label className={styles.label}>Academic Year</label>
-              <select
-                className={styles.select}
-                value={academicYear}
-                onChange={(e) => setAcademicYear(e.target.value)}
+            <div className={styles.controlsLeft}>
+              <div className={styles.fieldGroup}>
+                <label className={styles.label}>Academic Year</label>
+                <select
+                  className={styles.select}
+                  value={academicYear}
+                  onChange={(e) => setAcademicYear(e.target.value)}
+                >
+                  <option value="2026-27">2026-27</option>
+                  <option value="2025-26">2025-26</option>
+                  <option value="2024-25">2024-25</option>
+                </select>
+              </div>
+
+              <div className={styles.fieldGroup}>
+                <label className={styles.label}>Semester</label>
+                <select
+                  className={styles.select}
+                  value={semester}
+                  onChange={(e) => setSemester(Number(e.target.value))}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((s) => (
+                    <option key={s} value={s}>
+                      Semester {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Rules & Constraints Modal Trigger Button */}
+              <button
+                className={styles.rulesTriggerBtn}
+                onClick={() => setShowRulesModal(true)}
+                title="Manage custom and base scheduling constraints"
               >
-                <option value="2026-27">2026-27</option>
-                <option value="2025-26">2025-26</option>
-                <option value="2024-25">2024-25</option>
-              </select>
+                <span>⚙️ Scheduling Rules</span>
+                <span className={styles.rulesBadge}>{dynamicConstraints.length} Custom</span>
+              </button>
             </div>
 
-            <div className={styles.fieldGroup}>
-              <label className={styles.label}>Semester</label>
-              <select
-                className={styles.select}
-                value={semester}
-                onChange={(e) => setSemester(Number(e.target.value))}
+            <div className={styles.controlsRight}>
+              <button
+                className={styles.generateBtn}
+                onClick={handleGenerate}
+                disabled={jobStatus === 'running' || jobStatus === 'queued'}
+                title={
+                  !registrationClosed
+                    ? 'Registration window must be closed before generation'
+                    : 'Generate automated AI timetable'
+                }
               >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((s) => (
-                  <option key={s} value={s}>
-                    Semester {s}
-                  </option>
-                ))}
-              </select>
+                {jobStatus === 'running' || jobStatus === 'queued' ? 'Generating...' : '⚡ Generate AI Timetable'}
+              </button>
+
+              {allEntries.length > 0 && (
+                <>
+                  <button
+                    className={styles.exportExcelBtn}
+                    onClick={() => handleOpenExportModal('excel')}
+                    title="Export timetable as Excel workbook (.xlsx)"
+                  >
+                    📊 Export Excel (.xlsx)
+                  </button>
+
+                  <button
+                    className={styles.exportPdfBtn}
+                    onClick={() => handleOpenExportModal('pdf')}
+                    title="Export timetable as PDF"
+                  >
+                    📄 Export PDF
+                  </button>
+                </>
+              )}
             </div>
-
-            <button
-              className={styles.generateBtn}
-              onClick={handleGenerate}
-              disabled={jobStatus === 'running' || jobStatus === 'queued'}
-              title={
-                !registrationClosed
-                  ? 'Registration window must be closed before generation'
-                  : 'Generate automated timetable'
-              }
-            >
-              {jobStatus === 'running' || jobStatus === 'queued' ? 'Generating...' : '⚡ Generate Timetable'}
-            </button>
-
-            {allEntries.length > 0 && (
-              <>
-                <button
-                  className={styles.exportExcelBtn}
-                  onClick={() => handleOpenExportModal('excel')}
-                  title="Export timetable as Excel workbook (.xlsx)"
-                >
-                  📊 Export Excel (.xlsx)
-                </button>
-
-                <button
-                  className={styles.exportPdfBtn}
-                  onClick={() => handleOpenExportModal('pdf')}
-                  title="Export timetable as PDF"
-                >
-                  📄 Export PDF
-                </button>
-              </>
-            )}
           </div>
-
-          {/* Job Progress & Status Card */}
-          {jobStatus !== 'idle' && (
-            <div className={styles.aiJobCard}>
-              <div className={styles.aiHeader}>
-                <div className={styles.aiHeaderLeft}>
-                  <div className={styles.aiIconWrapper}>
-                    {jobStatus === 'running' || jobStatus === 'queued' ? (
-                      <span className={styles.aiIconSpinner} style={{ display: 'inline-block' }}>✨</span>
-                    ) : jobStatus === 'completed' ? (
-                      <span>✓</span>
-                    ) : (
-                      <span>⚠️</span>
-                    )}
-                  </div>
-                  <div>
-                    <h4 className={styles.aiTitle}>
-                      <span>AI Timetable Engine</span>
-                      {(jobStatus === 'running' || jobStatus === 'queued') && (
-                        <span style={{ fontSize: '0.68rem', color: '#818cf8', fontWeight: 600, background: 'rgba(99, 102, 241, 0.15)', padding: '0.1rem 0.45rem', borderRadius: '0.25rem' }}>
-                          LIVE PROCESSING
-                        </span>
-                      )}
-                    </h4>
-                    <p className={styles.aiSubtitle}>
-                      {jobStatus === 'completed' && (stepMessage || '🎉 Timetable generation complete! All department schedules placed.')}
-                      {jobStatus === 'failed' && '❌ Generation interrupted due to scheduling constraints.'}
-                      {(jobStatus === 'running' || jobStatus === 'queued') && (
-                        stepMessage || (
-                          jobProgress < 20
-                            ? '🔍 Reading student registrations & department mappings...'
-                            : jobProgress < 50
-                            ? '⚡ Building multi-department student schedule conflict graph...'
-                            : jobProgress < 80
-                            ? '🧠 Solving optimal time slot allocations & 2-hour lab blocks...'
-                            : '✨ Finalizing cross-department schedule entries & conflict log...'
-                        )
-                      )}
-                    </p>
-                  </div>
-                </div>
-                <div className={styles.aiPercentageBadge}>
-                  {jobProgress}%
-                </div>
-              </div>
-
-              {/* Progress track */}
-              <div className={styles.aiProgressTrack}>
-                <div className={styles.aiProgressFill} style={{ width: `${jobProgress}%` }} />
-              </div>
-
-              {/* Dynamic Step Badges */}
-              <div className={styles.aiStepsContainer}>
-                <div className={`${styles.aiStepPill} ${jobProgress >= 18 ? (jobProgress > 18 ? styles.aiStepDone : styles.aiStepActive) : ''}`}>
-                  <span>{jobProgress > 18 ? '✓' : '1'}</span>
-                  <span>
-                    {jobStats?.registrationCount
-                      ? `${jobStats.registrationCount} Regs | ${jobStats.courseCount || 0} Courses`
-                      : 'Input Loaded'}
-                  </span>
-                </div>
-                <div className={`${styles.aiStepPill} ${jobProgress >= 40 ? (jobProgress > 40 ? styles.aiStepDone : styles.aiStepActive) : ''}`}>
-                  <span>{jobProgress > 40 ? '✓' : '2'}</span>
-                  <span>
-                    {jobStats?.conflictEdgesCount !== undefined
-                      ? `${jobStats.conflictEdgesCount} Constraints`
-                      : 'Conflict Graph'}
-                  </span>
-                </div>
-                <div className={`${styles.aiStepPill} ${jobProgress >= 75 ? (jobProgress > 75 ? styles.aiStepDone : styles.aiStepActive) : ''}`}>
-                  <span>{jobProgress > 75 ? '✓' : '3'}</span>
-                  <span>
-                    {jobStats?.totalHours
-                      ? `${jobStats.placedHours || 0}/${jobStats.totalHours} Hours`
-                      : 'Slots Allocated'}
-                  </span>
-                </div>
-                <div className={`${styles.aiStepPill} ${jobProgress === 100 ? styles.aiStepDone : ''}`}>
-                  <span>{jobProgress === 100 ? '✓' : '4'}</span>
-                  <span>
-                    {jobStats?.savedEntriesCount
-                      ? `${jobStats.savedEntriesCount} Grid Entries`
-                      : 'Saved & Ready'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Feedback Banners */}
         {errorMsg && <div className={styles.bannerError}>❌ {errorMsg}</div>}
-        {jobError && <div className={styles.bannerError}>❌ Timetable Generation Failed: {jobError}</div>}
         {successMsg && <div className={styles.bannerSuccess}>✓ {successMsg}</div>}
 
         {/* Page-level Fetch Error State with Retry Button */}
@@ -623,16 +915,14 @@ export default function CampusDirectorTimetablePage() {
           </div>
         )}
 
-        {/* Navigation Tabs Bar: Department Tabs + Dedicated Conflicts Tab */}
+        {/* Navigation Tabs Bar */}
         <div className={styles.tabsContainer}>
           {departments.map((dept) => (
             <button
               key={dept.id}
               className={`${styles.tab} ${selectedDeptId === dept.id ? styles.activeTab : ''}`}
               onClick={() => handleDeptChange(dept.id)}
-              onMouseEnter={(e) => setTooltip({ text: dept.name, x: e.clientX + 14, y: e.clientY + 14 })}
-              onMouseMove={(e) => setTooltip({ text: dept.name, x: e.clientX + 14, y: e.clientY + 14 })}
-              onMouseLeave={() => setTooltip(null)}
+              title={dept.name}
             >
               {dept.code || dept.name}
             </button>
@@ -643,6 +933,7 @@ export default function CampusDirectorTimetablePage() {
             <button
               className={`${styles.conflictsTab} ${isViewingConflictsSection ? styles.activeConflictsTab : ''}`}
               onClick={() => setSelectedDeptId('VIEW_ALL_CONFLICTS')}
+              title="View all scheduling conflicts across campus"
             >
               ⚠️ Unresolved Conflicts ({allConflicts.length})
             </button>
@@ -662,7 +953,6 @@ export default function CampusDirectorTimetablePage() {
                 </p>
               </div>
 
-              {/* Department Filter Dropdown for Conflicts */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>Filter Department:</span>
                 <select
@@ -747,67 +1037,84 @@ export default function CampusDirectorTimetablePage() {
                 <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Loading timetable data...</p>
               </div>
             ) : departments.length > 0 ? (
-              <div className={styles.gridWrapper}>
-                <table className={styles.gridTable}>
-                  <thead>
-                    <tr>
-                      <th style={{ width: '15%' }}>Day / Period</th>
-                      {PERIODS.map((p) => (
-                        <th key={p.num}>{p.label}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[1, 2, 3, 4, 5].map((dayNum) => (
-                      <tr key={dayNum}>
-                        <td style={{ fontWeight: 700, background: '#f8fafc' }}>{DAYS_MAP[dayNum]}</td>
-                        {PERIODS.map((p) => {
-                          const entries = getEntriesAt(dayNum, p.num);
-                          const isParallelSlot = entries.length > 1;
-                          return (
-                            <td key={p.num}>
-                              {entries.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                  {entries.map((entry, idx) => (
-                                    <div key={entry.id || idx} className={styles.cellCourse}>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                                        <div className={styles.cellCourseCode}>{entry.courseCode}</div>
-                                        {isParallelSlot && (
-                                          <span
-                                            style={{
-                                              fontSize: '0.62rem',
-                                              fontWeight: 700,
-                                              background: '#dbeafe',
-                                              color: '#1d4ed8',
-                                              padding: '0.05rem 0.25rem',
-                                              borderRadius: '0.2rem',
-                                            }}
-                                            title="Parallel Course Group"
-                                          >
-                                            [P]
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className={styles.cellCourseTitle}>{entry.courseName}</div>
-                                      {entry.isLabBlock && <span className={styles.labBadge}>Lab Block (2h)</span>}
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span style={{ color: '#cbd5e1' }}>—</span>
-                              )}
-                            </td>
-                          );
-                        })}
+              <div>
+                {/* Active Department Header Banner */}
+                {(() => {
+                  const activeDept = departments.find((d) => d.id === selectedDeptId);
+                  return (
+                    <div className={styles.activeDeptBanner}>
+                      <span className={styles.activeDeptTitle}>
+                        🏛️ {activeDept?.name || 'Department'} ({activeDept?.code || 'Dept'}) Timetable
+                      </span>
+                      <span className={styles.activeDeptSub}>
+                        Semester {semester} • Academic Year {academicYear}
+                      </span>
+                    </div>
+                  );
+                })()}
+
+                <div className={styles.gridWrapper}>
+                  <table className={styles.gridTable}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '15%' }}>Day / Period</th>
+                        {PERIODS.map((p) => (
+                          <th key={p.num}>{p.label}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {[1, 2, 3, 4, 5].map((dayNum) => (
+                        <tr key={dayNum}>
+                          <td style={{ fontWeight: 700, background: '#f8fafc' }}>{DAYS_MAP[dayNum]}</td>
+                          {PERIODS.map((p) => {
+                            const entries = getEntriesAt(dayNum, p.num);
+                            const isParallelSlot = entries.length > 1;
+                            return (
+                              <td key={p.num}>
+                                {entries.length > 0 ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                    {entries.map((entry, idx) => (
+                                      <div key={entry.id || idx} className={styles.cellCourse}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                          <div className={styles.cellCourseCode}>{entry.courseCode}</div>
+                                          {isParallelSlot && (
+                                            <span
+                                              style={{
+                                                fontSize: '0.62rem',
+                                                fontWeight: 700,
+                                                background: '#dbeafe',
+                                                color: '#1d4ed8',
+                                                padding: '0.05rem 0.25rem',
+                                                borderRadius: '0.2rem',
+                                              }}
+                                              title="Parallel Course Group"
+                                            >
+                                              [P]
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className={styles.cellCourseTitle}>{entry.courseName}</div>
+                                        {entry.isLabBlock && <span className={styles.labBadge}>Lab Block (2h)</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span style={{ color: '#cbd5e1' }}>—</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b', background: '#ffffff', borderRadius: '0.5rem' }}>
                 <p>No timetable entries generated yet for Semester {semester} ({academicYear}).</p>
-                <p style={{ fontSize: '0.85rem' }}>Click <strong>"Generate Timetable"</strong> above to run the automated generator.</p>
+                <p style={{ fontSize: '0.85rem' }}>Click <strong>"Generate AI Timetable"</strong> above to run the scheduler.</p>
               </div>
             )}
 
@@ -871,7 +1178,675 @@ export default function CampusDirectorTimetablePage() {
         )}
       </div>
 
-      {/* Dedicated PDF Print Section (Only visible during window.print()) */}
+      {/* FULL-SCREEN GENERATION PROGRESS OVERLAY */}
+      {showGenerationOverlay && (
+        <div className={styles.generationOverlay}>
+          <div className={styles.generationModalCard}>
+            <div className={styles.generationModalHeader}>
+              <div className={styles.generationModalIcon}>
+                {jobStatus === 'completed' ? '✓' : jobStatus === 'failed' ? '⚠️' : '✨'}
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 className={styles.generationModalTitle}>
+                  <span>Gemini AI Timetable Scheduler</span>
+                  {(jobStatus === 'running' || jobStatus === 'queued') && (
+                    <span style={{ fontSize: '0.7rem', color: '#818cf8', background: 'rgba(99, 102, 241, 0.2)', padding: '0.15rem 0.5rem', borderRadius: '0.25rem', fontWeight: 600 }}>
+                      LIVE PROCESSING
+                    </span>
+                  )}
+                </h3>
+                <p className={styles.generationModalSubtitle}>
+                  {jobStatus === 'completed' && (stepMessage || '🎉 Timetable generation complete! All department schedules placed.')}
+                  {jobStatus === 'failed' && (jobError || '❌ Generation interrupted due to scheduling constraints.')}
+                  {(jobStatus === 'running' || jobStatus === 'queued') && (
+                    stepMessage || '🧠 Processing scheduling constraints and student registrations with Gemini AI...'
+                  )}
+                </p>
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#818cf8' }}>
+                {jobProgress}%
+              </div>
+            </div>
+
+            {/* Progress Bar Track */}
+            <div className={styles.aiProgressTrack} style={{ height: '8px', background: 'rgba(255, 255, 255, 0.1)' }}>
+              <div
+                className={styles.aiProgressFill}
+                style={{
+                  width: `${jobProgress}%`,
+                  background: jobStatus === 'failed' ? '#ef4444' : 'linear-gradient(90deg, #6366f1, #a855f7)',
+                }}
+              />
+            </div>
+
+            {/* Step Pills */}
+            <div className={styles.aiStepsContainer}>
+              <div className={`${styles.aiStepPill} ${jobProgress >= 20 ? (jobProgress > 20 ? styles.aiStepDone : styles.aiStepActive) : ''}`}>
+                <span>{jobProgress > 20 ? '✓' : '1'}</span>
+                <span>Input Loaded</span>
+              </div>
+              <div className={`${styles.aiStepPill} ${jobProgress >= 40 ? (jobProgress > 40 ? styles.aiStepDone : styles.aiStepActive) : ''}`}>
+                <span>{jobProgress > 40 ? '✓' : '2'}</span>
+                <span>AI Scheduling</span>
+              </div>
+              <div className={`${styles.aiStepPill} ${jobProgress >= 70 ? (jobProgress > 70 ? styles.aiStepDone : styles.aiStepActive) : ''}`}>
+                <span>{jobProgress > 70 ? '✓' : '3'}</span>
+                <span>Validation</span>
+              </div>
+              <div className={`${styles.aiStepPill} ${jobProgress === 100 ? styles.aiStepDone : ''}`}>
+                <span>{jobProgress === 100 ? '✓' : '4'}</span>
+                <span>Ready</span>
+              </div>
+            </div>
+
+            {/* ETC Countdown — shown while running/queued */}
+            {(jobStatus === 'running' || jobStatus === 'queued') && (() => {
+              // Phase label derived from actual progress milestones in job.ts
+              const phaseLabel =
+                jobProgress < 5  ? 'Queuing job...' :
+                jobProgress < 20 ? 'Loading course & student data...' :
+                jobProgress < 40 ? 'Building AI scheduling prompt...' :
+                jobProgress < 68 ? '🧠 Gemini AI is generating the schedule...' :
+                jobProgress < 75 ? 'Validating AI schedule...' :
+                jobProgress < 85 ? 'Clearing old timetable entries...' :
+                                   'Saving new timetable to database...';
+
+              const phaseNote =
+                jobProgress >= 40 && jobProgress < 68
+                  ? 'AI call can take 30–180s depending on load'
+                  : jobProgress >= 68 && jobProgress < 100
+                  ? 'Almost there!'
+                  : '';
+
+              return (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  marginTop: '1rem',
+                  padding: '0.8rem 1.25rem',
+                  background: 'rgba(99,102,241,0.12)',
+                  borderRadius: '0.6rem',
+                  border: '1px solid rgba(99,102,241,0.25)',
+                  width: '100%',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontSize: '1.1rem' }}>⏱</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                        <span style={{ fontSize: '0.65rem', color: '#a5b4fc', letterSpacing: '0.05em', fontWeight: 600 }}>ESTIMATED TIME REMAINING</span>
+                        <span style={{
+                          fontSize: '1.6rem',
+                          fontWeight: 800,
+                          color: etcSeconds <= 15 ? '#f87171' : etcSeconds <= 45 ? '#fb923c' : '#c4b5fd',
+                          fontVariantNumeric: 'tabular-nums',
+                          letterSpacing: '0.03em',
+                          lineHeight: 1.1,
+                        }}>
+                          {etcSeconds > 0
+                            ? `${Math.floor(etcSeconds / 60).toString().padStart(2, '0')}:${(etcSeconds % 60).toString().padStart(2, '0')}`
+                            : 'Finishing up...'}
+                        </span>
+                      </div>
+                    </div>
+                    {jobProgress >= 68 && (
+                      <span style={{ fontSize: '0.7rem', color: '#34d399', fontWeight: 700, background: 'rgba(52,211,153,0.15)', padding: '0.2rem 0.6rem', borderRadius: '0.3rem' }}>Almost done!</span>
+                    )}
+                  </div>
+                  <div style={{ width: '100%', borderTop: '1px solid rgba(99,102,241,0.2)', paddingTop: '0.4rem', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#818cf8', fontStyle: 'italic' }}>{phaseLabel}</span>
+                    {phaseNote && (
+                      <span style={{ fontSize: '0.65rem', color: '#64748b', marginLeft: '0.5rem' }}>({phaseNote})</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Footer Buttons for Failed or Completed States */}
+            {(jobStatus === 'failed' || jobStatus === 'completed') && (
+              <div className={styles.generationModalFooter}>
+                <button
+                  className={styles.generationModalCloseBtn}
+                  onClick={() => setShowGenerationOverlay(false)}
+                >
+                  {jobStatus === 'completed' ? 'View Generated Timetable →' : 'Close Overlay'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SCHEDULING RULES & CONSTRAINTS MODAL */}
+      {showRulesModal && (
+        <div className={styles.rulesModalOverlay}>
+          <div className={styles.rulesModal}>
+            <div className={styles.rulesModalHeader}>
+              <h3 className={styles.rulesModalTitle}>
+                <span>⚙️ Scheduling Rules & Constraints</span>
+              </h3>
+              <button
+                className={styles.rulesModalCloseBtn}
+                onClick={() => setShowRulesModal(false)}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Tabs */}
+            <div className={styles.rulesModalTabs}>
+              <button
+                className={`${styles.rulesTabBtn} ${rulesActiveTab === 'custom' ? styles.rulesTabBtnActive : ''}`}
+                onClick={() => setRulesActiveTab('custom')}
+              >
+                ✏️ Custom Rules for Semester {semester} ({dynamicConstraints.length})
+              </button>
+              <button
+                className={`${styles.rulesTabBtn} ${rulesActiveTab === 'base' ? styles.rulesTabBtnActive : ''}`}
+                onClick={() => setRulesActiveTab('base')}
+              >
+                📖 System Base Rules for Semester {semester} (
+                {baseConstraints ? baseConstraints.hard_constraints.length + baseConstraints.soft_constraints.length : 0}
+                )
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className={styles.rulesModalBody}>
+              {/* TAB 1: CUSTOM RULES */}
+              {rulesActiveTab === 'custom' && (
+                <>
+                  <div className={styles.rulesCreateBox}>
+                    <label className={styles.rulesCreateLabel}>
+                      Add New Custom Rule for Semester {semester} ({academicYear})
+                    </label>
+                    <div className={styles.rulesCreateRow}>
+                      <select
+                        className={styles.rulesSelectCategory}
+                        value={newCustomCategory}
+                        onChange={(e) => setNewCustomCategory(e.target.value as 'hard' | 'soft')}
+                      >
+                        <option value="hard">🔒 Hard Constraint</option>
+                        <option value="soft">💡 Soft Constraint</option>
+                      </select>
+
+                      <input
+                        type="text"
+                        className={styles.rulesInput}
+                        placeholder="e.g., AEC courses must be in afternoon P4+P5+P6, or Friday P6 free for sports..."
+                        value={newConstraintText}
+                        onChange={(e) => setNewConstraintText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddCustomConstraint();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className={styles.rulesAddBtn}
+                        onClick={handleAddCustomConstraint}
+                        disabled={!newConstraintText.trim()}
+                      >
+                        + Add Rule
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={styles.rulesListContainer}>
+                    <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.82rem', fontWeight: 700, color: '#475569' }}>
+                      Active Custom Rules ({dynamicConstraints.length}):
+                    </p>
+
+                    {dynamicConstraints.length > 0 ? (
+                      dynamicConstraints.map((c, idx) => (
+                        <div key={c.id} className={styles.ruleCard}>
+                          {editingConstraintId === c.id ? (
+                            <div className={styles.ruleEditRow}>
+                              <select
+                                className={styles.rulesSelectCategory}
+                                style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
+                                value={editingConstraintCategory}
+                                onChange={(e) => setEditingConstraintCategory(e.target.value as 'hard' | 'soft')}
+                              >
+                                <option value="hard">🔒 Hard</option>
+                                <option value="soft">💡 Soft</option>
+                              </select>
+                              <input
+                                type="text"
+                                className={styles.ruleEditInput}
+                                value={editingConstraintText}
+                                onChange={(e) => setEditingConstraintText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleSaveEditCustomConstraint(c.id);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingConstraintId(null);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                className={styles.ruleSaveBtn}
+                                onClick={() => handleSaveEditCustomConstraint(c.id)}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.ruleCancelBtn}
+                                onClick={() => setEditingConstraintId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                                <span
+                                  className={`${styles.ruleCategoryBadge} ${
+                                    c.category === 'soft' ? styles.ruleCategorySoft : styles.ruleCategoryHard
+                                  }`}
+                                >
+                                  {c.category === 'soft' ? 'Soft' : 'Hard'}
+                                </span>
+                                <span className={styles.ruleText}>
+                                  <strong>{idx + 1}.</strong> {c.text}
+                                </span>
+                              </div>
+                              <div className={styles.ruleActions}>
+                                <button
+                                  type="button"
+                                  className={styles.ruleEditBtn}
+                                  onClick={() => handleStartEditCustomConstraint(c)}
+                                  title="Edit rule"
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.ruleDeleteBtn}
+                                  onClick={() => handleDeleteCustomConstraint(c.id)}
+                                  title="Delete rule"
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '1.5rem', background: '#f8fafc', borderRadius: '0.5rem', color: '#64748b', fontSize: '0.85rem' }}>
+                        No custom rules entered yet for Semester {semester}. Choose Hard or Soft and enter a constraint above in plain English.
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* TAB 2: SYSTEM BASE RULES */}
+              {rulesActiveTab === 'base' && baseConstraints && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem', paddingBottom: '0.5rem', borderBottom: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b' }}>Filter:</span>
+                      <button
+                        type="button"
+                        style={{
+                          background: baseRulesFilterScope === 'all' ? '#0f172a' : '#f1f5f9',
+                          color: baseRulesFilterScope === 'all' ? '#ffffff' : '#334155',
+                          border: 'none',
+                          padding: '0.25rem 0.6rem',
+                          borderRadius: '0.3rem',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setBaseRulesFilterScope('all')}
+                      >
+                        All Active ({baseConstraints.hard_constraints.length + baseConstraints.soft_constraints.length})
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          background: baseRulesFilterScope === 'semester' ? '#0f172a' : '#f1f5f9',
+                          color: baseRulesFilterScope === 'semester' ? '#ffffff' : '#334155',
+                          border: 'none',
+                          padding: '0.25rem 0.6rem',
+                          borderRadius: '0.3rem',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setBaseRulesFilterScope('semester')}
+                      >
+                        Sem {semester} Scoped ({baseConstraints.selected_semester_hard.length + baseConstraints.selected_semester_soft.length})
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          background: baseRulesFilterScope === 'universal' ? '#0f172a' : '#f1f5f9',
+                          color: baseRulesFilterScope === 'universal' ? '#ffffff' : '#334155',
+                          border: 'none',
+                          padding: '0.25rem 0.6rem',
+                          borderRadius: '0.3rem',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setBaseRulesFilterScope('universal')}
+                      >
+                        Universal ({baseConstraints.universal_hard_constraints.length + baseConstraints.universal_soft_constraints.length})
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={styles.rulesResetBtn}
+                      onClick={handleResetBaseRules}
+                      disabled={savingBaseRules}
+                      title="Restore factory default base rules"
+                    >
+                      🔄 Reset to Defaults
+                    </button>
+                  </div>
+
+                  <div className={styles.rulesListContainer}>
+                    <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.82rem', fontWeight: 700, color: '#dc2626' }}>
+                      🔒 Hard Constraints:
+                    </p>
+
+                    {(baseRulesFilterScope === 'all' || baseRulesFilterScope === 'universal') &&
+                      baseConstraints.universal_hard_constraints.map((hc, idx) => (
+                        <div key={`u-hard-${idx}`} className={styles.ruleCard}>
+                          {editingBaseRule?.scope === 'universal' && editingBaseRule.category === 'hard' && editingBaseRule.index === idx ? (
+                            <div className={styles.ruleEditRow}>
+                              <input
+                                type="text"
+                                className={styles.ruleEditInput}
+                                value={editingBaseRuleText}
+                                onChange={(e) => setEditingBaseRuleText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleSaveEditBaseRule();
+                                  } else if (e.key === 'Escape') {
+                                    setEditingBaseRule(null);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                className={styles.ruleSaveBtn}
+                                onClick={handleSaveEditBaseRule}
+                                disabled={savingBaseRules}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.ruleCancelBtn}
+                                onClick={() => setEditingBaseRule(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                                <span className={`${styles.ruleCategoryBadge} ${styles.ruleCategoryHard}`}>Universal Hard</span>
+                                <span className={styles.ruleText}>{hc}</span>
+                              </div>
+                              <div className={styles.ruleActions}>
+                                <button
+                                  type="button"
+                                  className={styles.ruleEditBtn}
+                                  onClick={() => handleStartEditBaseRule('universal', 'hard', idx, hc)}
+                                  title="Edit rule"
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.ruleDeleteBtn}
+                                  onClick={() => handleDeleteBaseRule('universal', 'hard', idx)}
+                                  title="Delete rule"
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+
+                    {(baseRulesFilterScope === 'all' || baseRulesFilterScope === 'semester') &&
+                      baseConstraints.selected_semester_hard.map((hc, idx) => (
+                        <div key={`s-hard-${idx}`} className={styles.ruleCard} style={{ borderLeft: '3px solid #dc2626' }}>
+                          {editingBaseRule?.scope === 'semester' && editingBaseRule.category === 'hard' && editingBaseRule.index === idx ? (
+                            <div className={styles.ruleEditRow}>
+                              <input
+                                type="text"
+                                className={styles.ruleEditInput}
+                                value={editingBaseRuleText}
+                                onChange={(e) => setEditingBaseRuleText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleSaveEditBaseRule();
+                                  } else if (e.key === 'Escape') {
+                                    setEditingBaseRule(null);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                className={styles.ruleSaveBtn}
+                                onClick={handleSaveEditBaseRule}
+                                disabled={savingBaseRules}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.ruleCancelBtn}
+                                onClick={() => setEditingBaseRule(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                                <span className={`${styles.ruleCategoryBadge} ${styles.ruleCategoryHard}`}>Sem {semester} Hard</span>
+                                <span className={styles.ruleText}>{hc}</span>
+                              </div>
+                              <div className={styles.ruleActions}>
+                                <button
+                                  type="button"
+                                  className={styles.ruleEditBtn}
+                                  onClick={() => handleStartEditBaseRule('semester', 'hard', idx, hc)}
+                                  title="Edit rule"
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.ruleDeleteBtn}
+                                  onClick={() => handleDeleteBaseRule('semester', 'hard', idx)}
+                                  title="Delete rule"
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+
+                  <div className={styles.rulesListContainer} style={{ marginTop: '0.75rem' }}>
+                    <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.82rem', fontWeight: 700, color: '#2563eb' }}>
+                      💡 Soft Constraints:
+                    </p>
+
+                    {(baseRulesFilterScope === 'all' || baseRulesFilterScope === 'universal') &&
+                      baseConstraints.universal_soft_constraints.map((sc, idx) => (
+                        <div key={`u-soft-${idx}`} className={styles.ruleCard}>
+                          {editingBaseRule?.scope === 'universal' && editingBaseRule.category === 'soft' && editingBaseRule.index === idx ? (
+                            <div className={styles.ruleEditRow}>
+                              <input
+                                type="text"
+                                className={styles.ruleEditInput}
+                                value={editingBaseRuleText}
+                                onChange={(e) => setEditingBaseRuleText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleSaveEditBaseRule();
+                                  } else if (e.key === 'Escape') {
+                                    setEditingBaseRule(null);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                className={styles.ruleSaveBtn}
+                                onClick={handleSaveEditBaseRule}
+                                disabled={savingBaseRules}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.ruleCancelBtn}
+                                onClick={() => setEditingBaseRule(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                                <span className={`${styles.ruleCategoryBadge} ${styles.ruleCategorySoft}`}>Universal Soft</span>
+                                <span className={styles.ruleText}>{sc}</span>
+                              </div>
+                              <div className={styles.ruleActions}>
+                                <button
+                                  type="button"
+                                  className={styles.ruleEditBtn}
+                                  onClick={() => handleStartEditBaseRule('universal', 'soft', idx, sc)}
+                                  title="Edit rule"
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.ruleDeleteBtn}
+                                  onClick={() => handleDeleteBaseRule('universal', 'soft', idx)}
+                                  title="Delete rule"
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+
+                    {(baseRulesFilterScope === 'all' || baseRulesFilterScope === 'semester') &&
+                      baseConstraints.selected_semester_soft.map((sc, idx) => (
+                        <div key={`s-soft-${idx}`} className={styles.ruleCard} style={{ borderLeft: '3px solid #2563eb' }}>
+                          {editingBaseRule?.scope === 'semester' && editingBaseRule.category === 'soft' && editingBaseRule.index === idx ? (
+                            <div className={styles.ruleEditRow}>
+                              <input
+                                type="text"
+                                className={styles.ruleEditInput}
+                                value={editingBaseRuleText}
+                                onChange={(e) => setEditingBaseRuleText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleSaveEditBaseRule();
+                                  } else if (e.key === 'Escape') {
+                                    setEditingBaseRule(null);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                className={styles.ruleSaveBtn}
+                                onClick={handleSaveEditBaseRule}
+                                disabled={savingBaseRules}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.ruleCancelBtn}
+                                onClick={() => setEditingBaseRule(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                                <span className={`${styles.ruleCategoryBadge} ${styles.ruleCategorySoft}`}>Sem {semester} Soft</span>
+                                <span className={styles.ruleText}>{sc}</span>
+                              </div>
+                              <div className={styles.ruleActions}>
+                                <button
+                                  type="button"
+                                  className={styles.ruleEditBtn}
+                                  onClick={() => handleStartEditBaseRule('semester', 'soft', idx, sc)}
+                                  title="Edit rule"
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.ruleDeleteBtn}
+                                  onClick={() => handleDeleteBaseRule('semester', 'soft', idx)}
+                                  title="Delete rule"
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className={styles.rulesModalFooter}>
+              <button
+                className={styles.rulesDoneBtn}
+                onClick={() => setShowRulesModal(false)}
+              >
+                <span>✓ Done</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dedicated PDF Print Section */}
       <div className={styles.printArea}>
         {(printTargetDept === 'all'
           ? (departments.length > 0 ? departments : Array.from(new Set(allEntries.map((e) => e.departmentId))).map((id) => ({ id, name: allEntries.find((e) => e.departmentId === id)?.departmentName || 'Department' })))
@@ -903,7 +1878,7 @@ export default function CampusDirectorTimetablePage() {
                         return (
                           <td key={p.num}>
                             {entries.length > 0 ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                                 {entries.map((entry, idx) => (
                                   <div key={entry.id || idx} className={styles.cellCourse}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
@@ -911,11 +1886,11 @@ export default function CampusDirectorTimetablePage() {
                                       {isParallelSlot && (
                                         <span
                                           style={{
-                                            fontSize: '0.6rem',
+                                            fontSize: '0.62rem',
                                             fontWeight: 700,
-                                            background: '#e2e8f0',
-                                            color: '#0f172a',
-                                            padding: '0.05rem 0.2rem',
+                                            background: '#dbeafe',
+                                            color: '#1d4ed8',
+                                            padding: '0.05rem 0.25rem',
                                             borderRadius: '0.2rem',
                                           }}
                                         >
@@ -1004,22 +1979,6 @@ export default function CampusDirectorTimetablePage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Instant Pointer Mouse Tooltip */}
-      {tooltip && (
-        <div
-          className={styles.mouseTooltip}
-          style={{
-            left: `${tooltip.x}px`,
-            top: `${tooltip.y}px`,
-            position: 'fixed',
-            pointerEvents: 'none',
-            zIndex: 1000,
-          }}
-        >
-          {tooltip.text}
         </div>
       )}
     </div>
