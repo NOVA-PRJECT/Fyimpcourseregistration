@@ -56,6 +56,19 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
 
+  // Parallel groups state
+  const [parallelGroups, setParallelGroups] = useState<any[]>([])
+  const [loadingParallel, setLoadingParallel] = useState(false)
+  const [showNewGroupModal, setShowNewGroupModal] = useState(false)
+  const [newGroupLabel, setNewGroupLabel] = useState('')
+  const [selectedGroupCourseIds, setSelectedGroupCourseIds] = useState<string[]>([])
+  const [savingGroup, setSavingGroup] = useState(false)
+  const [addCourseToGroupId, setAddCourseToGroupId] = useState<string | null>(null)
+  const [selectedCourseToAdd, setSelectedCourseToAdd] = useState('')
+  const [addingCourse, setAddingCourse] = useState(false)
+  const [deleteGroupConfirm, setDeleteGroupConfirm] = useState<any | null>(null)
+  const [deletingGroup, setDeletingGroup] = useState(false)
+
   // Helper to determine credit ranges for each slot
   function getSlotCreditRange(slot: SlotData): { min: number; max: number } {
     if (!slot.rule) return { min: 0, max: 0 }
@@ -168,6 +181,118 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     const data = await res.json()
     if (res.ok) setCourses(data)
     setLoadingCourses(false)
+    fetchParallelGroups(sem)
+  }
+
+  async function fetchParallelGroups(sem: number = semester) {
+    setLoadingParallel(true)
+    try {
+      const res = await fetch(`/api/timetable/parallel-groups?academicYear=2026-27&semester=${sem}`)
+      const data = await res.json()
+      if (res.ok) setParallelGroups(data.groups ?? [])
+    } catch (err) {
+      console.error('Failed to fetch parallel groups:', err)
+    } finally {
+      setLoadingParallel(false)
+    }
+  }
+
+  async function handleCreateGroup() {
+    if (selectedGroupCourseIds.length < 2) {
+      setError('At least 2 courses must be selected for a parallel group')
+      return
+    }
+    if (courses.length === 0) return
+    const deptId = courses[0]?.department_id
+    if (!deptId) {
+      setError('Department ID could not be identified')
+      return
+    }
+    setSavingGroup(true)
+    setError('')
+
+    const res = await fetch('/api/timetable/parallel-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        academicYear: '2026-27',
+        semester,
+        departmentId: deptId,
+        label: newGroupLabel.trim() || undefined,
+        courseIds: selectedGroupCourseIds,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setError(data.error ?? 'Failed to create parallel group')
+    } else {
+      setSuccess('Parallel group created successfully')
+      setTimeout(() => setSuccess(''), 1000)
+      setShowNewGroupModal(false)
+      setNewGroupLabel('')
+      setSelectedGroupCourseIds([])
+      fetchParallelGroups(semester)
+    }
+    setSavingGroup(false)
+  }
+
+  async function handleAddCourseToGroup(groupId: string) {
+    if (!selectedCourseToAdd) {
+      setError('Please select a course to add')
+      return
+    }
+    setAddingCourse(true)
+    setError('')
+    const res = await fetch(`/api/timetable/parallel-groups/${groupId}/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ courseId: selectedCourseToAdd }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setError(data.error ?? 'Failed to add course to group')
+    } else {
+      setSuccess('Course added to group')
+      setTimeout(() => setSuccess(''), 1000)
+      setAddCourseToGroupId(null)
+      setSelectedCourseToAdd('')
+      fetchParallelGroups(semester)
+    }
+    setAddingCourse(false)
+  }
+
+  async function handleRemoveCourseFromGroup(groupId: string, courseId: string) {
+    setError('')
+    const res = await fetch(`/api/timetable/parallel-groups/${groupId}/courses/${courseId}`, {
+      method: 'DELETE',
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setError(data.error ?? 'Failed to remove course from group')
+    } else {
+      setSuccess('Course removed from group')
+      setTimeout(() => setSuccess(''), 1000)
+      fetchParallelGroups(semester)
+    }
+  }
+
+  async function handleDeleteGroup() {
+    if (!deleteGroupConfirm) return
+    setDeletingGroup(true)
+    setError('')
+    const res = await fetch(`/api/timetable/parallel-groups/${deleteGroupConfirm.groupId}`, {
+      method: 'DELETE',
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setError(data.error ?? 'Failed to delete parallel group')
+    } else {
+      setSuccess('Parallel group deleted')
+      setTimeout(() => setSuccess(''), 1000)
+      setDeleteGroupConfirm(null)
+      fetchParallelGroups(semester)
+    }
+    setDeletingGroup(false)
   }
 
   function updateSlot(slotNum: number, field: keyof SlotData, value: string) {
@@ -665,9 +790,229 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                   </table>
                 )}
               </div>
+
+              {/* ── PARALLEL GROUPS PANEL ── */}
+              <div style={{ marginTop: '2.5rem' }}>
+                <div className={styles.sectionHeader}>
+                  <div>
+                    <p className={styles.sectionTitle} style={{ margin: 0 }}>⚡ Parallel Course Groups — Semester {semester}</p>
+                    <p style={{ fontSize: '0.72rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
+                      Group alternative courses (e.g. Electives) to force them into the same time slot simultaneously.
+                    </p>
+                  </div>
+                  <button className={styles.addBtn} onClick={() => {
+                    setShowNewGroupModal(true)
+                    setNewGroupLabel('')
+                    setSelectedGroupCourseIds([])
+                    setError('')
+                  }}>+ New Group</button>
+                </div>
+
+                <div className={styles.tableWrapper}>
+                  {loadingParallel ? (
+                    <div className={styles.loadingState}>
+                      <div className={styles.spinner} />
+                      <p className={styles.loadingText}>Loading parallel groups...</p>
+                    </div>
+                  ) : parallelGroups.length === 0 ? (
+                    <div className={styles.emptyState}>
+                      <div className={styles.emptyIcon}>⚡</div>
+                      <p className={styles.emptyTitle}>No parallel groups yet</p>
+                      <p className={styles.emptySubtitle}>
+                        Create a parallel group to schedule alternative elective courses into the same time slot.
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {parallelGroups.map((group: any) => (
+                        <div key={group.groupId} style={{
+                          background: '#ffffff',
+                          border: '1.5px solid #e2e8f0',
+                          borderRadius: '0.5rem',
+                          padding: '0.85rem 1rem',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a' }}>
+                                {group.label || `Elective Parallel Group (${group.courses.length} courses)`}
+                              </span>
+                              <span className={styles.codeBadge} style={{ background: '#eff6ff', color: '#1d4ed8' }}>
+                                {group.courses.length} Parallel Courses
+                              </span>
+                            </div>
+                            <button
+                              className={styles.deleteBtn}
+                              onClick={() => setDeleteGroupConfirm(group)}
+                              style={{ fontSize: '0.75rem' }}
+                            >
+                              Delete Group
+                            </button>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', paddingLeft: '0.75rem', borderLeft: '3px solid #3b82f6' }}>
+                            {group.courses.map((c: any) => (
+                              <div key={c.courseId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+                                <span>
+                                  <strong style={{ fontFamily: 'monospace', color: '#1e293b' }}>{c.courseCode}</strong> — {c.title}
+                                </span>
+                                <button
+                                  onClick={() => handleRemoveCourseFromGroup(group.groupId, c.courseId)}
+                                  style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: '0.25rem', padding: '0.1rem 0.4rem', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 600 }}
+                                  title="Remove course from group"
+                                >
+                                  ✕ Remove
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div style={{ marginTop: '0.75rem' }}>
+                            <button
+                              className={styles.addBtn}
+                              style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem', background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}
+                              onClick={() => {
+                                setAddCourseToGroupId(group.groupId)
+                                setSelectedCourseToAdd('')
+                                setError('')
+                              }}
+                            >
+                              + Add Course
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </>
           )}
         </>
+      )}
+
+      {/* New Parallel Group Modal */}
+      {showNewGroupModal && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>+ New Parallel Group</h3>
+            <p className={styles.modalSubtitle}>
+              Select courses in Semester {semester} that are alternatives to each other. They will be scheduled in the exact same time slot.
+            </p>
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Group Label (Optional)</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. Elective Group A"
+                  value={newGroupLabel}
+                  onChange={e => setNewGroupLabel(e.target.value)}
+                />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Select Courses (Min 2 required)</label>
+                <div style={{ maxHeight: '12rem', overflowY: 'auto', border: '1px solid #dde1e7', borderRadius: '0.5rem', padding: '0.5rem' }}>
+                  {courses
+                    .filter(c => !parallelGroups.some(g => g.courses.some((gc: any) => gc.courseId === c.id)))
+                    .map(c => {
+                      const isSelected = selectedGroupCourseIds.includes(c.id)
+                      return (
+                        <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0.2rem', cursor: 'pointer', fontSize: '0.8rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              if (isSelected) {
+                                setSelectedGroupCourseIds(prev => prev.filter(id => id !== c.id))
+                              } else {
+                                setSelectedGroupCourseIds(prev => [...prev, c.id])
+                              }
+                            }}
+                          />
+                          <span><strong>{c.course_code}</strong> — {c.title}</span>
+                        </label>
+                      )
+                    })}
+                  {courses.filter(c => !parallelGroups.some(g => g.courses.some((gc: any) => gc.courseId === c.id))).length === 0 && (
+                    <p style={{ fontSize: '0.78rem', color: '#9ba1ab', margin: 0, textAlign: 'center', padding: '0.5rem' }}>
+                      No ungrouped courses available for Semester {semester}.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+            {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{error}</div>}
+            <div className={styles.modalActions}>
+              <button className={styles.modalCancelBtn} onClick={() => { setShowNewGroupModal(false); setError('') }} disabled={savingGroup}>Cancel</button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={handleCreateGroup}
+                disabled={savingGroup || selectedGroupCourseIds.length < 2}
+              >
+                {savingGroup ? 'Creating...' : 'Create Group →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Course to Parallel Group Modal */}
+      {addCourseToGroupId && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Add Course to Group</h3>
+            <div className={styles.fieldGroup}>
+              <div className={styles.field}>
+                <label className={styles.label}>Select Course</label>
+                <select
+                  className={styles.input}
+                  value={selectedCourseToAdd}
+                  onChange={e => setSelectedCourseToAdd(e.target.value)}
+                >
+                  <option value="">— Select Course —</option>
+                  {courses
+                    .filter(c => !parallelGroups.some(g => g.courses.some((gc: any) => gc.courseId === c.id)))
+                    .map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.course_code} — {c.title}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+            {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{error}</div>}
+            <div className={styles.modalActions}>
+              <button className={styles.modalCancelBtn} onClick={() => { setAddCourseToGroupId(null); setError('') }} disabled={addingCourse}>Cancel</button>
+              <button
+                className={styles.modalConfirmBtn}
+                onClick={() => handleAddCourseToGroup(addCourseToGroupId)}
+                disabled={addingCourse || !selectedCourseToAdd}
+              >
+                {addingCourse ? 'Adding...' : 'Add Course →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Parallel Group Confirmation Modal */}
+      {deleteGroupConfirm && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Delete Parallel Group</h3>
+            <p className={styles.modalSubtitle}>
+              This will ungroup all courses in <strong>{deleteGroupConfirm.label || 'this parallel group'}</strong>. Generation will treat them independently.
+            </p>
+            {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{error}</div>}
+            <div className={styles.modalActions}>
+              <button className={styles.modalCancelBtn} onClick={() => { setDeleteGroupConfirm(null); setError('') }} disabled={deletingGroup}>Cancel</button>
+              <button className={styles.modalDeleteBtn} onClick={handleDeleteGroup} disabled={deletingGroup}>
+                {deletingGroup ? 'Deleting...' : 'Yes, Delete Group'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {view === 'courses' && (

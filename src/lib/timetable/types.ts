@@ -1,8 +1,15 @@
 export type SlotId = string; // uuid of time_slots row
 
+export interface ParallelGroup {
+  groupId: string;
+  departmentId: string;
+  courseIds: string[]; // all course IDs in this group
+}
+
 export interface CourseNode {
   courseId: string;
   departmentId: string;
+  category: string; // from courses.category e.g. 'DSE', 'SEC', 'VAC'
   theoryHours: number;
   practicalHours: number;
   remainingTheoryHours: number;
@@ -48,3 +55,14 @@ export const LAB_BLOCK_PAIRS: [number, number][] = [
 ];
 
 export const DAYS = [1, 2, 3, 4, 5]; // Mon–Fri
+
+// Categories that are campus-wide synchronized and slot-exclusive
+export const CAMPUS_SYNC_EXCLUSIVE = ['AEC', 'VAC', 'SEC'] as const;
+
+// Valid consecutive theory block period combinations (never P3→P4, crosses lunch)
+// Format: [periodStart, ...periods]
+export const THEORY_BLOCKS: Record<number, number[][]> = {
+  1: [[4], [5], [6], [1], [2], [3]], // 1-hour: afternoon preferred
+  2: [[4, 5], [5, 6]], // 2-hour: strictly afternoon consecutive pairs
+  3: [[4, 5, 6]], // 3-hour: strictly full afternoon
+};

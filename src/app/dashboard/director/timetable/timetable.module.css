@@ -346,6 +346,7 @@
 
 .tabsContainer {
   display: flex;
+  align-items: center;
   gap: 0.4rem;
   overflow-x: auto;
   padding-bottom: 0.5rem;
@@ -373,6 +374,32 @@
   background: #002147;
   color: #ffffff;
   border-color: #002147;
+}
+
+.conflictsTab {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+  padding: 0.5rem 1rem;
+  border-radius: 0.4rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.conflictsTab:hover {
+  background: #fee2e2;
+}
+
+.activeConflictsTab {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
 }
 
 .gridWrapper {
@@ -468,7 +495,7 @@
   background: #fffbebf5;
   border: 1px solid #fde68a;
   border-radius: 0.5rem;
-  padding: 0.9rem;
+  padding: 1rem;
   margin-bottom: 1.25rem;
   color: #92400e;
 }
@@ -491,19 +518,125 @@
   color: #166534;
 }
 
+/* Dedicated Conflicts Dashboard Section */
+.conflictsSectionCard {
+  background: #ffffff;
+  border: 1px solid #fee2e2;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.08);
+}
+
+.conflictsSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #fee2e2;
+  margin-bottom: 1.25rem;
+}
+
+.conflictsSectionTitle {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #991b1b;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.conflictsSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.conflictStatCard {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+}
+
+.conflictStatValue {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #991b1b;
+  margin: 0;
+}
+
+.conflictStatLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #7f1d1d;
+  margin: 0.2rem 0 0 0;
+  text-transform: uppercase;
+}
+
 .conflictsList {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  margin-top: 0.6rem;
+  gap: 0.75rem;
 }
 
 .conflictItem {
   background: #ffffff;
+  border: 1px solid #fee2e2;
   border-left: 4px solid #ef4444;
-  padding: 0.65rem 0.85rem;
-  border-radius: 0.35rem;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  padding: 0.9rem 1.1rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.conflictHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.conflictCourseTitle {
+  font-weight: 700;
+  color: #991b1b;
+  font-size: 0.92rem;
+  margin: 0;
+}
+
+.conflictDeptBadge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.conflictReason {
+  font-size: 0.84rem;
+  color: #334155;
+  margin: 0.3rem 0;
+  line-height: 1.45;
+}
+
+.conflictFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #fee2e2;
+  font-size: 0.8rem;
+  color: #7f1d1d;
+  font-weight: 600;
 }
 
 .modalOverlay {

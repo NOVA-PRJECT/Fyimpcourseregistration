@@ -13,6 +13,7 @@ interface TimetableEntry {
   courseCode: string;
   departmentId: string;
   departmentName: string;
+  departmentCode?: string;
   day: number;
   period: number;
   startTime: string;
@@ -26,6 +27,10 @@ interface ConflictItem {
   id?: string;
   courseId: string;
   courseName: string;
+  courseCode?: string;
+  departmentId?: string;
+  departmentName?: string;
+  departmentCode?: string;
   reason: string;
   conflictingStudentCount: number;
 }
@@ -67,6 +72,7 @@ export default function CampusDirectorTimetablePage() {
   const [allConflicts, setAllConflicts] = useState<ConflictItem[]>([]);
   const [departments, setDepartments] = useState<{ id: string; name: string; code?: string }[]>([]);
   const [selectedDeptId, setSelectedDeptId] = useState<string>('');
+  const [conflictDeptFilter, setConflictDeptFilter] = useState<string>('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,40 +88,17 @@ export default function CampusDirectorTimetablePage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const CACHE_KEY = `fyimp:timetable:${academicYear}:${semester}`;
-
-  // Core fetch function with optional forceRefresh
+  // Live fetch function directly from API (no stale cache)
   const fetchEntries = useCallback(
     async (forceRefresh = false) => {
       if (!academicYear || !semester) return;
-
-      if (forceRefresh) {
-        try {
-          sessionStorage.removeItem(CACHE_KEY);
-        } catch {
-          /* ignore */
-        }
-      } else {
-        // Try cache first
-        try {
-          const cached = sessionStorage.getItem(CACHE_KEY);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            setAllEntries(parsed.entries ?? []);
-            setAllConflicts(parsed.conflicts ?? []);
-            setDepartments(parsed.departments ?? []);
-            return;
-          }
-        } catch {
-          // Cache read failed — proceed to fetch
-        }
-      }
 
       setLoading(true);
       setError(null);
 
       try {
-        const res = await fetch(`/api/timetable/entries?academicYear=${academicYear}&semester=${semester}`);
+        const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : '';
+        const res = await fetch(`/api/timetable/entries?academicYear=${academicYear}&semester=${semester}${cacheBuster}`);
         if (!res.ok) throw new Error(`Failed to load timetable (${res.status})`);
         const data = await res.json();
 
@@ -134,29 +117,15 @@ export default function CampusDirectorTimetablePage() {
         setAllEntries(entriesList);
         setAllConflicts(conflictsList);
         setDepartments(deptList);
-
-        try {
-          sessionStorage.setItem(
-            CACHE_KEY,
-            JSON.stringify({
-              entries: entriesList,
-              conflicts: conflictsList,
-              departments: deptList,
-            })
-          );
-        } catch {
-          // sessionStorage write failed (quota) — continue without cache
-        }
       } catch (err: any) {
         setError(err.message);
       } finally {
         setLoading(false);
       }
     },
-    [academicYear, semester, CACHE_KEY]
+    [academicYear, semester]
   );
 
-  // Invalidate cache and force fresh API fetch
   const invalidateCache = useCallback(() => {
     fetchEntries(true);
   }, [fetchEntries]);
@@ -191,14 +160,14 @@ export default function CampusDirectorTimetablePage() {
       .catch(() => {});
   }, [academicYear, semester]);
 
-  // Single fetch on mount / selector change with sessionStorage cache
+  // Single fetch on mount / selector change
   useEffect(() => {
-    fetchEntries(false);
+    fetchEntries(true);
   }, [fetchEntries]);
 
   // Set default selected department once data loads
   useEffect(() => {
-    if (departments.length > 0 && (!selectedDeptId || !departments.some((d) => d.id === selectedDeptId))) {
+    if (departments.length > 0 && (!selectedDeptId || (selectedDeptId !== 'VIEW_ALL_CONFLICTS' && !departments.some((d) => d.id === selectedDeptId)))) {
       setSelectedDeptId(departments[0].id);
     } else if (allEntries.length > 0 && !selectedDeptId) {
       setSelectedDeptId(allEntries[0].departmentId);
@@ -222,7 +191,7 @@ export default function CampusDirectorTimetablePage() {
 
         if (data.status === 'completed') {
           clearInterval(interval);
-          setSuccessMsg('Timetable generated successfully!');
+          setSuccessMsg(data.stepMessage || 'Timetable generated successfully!');
           invalidateCache();
         } else if (data.status === 'failed') {
           clearInterval(interval);
@@ -333,9 +302,12 @@ export default function CampusDirectorTimetablePage() {
           [1, 2, 3, 4, 5].forEach((dayNum) => {
             const row: string[] = [DAYS_MAP[dayNum]];
             PERIODS.forEach((p) => {
-              const entry = deptEntries.find((e) => e.day === dayNum && e.period === p.num);
-              if (entry) {
-                row.push(`${entry.courseCode} - ${entry.courseName}${entry.isLabBlock ? ' [LAB]' : ''}`);
+              const entries = deptEntries.filter((e) => e.day === dayNum && e.period === p.num);
+              if (entries.length > 0) {
+                const text = entries
+                  .map((e) => `${e.courseCode} - ${e.courseName}${e.isLabBlock ? ' [LAB]' : ''}`)
+                  .join(' / ');
+                row.push(text);
               } else {
                 row.push('—');
               }
@@ -368,9 +340,12 @@ export default function CampusDirectorTimetablePage() {
         [1, 2, 3, 4, 5].forEach((dayNum) => {
           const row: string[] = [DAYS_MAP[dayNum]];
           PERIODS.forEach((p) => {
-            const entry = deptEntries.find((e) => e.day === dayNum && e.period === p.num);
-            if (entry) {
-              row.push(`${entry.courseCode} - ${entry.courseName}${entry.isLabBlock ? ' [LAB]' : ''}`);
+            const entries = deptEntries.filter((e) => e.day === dayNum && e.period === p.num);
+            if (entries.length > 0) {
+              const text = entries
+                .map((e) => `${e.courseCode} - ${e.courseName}${e.isLabBlock ? ' [LAB]' : ''}`)
+                .join(' / ');
+              row.push(text);
             } else {
               row.push('—');
             }
@@ -404,12 +379,21 @@ export default function CampusDirectorTimetablePage() {
     setSelectedDeptId(deptId);
   }
 
-  // Helper to find entry at day + period
-  function getEntryAt(day: number, period: number): TimetableEntry | undefined {
-    return visibleEntries.find((e) => e.day === day && e.period === period);
+  // Helper to find entries at day + period (supports stacked parallel courses)
+  function getEntriesAt(day: number, period: number): TimetableEntry[] {
+    return visibleEntries.filter((e) => e.day === day && e.period === period);
   }
 
   const hasUnresolvedConflicts = allConflicts.length > 0;
+  const isViewingConflictsSection = selectedDeptId === 'VIEW_ALL_CONFLICTS';
+
+  // Filtered conflicts based on conflictDeptFilter
+  const displayedConflicts = conflictDeptFilter === 'all'
+    ? allConflicts
+    : allConflicts.filter((c) => c.departmentId === conflictDeptFilter);
+
+  const totalConflictingStudents = allConflicts.reduce((sum, c) => sum + (c.conflictingStudentCount || 0), 0);
+  const impactedDeptIds = new Set(allConflicts.map((c) => c.departmentId).filter(Boolean));
 
   return (
     <div className={styles.pageWrapper}>
@@ -493,7 +477,7 @@ export default function CampusDirectorTimetablePage() {
             )}
           </div>
 
-          {/* Job Progress & GenAI Status Card */}
+          {/* Job Progress & Status Card */}
           {jobStatus !== 'idle' && (
             <div className={styles.aiJobCard}>
               <div className={styles.aiHeader}>
@@ -609,92 +593,280 @@ export default function CampusDirectorTimetablePage() {
           </div>
         )}
 
-        {/* Panel B: Conflicts Warning List */}
+        {/* Prominent Conflicts Notice Banner with Instant Navigation */}
         {hasUnresolvedConflicts && (
-          <div className={styles.bannerWarning}>
-            <p style={{ fontWeight: 700, margin: '0 0 0.5rem 0' }}>
-              ⚠️ {allConflicts.length} course(s) could not be scheduled due to student timetable conflicts:
-            </p>
+          <div className={styles.bannerWarning} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div>
+              <p style={{ fontWeight: 700, margin: '0 0 0.25rem 0', fontSize: '0.95rem' }}>
+                ⚠️ {allConflicts.length} Course Scheduling Conflict(s) Require Attention
+              </p>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: '#78350f' }}>
+                Some courses could not be placed due to student timetable overlaps across departments.
+              </p>
+            </div>
+            <button
+              style={{
+                background: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.45rem 0.9rem',
+                borderRadius: '0.35rem',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+              }}
+              onClick={() => setSelectedDeptId('VIEW_ALL_CONFLICTS')}
+            >
+              🔍 View All {allConflicts.length} Conflicts →
+            </button>
+          </div>
+        )}
+
+        {/* Navigation Tabs Bar: Department Tabs + Dedicated Conflicts Tab */}
+        <div className={styles.tabsContainer}>
+          {departments.map((dept) => (
+            <button
+              key={dept.id}
+              className={`${styles.tab} ${selectedDeptId === dept.id ? styles.activeTab : ''}`}
+              onClick={() => handleDeptChange(dept.id)}
+              onMouseEnter={(e) => setTooltip({ text: dept.name, x: e.clientX + 14, y: e.clientY + 14 })}
+              onMouseMove={(e) => setTooltip({ text: dept.name, x: e.clientX + 14, y: e.clientY + 14 })}
+              onMouseLeave={() => setTooltip(null)}
+            >
+              {dept.code || dept.name}
+            </button>
+          ))}
+
+          {/* Dedicated Conflicts Tab Button */}
+          {hasUnresolvedConflicts && (
+            <button
+              className={`${styles.conflictsTab} ${isViewingConflictsSection ? styles.activeConflictsTab : ''}`}
+              onClick={() => setSelectedDeptId('VIEW_ALL_CONFLICTS')}
+            >
+              ⚠️ Unresolved Conflicts ({allConflicts.length})
+            </button>
+          )}
+        </div>
+
+        {/* VIEW 1: Dedicated Full Conflicts Section */}
+        {isViewingConflictsSection ? (
+          <div className={styles.conflictsSectionCard}>
+            <div className={styles.conflictsSectionHeader}>
+              <div>
+                <h3 className={styles.conflictsSectionTitle}>
+                  ⚠️ Campus Scheduling Conflicts ({allConflicts.length})
+                </h3>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.82rem', color: '#64748b' }}>
+                  The following courses could not be assigned to time slots due to student schedule clashes.
+                </p>
+              </div>
+
+              {/* Department Filter Dropdown for Conflicts */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>Filter Department:</span>
+                <select
+                  className={styles.select}
+                  value={conflictDeptFilter}
+                  onChange={(e) => setConflictDeptFilter(e.target.value)}
+                >
+                  <option value="all">All Departments ({allConflicts.length})</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.code || d.name} ({allConflicts.filter((c) => c.departmentId === d.id).length})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Summary Stat Cards */}
+            <div className={styles.conflictsSummaryGrid}>
+              <div className={styles.conflictStatCard}>
+                <p className={styles.conflictStatValue}>{allConflicts.length}</p>
+                <p className={styles.conflictStatLabel}>Unplaced Courses</p>
+              </div>
+              <div className={styles.conflictStatCard}>
+                <p className={styles.conflictStatValue}>{impactedDeptIds.size}</p>
+                <p className={styles.conflictStatLabel}>Impacted Departments</p>
+              </div>
+              <div className={styles.conflictStatCard}>
+                <p className={styles.conflictStatValue}>{totalConflictingStudents}</p>
+                <p className={styles.conflictStatLabel}>Total Student Impacts</p>
+              </div>
+            </div>
+
+            {/* List of Individual Conflict Cards */}
             <div className={styles.conflictsList}>
-              {allConflicts.map((c, idx) => (
-                <div key={idx} className={styles.conflictItem}>
-                  <p style={{ fontWeight: 700, color: '#991b1b', margin: 0 }}>Course: {c.courseName}</p>
-                  <p style={{ fontSize: '0.82rem', color: '#334155', margin: '0.3rem 0' }}>
-                    <strong>Explanation:</strong> {c.reason}
-                  </p>
-                  <p style={{ fontSize: '0.78rem', color: '#991b1b', margin: 0, fontWeight: 600 }}>
-                    <strong>Impacted Students:</strong> {c.conflictingStudentCount} student(s) are registered in overlapping courses
-                  </p>
+              {displayedConflicts.map((c, idx) => (
+                <div key={c.id || idx} className={styles.conflictItem}>
+                  <div className={styles.conflictHeader}>
+                    <div className={styles.conflictCourseTitle}>
+                      {c.courseCode ? `[${c.courseCode}] ` : ''}{c.courseName}
+                    </div>
+                    {c.departmentName && (
+                      <span className={styles.conflictDeptBadge}>
+                        🏢 Department: {c.departmentName}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className={styles.conflictReason}>
+                    <strong>Conflict Reason:</strong> {c.reason}
+                  </div>
+
+                  <div className={styles.conflictFooter}>
+                    <span>👥 Impacted Students: <strong>{c.conflictingStudentCount} student(s)</strong></span>
+                    {c.departmentId && (
+                      <button
+                        style={{
+                          background: '#002147',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '0.3rem',
+                          padding: '0.25rem 0.65rem',
+                          fontSize: '0.74rem',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                        }}
+                        onClick={() => handleDeptChange(c.departmentId!)}
+                      >
+                        View {c.departmentCode || c.departmentName} Grid →
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
-        )}
-
-        {/* Panel A: Timetable Grid Area */}
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '4rem', color: '#6366f1', background: '#ffffff', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-            <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Loading timetable data...</p>
-          </div>
-        ) : departments.length > 0 ? (
-          <div>
-            {/* Department Tabs */}
-            <div className={styles.tabsContainer}>
-              {departments.map((dept) => (
-                <button
-                  key={dept.id}
-                  className={`${styles.tab} ${selectedDeptId === dept.id ? styles.activeTab : ''}`}
-                  onClick={() => handleDeptChange(dept.id)}
-                  onMouseEnter={(e) => setTooltip({ text: dept.name, x: e.clientX + 14, y: e.clientY + 14 })}
-                  onMouseMove={(e) => setTooltip({ text: dept.name, x: e.clientX + 14, y: e.clientY + 14 })}
-                  onMouseLeave={() => setTooltip(null)}
-                >
-                  {dept.code || dept.name}
-                </button>
-              ))}
-            </div>
-
-            {/* 5x6 Grid */}
-            <div className={styles.gridWrapper}>
-              <table className={styles.gridTable}>
-                <thead>
-                  <tr>
-                    <th style={{ width: '15%' }}>Day / Period</th>
-                    {PERIODS.map((p) => (
-                      <th key={p.num}>{p.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[1, 2, 3, 4, 5].map((dayNum) => (
-                    <tr key={dayNum}>
-                      <td style={{ fontWeight: 700, background: '#f8fafc' }}>{DAYS_MAP[dayNum]}</td>
-                      {PERIODS.map((p) => {
-                        const entry = getEntryAt(dayNum, p.num);
-                        return (
-                          <td key={p.num}>
-                            {entry ? (
-                              <div className={styles.cellCourse}>
-                                <div className={styles.cellCourseCode}>{entry.courseCode}</div>
-                                <div className={styles.cellCourseTitle}>{entry.courseName}</div>
-                                {entry.isLabBlock && <span className={styles.labBadge}>Lab Block (2h)</span>}
-                              </div>
-                            ) : (
-                              <span style={{ color: '#cbd5e1' }}>—</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
         ) : (
-          <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b', background: '#ffffff', borderRadius: '0.5rem' }}>
-            <p>No timetable entries generated yet for Semester {semester} ({academicYear}).</p>
-            <p style={{ fontSize: '0.85rem' }}>Click <strong>"Generate Timetable"</strong> above to run the automated generator.</p>
+          /* VIEW 2: Regular Department Timetable Grid */
+          <div>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '4rem', color: '#6366f1', background: '#ffffff', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Loading timetable data...</p>
+              </div>
+            ) : departments.length > 0 ? (
+              <div className={styles.gridWrapper}>
+                <table className={styles.gridTable}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '15%' }}>Day / Period</th>
+                      {PERIODS.map((p) => (
+                        <th key={p.num}>{p.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3, 4, 5].map((dayNum) => (
+                      <tr key={dayNum}>
+                        <td style={{ fontWeight: 700, background: '#f8fafc' }}>{DAYS_MAP[dayNum]}</td>
+                        {PERIODS.map((p) => {
+                          const entries = getEntriesAt(dayNum, p.num);
+                          const isParallelSlot = entries.length > 1;
+                          return (
+                            <td key={p.num}>
+                              {entries.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                  {entries.map((entry, idx) => (
+                                    <div key={entry.id || idx} className={styles.cellCourse}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                        <div className={styles.cellCourseCode}>{entry.courseCode}</div>
+                                        {isParallelSlot && (
+                                          <span
+                                            style={{
+                                              fontSize: '0.62rem',
+                                              fontWeight: 700,
+                                              background: '#dbeafe',
+                                              color: '#1d4ed8',
+                                              padding: '0.05rem 0.25rem',
+                                              borderRadius: '0.2rem',
+                                            }}
+                                            title="Parallel Course Group"
+                                          >
+                                            [P]
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className={styles.cellCourseTitle}>{entry.courseName}</div>
+                                      {entry.isLabBlock && <span className={styles.labBadge}>Lab Block (2h)</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span style={{ color: '#cbd5e1' }}>—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b', background: '#ffffff', borderRadius: '0.5rem' }}>
+                <p>No timetable entries generated yet for Semester {semester} ({academicYear}).</p>
+                <p style={{ fontSize: '0.85rem' }}>Click <strong>"Generate Timetable"</strong> above to run the automated generator.</p>
+              </div>
+            )}
+
+            {/* In-Department Conflicts List (Below Grid) */}
+            {hasUnresolvedConflicts && (
+              <div className={styles.conflictsSectionCard} style={{ marginTop: '2rem' }}>
+                <div className={styles.conflictsSectionHeader}>
+                  <h4 className={styles.conflictsSectionTitle} style={{ fontSize: '1rem' }}>
+                    ⚠️ Scheduling Conflicts in Active View ({allConflicts.filter((c) => !selectedDeptId || c.departmentId === selectedDeptId).length} of {allConflicts.length})
+                  </h4>
+                  <button
+                    style={{
+                      background: '#dc2626',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '0.3rem',
+                      fontWeight: 600,
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setSelectedDeptId('VIEW_ALL_CONFLICTS')}
+                  >
+                    Open Full Conflicts Dashboard →
+                  </button>
+                </div>
+
+                <div className={styles.conflictsList}>
+                  {allConflicts
+                    .filter((c) => !selectedDeptId || c.departmentId === selectedDeptId)
+                    .map((c, idx) => (
+                      <div key={c.id || idx} className={styles.conflictItem}>
+                        <div className={styles.conflictHeader}>
+                          <div className={styles.conflictCourseTitle}>
+                            {c.courseCode ? `[${c.courseCode}] ` : ''}{c.courseName}
+                          </div>
+                          {c.departmentName && (
+                            <span className={styles.conflictDeptBadge}>
+                              🏢 {c.departmentName}
+                            </span>
+                          )}
+                        </div>
+                        <div className={styles.conflictReason}>
+                          <strong>Reason:</strong> {c.reason}
+                        </div>
+                        <div className={styles.conflictFooter}>
+                          <span>👥 Impacted Students: <strong>{c.conflictingStudentCount} student(s)</strong></span>
+                        </div>
+                      </div>
+                    ))}
+
+                  {allConflicts.filter((c) => !selectedDeptId || c.departmentId === selectedDeptId).length === 0 && (
+                    <p style={{ margin: '0.5rem 0', color: '#166534', fontWeight: 600, fontSize: '0.85rem' }}>
+                      ✓ Zero conflicts in this department! (The remaining {allConflicts.length} conflict(s) are in other campus departments).
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -726,14 +898,35 @@ export default function CampusDirectorTimetablePage() {
                     <tr key={dayNum}>
                       <td style={{ fontWeight: 700, background: '#f8fafc' }}>{DAYS_MAP[dayNum]}</td>
                       {PERIODS.map((p) => {
-                        const entry = deptEntries.find((e) => e.day === dayNum && e.period === p.num);
+                        const entries = deptEntries.filter((e) => e.day === dayNum && e.period === p.num);
+                        const isParallelSlot = entries.length > 1;
                         return (
                           <td key={p.num}>
-                            {entry ? (
-                              <div className={styles.cellCourse}>
-                                <div className={styles.cellCourseCode}>{entry.courseCode}</div>
-                                <div className={styles.cellCourseTitle}>{entry.courseName}</div>
-                                {entry.isLabBlock && <span className={styles.labBadge}>Lab Block (2h)</span>}
+                            {entries.length > 0 ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                {entries.map((entry, idx) => (
+                                  <div key={entry.id || idx} className={styles.cellCourse}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                      <div className={styles.cellCourseCode}>{entry.courseCode}</div>
+                                      {isParallelSlot && (
+                                        <span
+                                          style={{
+                                            fontSize: '0.6rem',
+                                            fontWeight: 700,
+                                            background: '#e2e8f0',
+                                            color: '#0f172a',
+                                            padding: '0.05rem 0.2rem',
+                                            borderRadius: '0.2rem',
+                                          }}
+                                        >
+                                          [P]
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className={styles.cellCourseTitle}>{entry.courseName}</div>
+                                    {entry.isLabBlock && <span className={styles.labBadge}>Lab Block (2h)</span>}
+                                  </div>
+                                ))}
                               </div>
                             ) : (
                               <span style={{ color: '#cbd5e1' }}>—</span>

@@ -44,7 +44,7 @@ export async function runGenerationJob(
     await reportProgress(0, '🚀 Starting automated timetable generation job...');
 
     // 2. Load input data with live status callback
-    const { courses, slotMap, studentDeptMap, stats: loadStats } = await loadGenerationInput(
+    const { courses, slotMap, studentDeptMap, parallelGroups, stats: loadStats } = await loadGenerationInput(
       dbClient,
       academicYear,
       semester,
@@ -59,6 +59,7 @@ export async function runGenerationJob(
       courses,
       slotMap,
       studentDeptMap,
+      parallelGroups,
       (p, msg, st) => {
         reportProgress(p, msg, { ...loadStats, ...st }).catch(() => {});
       }

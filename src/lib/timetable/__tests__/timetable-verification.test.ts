@@ -21,11 +21,13 @@ function createCourse(
   theoryHours: number,
   practicalHours: number,
   studentIds: string[],
-  isCrossDept: boolean = false
+  isCrossDept: boolean = false,
+  category: string = 'DSC'
 ): CourseNode {
   return {
     courseId,
     departmentId,
+    category,
     theoryHours,
     practicalHours,
     remainingTheoryHours: theoryHours,
@@ -82,7 +84,7 @@ describe('Timetable System End-to-End Verification', () => {
       expect(result.assignments.length).toBeGreaterThan(0);
 
       // Verify lab block continuous assignment
-      const labAssignments = result.assignments.filter(a => a.courseId === 'CS102_LAB');
+      const labAssignments = result.assignments.filter((a) => a.courseId === 'CS102_LAB');
       expect(labAssignments).toHaveLength(2);
       expect(labAssignments[0].isLabBlock).toBe(true);
 
@@ -119,7 +121,7 @@ describe('Timetable System End-to-End Verification', () => {
       const result = generateTimetable(courses, slotMap);
       expect(result.conflicts).toHaveLength(0);
 
-      const assignedSlots = result.assignments.map(a => a.timeSlotId);
+      const assignedSlots = result.assignments.map((a) => a.timeSlotId);
       const uniqueSlots = new Set(assignedSlots);
       expect(assignedSlots.length).toEqual(uniqueSlots.size); // All assigned slots for student_x are distinct
     });

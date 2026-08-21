@@ -1,5 +1,78 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { CourseNode, SlotId } from './types';
+import { CAMPUS_SYNC_EXCLUSIVE, CourseNode, ParallelGroup, SlotId } from './types';
+
+/**
+ * Auto-detect parallel groups from live registration data (Update 05 & Update 06).
+ * Courses taken by the same student department batch in the same category with
+ * matching theory/practical hour structures and zero student overlap across ALL pairs
+ * are treated as elective alternatives and grouped to share identical time slots.
+ */
+export function detectParallelGroups(
+  courses: CourseNode[],
+  studentDeptMap: Map<string, string> = new Map()
+): ParallelGroup[] {
+  const parallelGroups: ParallelGroup[] = [];
+
+  // Group courses by student batch department + category + matching hours structure
+  const buckets = new Map<string, CourseNode[]>();
+  for (const course of courses) {
+    // CSE categories are handled in Pre-Phase 0, not parallel groups
+    if ((CAMPUS_SYNC_EXCLUSIVE as readonly string[]).includes(course.category)) {
+      continue;
+    }
+
+    const studentDepts = new Set<string>();
+    for (const studentId of course.studentIds) {
+      const deptId = studentDeptMap.get(studentId);
+      if (deptId) studentDepts.add(deptId);
+    }
+    if (studentDepts.size === 0) {
+      studentDepts.add(course.departmentId);
+    }
+
+    for (const deptId of studentDepts) {
+      // Include theory and practical hours so parallel courses always have matching session structures
+      const key = `${deptId}:${course.category || 'General'}:T${course.theoryHours}:P${course.practicalHours}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      const list = buckets.get(key)!;
+      if (!list.some((c) => c.courseId === course.courseId)) {
+        list.push(course);
+      }
+    }
+  }
+
+  for (const [key, bucket] of buckets) {
+    // Need at least 2 courses to form a parallel group
+    if (bucket.length < 2) continue;
+    const deptId = key.split(':')[0];
+
+    // Check if ALL pairs in this bucket have zero student overlap.
+    // If any pair shares even one student, they are not true alternatives.
+    let allZeroOverlap = true;
+
+    outer:
+    for (let i = 0; i < bucket.length; i++) {
+      for (let j = i + 1; j < bucket.length; j++) {
+        for (const studentId of bucket[i].studentIds) {
+          if (bucket[j].studentIds.has(studentId)) {
+            allZeroOverlap = false;
+            break outer;
+          }
+        }
+      }
+    }
+
+    if (allZeroOverlap) {
+      parallelGroups.push({
+        groupId: crypto.randomUUID(), // runtime only — never stored in DB
+        departmentId: deptId,
+        courseIds: bucket.map((c) => c.courseId),
+      });
+    }
+  }
+
+  return parallelGroups;
+}
 
 export async function loadGenerationInput(
   supabase: SupabaseClient,
@@ -11,6 +84,7 @@ export async function loadGenerationInput(
   courses: CourseNode[];
   slotMap: Map<number, Map<number, SlotId>>;
   studentDeptMap: Map<string, string>;
+  parallelGroups: ParallelGroup[];
   stats: {
     registrationCount: number;
     studentCount: number;
@@ -91,7 +165,6 @@ export async function loadGenerationInput(
   const allStudentIds = Array.from(new Set(rawRegistrations.map((r: any) => r.student_id).filter(Boolean)));
 
   if (allStudentIds.length > 0) {
-    // Primary query: students table for department_id
     const { data: studentDepts } = await supabase
       .from('students')
       .select('id, department_id')
@@ -101,7 +174,6 @@ export async function loadGenerationInput(
       if (row.department_id) studentDeptMap.set(row.id, row.department_id);
     }
 
-    // Fallback query: users table for any unmapped student_ids
     const unmappedIds = allStudentIds.filter((id) => !studentDeptMap.has(id));
     if (unmappedIds.length > 0) {
       const { data: userDepts } = await supabase
@@ -130,7 +202,7 @@ export async function loadGenerationInput(
   // Query 3: Fetch courses metadata
   const { data: rawCourses, error: courseError } = await supabase
     .from('courses')
-    .select('id, department_id, theory_hours_per_week, practical_hours_per_week')
+    .select('id, department_id, theory_hours_per_week, practical_hours_per_week, category')
     .in('id', Array.from(allCourseIds));
 
   if (courseError) {
@@ -138,22 +210,33 @@ export async function loadGenerationInput(
     throw new Error(`Database error while reading courses: ${courseError.message}`);
   }
 
-  const courseMetaMap = new Map<string, { departmentId: string; theoryHours: number; practicalHours: number }>();
+  const courseMetaMap = new Map<
+    string,
+    {
+      departmentId: string;
+      theoryHours: number;
+      practicalHours: number;
+      category: string;
+    }
+  >();
+
   for (const c of rawCourses || []) {
     courseMetaMap.set(c.id, {
       departmentId: c.department_id,
-      theoryHours: c.theory_hours_per_week ?? 0,
+      theoryHours: c.theory_hours_per_week ?? 3,
       practicalHours: c.practical_hours_per_week ?? 0,
+      category: (c.category || 'General').trim(),
     });
   }
 
-  // Group student enrollments by course_id and track student department IDs
+  // Group student enrollments by course_id
   const courseGroupMap = new Map<
     string,
     {
       departmentId: string;
       theoryHours: number;
       practicalHours: number;
+      category: string;
       studentIds: Set<string>;
       studentDeptIds: Set<string>;
     }
@@ -169,6 +252,7 @@ export async function loadGenerationInput(
         departmentId: meta.departmentId,
         theoryHours: meta.theoryHours,
         practicalHours: meta.practicalHours,
+        category: meta.category,
         studentIds: new Set<string>(),
         studentDeptIds: new Set<string>(),
       };
@@ -187,11 +271,11 @@ export async function loadGenerationInput(
 
   for (const [courseId, group] of courseGroupMap.entries()) {
     if (group.studentIds.size === 0) continue;
-    if (group.theoryHours === 0 && group.practicalHours === 0) continue;
 
     courses.push({
       courseId,
       departmentId: group.departmentId,
+      category: group.category,
       theoryHours: group.theoryHours,
       practicalHours: group.practicalHours,
       remainingTheoryHours: group.theoryHours,
@@ -249,6 +333,9 @@ export async function loadGenerationInput(
   let slotCount = 0;
   slotMap.forEach((dayMap) => (slotCount += dayMap.size));
 
+  // Auto-detect parallel groups from live registration data using studentDeptMap
+  const parallelGroups = detectParallelGroups(courses, studentDeptMap);
+
   const stats = {
     registrationCount: rawRegistrations.length,
     studentCount: studentDeptMap.size,
@@ -260,9 +347,9 @@ export async function loadGenerationInput(
 
   await onProgress?.(
     30,
-    `⏰ Verified ${slotCount} weekly time slots. Ready for conflict graph analysis...`,
+    `⏰ Verified ${slotCount} weekly time slots & detected ${parallelGroups.length} parallel group(s). Ready for conflict graph analysis...`,
     stats
   );
 
-  return { courses, slotMap, studentDeptMap, stats };
+  return { courses, slotMap, studentDeptMap, parallelGroups, stats };
 }
