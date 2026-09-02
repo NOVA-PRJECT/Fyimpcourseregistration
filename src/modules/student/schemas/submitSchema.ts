@@ -2,10 +2,11 @@ import { z } from 'zod'
 
 export const SubmitCoursesSchema = z.object({
   semester: z.number().int().min(1).max(10),
+  pathway_id: z.string().min(1),
   courses: z
     .array(z.string().uuid('Invalid Course ID'))
     .min(1, 'At least one course is required')
-    .max(6, 'Maximum 6 courses allowed'),
+    .max(10, 'Maximum 10 courses allowed'),
 }).refine(
   (data) => new Set(data.courses).size === data.courses.length,
   {

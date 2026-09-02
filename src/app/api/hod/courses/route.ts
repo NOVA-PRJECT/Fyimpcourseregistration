@@ -29,7 +29,7 @@ const DeleteCourseSchema = z.object({
   course_id: z.string().uuid('Invalid course ID'),
 })
 
-// GET — fetch courses for dept + semester
+// GET — fetch courses for campus depts + AEC for semester
 export async function GET(request: NextRequest) {
   const auth = await verifyHod()
   if (!auth.success) return handleAuthError(auth)
@@ -41,10 +41,19 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = await getSupabaseServerClient()
+
+  // Fetch all department IDs in HOD's campus
+  const { data: depts } = await supabase
+    .from('departments')
+    .select('id')
+    .eq('campus_id', auth.campus_id)
+
+  const campusDeptIds = depts && depts.length > 0 ? depts.map(d => d.id) : [auth.department_id]
+
   const { data, error } = await supabase
     .from('courses')
-    .select('*')
-    .eq('department_id', auth.department_id)
+    .select('*, departments(name, code, campus_id)')
+    .or(`department_id.in.(${campusDeptIds.join(',')}),category.eq.AEC`)
     .eq('semester', Number(semester))
     .order('category')
 
@@ -53,7 +62,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to fetch courses' }, { status: 500 })
   }
 
-  return NextResponse.json(data ?? [])
+  const mapped = (data ?? []).map((c: any) => ({
+    ...c,
+    department_name: c.departments?.name ?? '',
+    department_code: c.departments?.code ?? '',
+    is_own_campus: campusDeptIds.includes(c.department_id),
+  }))
+
+  return NextResponse.json(mapped)
 }
 
 // POST — add new course

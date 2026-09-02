@@ -96,12 +96,12 @@ export default function StudentDashboardClient({ studentInfo, hasSubmission }: S
                 href="/dashboard/student/register"
                 className={styles.registerLink}
               >
-                {hasSubmission ? 'Update Registration →' : 'Register Courses →'}
+                {hasSubmission ? 'Update Track & Course Selection →' : 'Select Track & Register Courses →'}
               </Link>
               <p className={styles.registerHint}>
                 {hasSubmission
-                  ? 'You have already submitted. Click to update your selection.'
-                  : 'Select your courses for this semester.'}
+                  ? 'You have already submitted your track selection. Click to view or update your choices.'
+                  : 'First select your academic track, then choose your paper preferences for this semester.'}
               </p>
             </div>
 

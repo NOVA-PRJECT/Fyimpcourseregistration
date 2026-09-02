@@ -36,14 +36,34 @@ export type SemesterBlueprint = {
   slot_6_rule: SlotRule | null
   slot_6_target: string | null
   slot_6_name: string | null
+  pathways: Pathway[] | null
+}
+
+// ── Pathway types ───────────────────────────────────────────
+
+export type PathwaySlot = {
+  rule: string
+  target: string
+  name: string
+}
+
+export type Pathway = {
+  id: string
+  name: string
+  slots: PathwaySlot[]
+}
+
+export type PathwaySummary = {
+  id: string
+  name: string
 }
 
 export type BlueprintSlot = {
   slot: number
-  rule: SlotRule
+  rule: SlotRule | string
   name: string
-  course?: Course
-  options?: Course[]
+  course?: Course & { department_name?: string }
+  options?: (Course & { department_name?: string })[]
 }
 
 export type BlueprintResponse = {
@@ -51,5 +71,7 @@ export type BlueprintResponse = {
   deadline: string
   min_credits: number
   max_credits: number
-  slots: BlueprintSlot[]
+  slots?: BlueprintSlot[]
+  pathways?: PathwaySummary[]
+  pathway_id?: string
 }

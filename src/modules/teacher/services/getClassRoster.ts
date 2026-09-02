@@ -50,6 +50,7 @@ export async function getClassRoster(courseId: string, campus_id: string) {
     .from('student_registrations')
     .select(`
       student_id,
+      pathway_id,
       slot_1_course_id,
       slot_2_course_id,
       slot_3_course_id,
@@ -78,6 +79,11 @@ export async function getClassRoster(courseId: string, campus_id: string) {
   }
 
   const studentIds = registrations.map((r: any) => r.student_id)
+
+  // Build student → pathway_id map
+  const studentPathwayMap = new Map(
+    registrations.map((r: any) => [r.student_id, r.pathway_id ?? null])
+  )
 
   const { data: students, error: studentError } = await supabaseAdmin
     .from('students')
@@ -115,6 +121,7 @@ export async function getClassRoster(courseId: string, campus_id: string) {
     full_name: student.full_name,
     department: student.departments?.name ?? 'Unknown',
     department_code: student.departments?.code ?? '',
+    pathway: studentPathwayMap.get(student.id) ?? 'Default',
   }))
 
   roster.sort((a, b) => {

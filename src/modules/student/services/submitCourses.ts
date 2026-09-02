@@ -5,8 +5,9 @@ import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { VerifiedStudent } from '@/core/auth/verifyRole'
 import { isCourseEligibleForSlot } from '@/core/utils/slotRules'
 import { logServerError } from '@/core/logging/logger'
+import { Pathway } from '@/core/types/course.types'
 
-export async function submitCourses(auth: VerifiedStudent, { semester, courses }: SubmitCoursesInput) {
+export async function submitCourses(auth: VerifiedStudent, { semester, pathway_id, courses }: SubmitCoursesInput) {
   const supabase = await getSupabaseServerClient()
 
   // M3 fix: Server-side duplicate course check (defense against schema bypass)
@@ -62,18 +63,32 @@ export async function submitCourses(auth: VerifiedStudent, { semester, courses }
     return { success: false, error: 'No blueprint found for your semester', status: 404 }
   }
 
-  // Build slot definitions from blueprint
-  const slots = Array.from({ length: 6 }, (_, i) => ({
-    slot: i + 1,
-    rule: blueprint[`slot_${i + 1}_rule`] as string | null,
-    target: blueprint[`slot_${i + 1}_target`] as string | null,
-  })).filter(s => s.rule) // only defined slots
+  // Read pathways from JSONB column
+  const pathways = blueprint.pathways as Pathway[] | null
+  if (!pathways || pathways.length === 0) {
+    return { success: false, error: 'Blueprint not configured', status: 400 }
+  }
 
-  // Validate course count matches defined slots
+  // Find the matching pathway
+  const pathway = pathways.find(p => p.id === pathway_id)
+  if (!pathway) {
+    return { success: false, error: 'Invalid pathway selected', status: 400 }
+  }
+
+  // Build slot definitions from pathway
+  const slots = pathway.slots
+    .map((s, i) => ({
+      slot: i + 1,
+      rule: s.rule,
+      target: s.target,
+    }))
+    .filter(s => s.rule)
+
+  // Validate course count matches pathway's defined slots
   if (courses.length !== slots.length) {
     return {
       success: false,
-      error: `Expected ${slots.length} courses for this semester, got ${courses.length}`,
+      error: `Expected ${slots.length} courses for this pathway, got ${courses.length}`,
       status: 400,
     }
   }
@@ -98,7 +113,7 @@ export async function submitCourses(auth: VerifiedStudent, { semester, courses }
   // Build course lookup by id
   const courseMap = new Map(courseData.map(c => [c.id, c]))
 
-  // Validate each course against its blueprint slot rule
+  // Validate each course against its pathway slot rule
   for (let i = 0; i < slots.length; i++) {
     const { slot, rule, target } = slots[i]
     const courseId = courses[i]
@@ -128,7 +143,7 @@ export async function submitCourses(auth: VerifiedStudent, { semester, courses }
 
     if (!isEligible) {
       // Return the specific detailed error messages to keep user experience identical
-      if (rule === SLOT_RULES.FIXED) {
+      if (rule === SLOT_RULES.FIXED || rule === SLOT_RULES.AEC_ELECT || rule === SLOT_RULES.CAMPUS_FIXED) {
         return {
           success: false,
           error: `Slot ${slot} requires a fixed course and cannot be changed`,
@@ -218,7 +233,7 @@ export async function submitCourses(auth: VerifiedStudent, { semester, courses }
     }
   }
 
-  // Build upsert payload — slot assignment follows blueprint order
+  // Build upsert payload
   const payload: Record<string, unknown> = {
     student_id: auth.userId,
     campus_id: auth.campus_id,
@@ -226,12 +241,11 @@ export async function submitCourses(auth: VerifiedStudent, { semester, courses }
     academic_year: settings.academic_year,
     total_credits: totalCredits,
     submitted_at: new Date().toISOString(),
-    slot_1_course_id: courses[0] ?? null,
-    slot_2_course_id: courses[1] ?? null,
-    slot_3_course_id: courses[2] ?? null,
-    slot_4_course_id: courses[3] ?? null,
-    slot_5_course_id: courses[4] ?? null,
-    slot_6_course_id: courses[5] ?? null,
+    pathway_id,
+    selections: {
+      pathway_id,
+      courses,
+    },
   }
 
   // Upsert via supabaseAdmin — student_registrations RLS denies direct client writes

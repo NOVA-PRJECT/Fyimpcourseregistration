@@ -16,6 +16,10 @@ export function isCourseEligibleForSlot(
     return course.course_code === target
   }
 
+  if (rule === SLOT_RULES.AEC_ELECT || rule === SLOT_RULES.CAMPUS_FIXED) {
+    return course.course_code === target
+  }
+
   if (rule === SLOT_RULES.DEPT_RESTRICTED) {
     if (!target) return false
     const allowedDeptCodes = target.split(',').map(code => code.trim())

@@ -1,65 +1,33 @@
 import { SLOT_RULES } from '@/core/constants/courseCategories'
-import { BlueprintSlot, BlueprintResponse } from '@/core/types/course.types'
+import { BlueprintSlot, BlueprintResponse, Pathway, PathwaySlot } from '@/core/types/course.types'
 import { getSupabaseServerClient } from '@/core/database/supabaseClient'
 import { VerifiedStudent } from '@/core/auth/verifyRole'
 import { isCourseEligibleForSlot } from '@/core/utils/slotRules'
 
-export async function getBlueprint(auth: VerifiedStudent) {
-  const supabase = await getSupabaseServerClient()
-
-  // Parallel fetch: Settings, Blueprint, and all Departments
-  const [
-    { data: settings, error: settingsError },
-    { data: blueprint, error: blueprintError },
-    { data: departmentsData }
-  ] = await Promise.all([
-    supabase
-      .from('campus_settings')
-      .select('deadline, min_credits, max_credits, academic_year')
-      .eq('campus_id', auth.campus_id)
-      .single(),
-    supabase
-      .from('semester_blueprints')
-      .select('*')
-      .eq('department_id', auth.department_id)
-      .eq('semester', auth.current_semester)
-      .single(),
-    supabase
-      .from('departments')
-      .select('id, name, code')
-  ])
-
-  if (settingsError || !settings) {
-    return { success: false, error: 'Campus settings not found', status: 404 }
-  }
-
-  if (blueprintError || !blueprint) {
-    return { success: false, error: 'Blueprint not found for this semester', status: 404 }
-  }
-
-  // Check registration window
-  const now = new Date()
-  const deadline = settings.deadline ? new Date(settings.deadline) : null
-  const windowOpen = deadline !== null && now < deadline
-
-  // Build department code → id map for O(1) lookup
-  const deptMap = new Map(departmentsData?.map(d => [d.code, d.id]) || [])
-  const deptIdToName = new Map(departmentsData?.map(d => [d.id, d.name]) || [])
-
-  // PRE-FLIGHT: Identify all slots and batch-fetch FIXED courses
-  const slotsInfo = Array.from({ length: 6 }).map((_, i) => ({
+/**
+ * Resolve a single pathway's slots into BlueprintSlot[] with course options.
+ * Extracted so it can be reused by getPathwaySlots service.
+ */
+export async function resolvePathwaySlots(
+  pathway: Pathway,
+  auth: VerifiedStudent,
+  supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>,
+  deptMap: Map<string, string>,
+  deptIdToName: Map<string, string>,
+) {
+  const slotsInfo = pathway.slots.map((s: PathwaySlot, i: number) => ({
     slot: i + 1,
-    rule: blueprint[`slot_${i + 1}_rule`],
-    target: blueprint[`slot_${i + 1}_target`],
-    name: blueprint[`slot_${i + 1}_name`] ?? `Paper ${i + 1}`
+    rule: s.rule,
+    target: s.target,
+    name: s.name ?? `Paper ${i + 1}`,
   })).filter(s => s.rule && s.target)
 
   if (slotsInfo.length === 0) {
-    return { success: false, error: 'Blueprint has no configured course slots for this semester', status: 400 }
+    return { success: false as const, error: 'Pathway has no configured course slots', status: 400 }
   }
 
   const fixedTargets = slotsInfo
-    .filter(s => s.rule === SLOT_RULES.FIXED)
+    .filter(s => s.rule === SLOT_RULES.FIXED || s.rule === SLOT_RULES.AEC_ELECT || s.rule === SLOT_RULES.CAMPUS_FIXED)
     .map(s => s.target)
 
   let fixedCourseIds: string[] = []
@@ -77,21 +45,10 @@ export async function getBlueprint(auth: VerifiedStudent) {
     }
   }
 
-  // FINAL PARALLEL PASS: existing registration + all slot queries simultaneously
-  const [existingRegistrationRes, ...resolvedSlots] = await Promise.all([
-    // Check if student already submitted this semester
-    supabase
-      .from('student_registrations')
-      .select('slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
-      .eq('student_id', auth.userId)
-      .eq('semester', auth.current_semester)
-      .eq('academic_year', settings.academic_year)
-      .single(),
-
-    // Resolve each slot in parallel
-    ...slotsInfo.map(async ({ slot, rule, target, name }) => {
-      // FIXED — already resolved from batch fetch
-      if (rule === SLOT_RULES.FIXED) {
+  const resolvedSlots = await Promise.all(
+    slotsInfo.map(async ({ slot, rule, target, name }) => {
+      // FIXED / AEC_ELECT / CAMPUS_FIXED — already resolved from batch fetch
+      if (rule === SLOT_RULES.FIXED || rule === SLOT_RULES.AEC_ELECT || rule === SLOT_RULES.CAMPUS_FIXED) {
         const c = fixedCoursesMap[target]
         return {
           slot,
@@ -199,15 +156,105 @@ export async function getBlueprint(auth: VerifiedStudent) {
       // Unknown rule — return empty safely
       return { slot, rule, name, options: [] }
     })
+  )
+
+  return { success: true as const, slots: resolvedSlots as BlueprintSlot[] }
+}
+
+export async function getBlueprint(auth: VerifiedStudent) {
+  const supabase = await getSupabaseServerClient()
+
+  // Parallel fetch: Settings, Blueprint, and all Departments
+  const [
+    { data: settings, error: settingsError },
+    { data: blueprint, error: blueprintError },
+    { data: departmentsData }
+  ] = await Promise.all([
+    supabase
+      .from('campus_settings')
+      .select('deadline, min_credits, max_credits, academic_year')
+      .eq('campus_id', auth.campus_id)
+      .single(),
+    supabase
+      .from('semester_blueprints')
+      .select('*')
+      .eq('department_id', auth.department_id)
+      .eq('semester', auth.current_semester)
+      .single(),
+    supabase
+      .from('departments')
+      .select('id, name, code')
   ])
 
-  // Build and return the full response
+  if (settingsError || !settings) {
+    return { success: false, error: 'Campus settings not found', status: 404 }
+  }
+
+  if (blueprintError || !blueprint) {
+    return { success: false, error: 'Blueprint not found for this semester', status: 404 }
+  }
+
+  // Read pathways from JSONB column
+  const pathways = blueprint.pathways as Pathway[] | null
+
+  if (!pathways || pathways.length === 0) {
+    return { success: false, error: 'Blueprint not configured', status: 400 }
+  }
+
+  // Check registration window
+  const now = new Date()
+  const deadline = settings.deadline ? new Date(settings.deadline) : null
+  const windowOpen = deadline !== null && now < deadline
+
+  // Build department code → id map for O(1) lookup
+  const deptMap = new Map(departmentsData?.map(d => [d.code, d.id]) || [])
+  const deptIdToName = new Map(departmentsData?.map(d => [d.id, d.name]) || [])
+
+  // Fetch existing registration (includes pathway_id and selections now)
+  const { data: existingReg } = await supabase
+    .from('student_registrations')
+    .select('pathway_id, selections, slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
+    .eq('student_id', auth.userId)
+    .eq('semester', auth.current_semester)
+    .eq('academic_year', settings.academic_year)
+    .single()
+
+  // Single pathway → auto-assign, resolve slots immediately
+  if (pathways.length === 1) {
+    const pathway = pathways[0]
+    const resolved = await resolvePathwaySlots(pathway, auth, supabase, deptMap, deptIdToName)
+
+    if (!resolved.success) {
+      return { success: false, error: resolved.error, status: resolved.status }
+    }
+
+    const response: BlueprintResponse = {
+      window_status: windowOpen ? 'OPEN' : 'CLOSED',
+      deadline: settings.deadline ?? '',
+      min_credits: blueprint.min_credits,
+      max_credits: blueprint.max_credits,
+      slots: resolved.slots,
+      pathway_id: pathway.id,
+    }
+
+    return {
+      success: true,
+      student: {
+        full_name: auth.full_name,
+        current_semester: auth.current_semester,
+      },
+      data: response,
+      ...(existingReg && { existing: existingReg })
+    }
+  }
+
+  // Multiple pathways → return pathway list for picker
   const response: BlueprintResponse = {
     window_status: windowOpen ? 'OPEN' : 'CLOSED',
     deadline: settings.deadline ?? '',
     min_credits: blueprint.min_credits,
     max_credits: blueprint.max_credits,
-    slots: resolvedSlots as BlueprintSlot[],
+    pathways: pathways.map(p => ({ id: p.id, name: p.name })),
   }
 
   return {
@@ -217,6 +264,6 @@ export async function getBlueprint(auth: VerifiedStudent) {
       current_semester: auth.current_semester,
     },
     data: response,
-    ...(existingRegistrationRes.data && { existing: existingRegistrationRes.data })
+    ...(existingReg && { existing: existingReg })
   }
 }
