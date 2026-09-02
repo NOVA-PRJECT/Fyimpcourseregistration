@@ -1,0 +1,79 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common'
+import { TimetableService } from './timetable.service'
+import { AuthGuard } from '../../core/auth/guards/auth.guard'
+import { RolesGuard } from '../../core/auth/guards/roles.guard'
+import { Roles } from '../../core/auth/decorators/roles.decorator'
+import { CurrentUser } from '../../core/auth/decorators/current-user.decorator'
+import { AuthUser } from '../../core/auth/types'
+
+@Controller('api/timetable')
+@UseGuards(AuthGuard, RolesGuard)
+export class TimetableController {
+  constructor(private readonly timetableService: TimetableService) {}
+
+  // ──────────────── Constraints ────────────────
+  @Get('constraints')
+  @Roles('superadmin', 'campus_director', 'hod')
+  async getConstraints(@Query('semester') semester: string | undefined) {
+    return this.timetableService.getConstraints(semester)
+  }
+
+  @Put('constraints')
+  @Roles('superadmin', 'campus_director')
+  async updateConstraints(@Body() body: any) {
+    return this.timetableService.updateConstraints(body)
+  }
+
+  // ──────────────── Entries ────────────────
+  @Get('entries')
+  @Roles('superadmin', 'campus_director', 'hod', 'teaching_staff', 'student')
+  async getEntries(
+    @Query('academicYear') academicYear: string,
+    @Query('semester') semester: string,
+    @Query('departmentId') departmentId: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.timetableService.getEntries(academicYear, Number(semester), departmentId, user)
+  }
+
+  // ──────────────── Generate ────────────────
+  @Post('generate')
+  @Roles('superadmin', 'campus_director')
+  async generate(
+    @Body() body: { academicYear: string; semester: number; dynamicConstraints?: any[] },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.timetableService.generate(body.academicYear, body.semester, body.dynamicConstraints, user)
+  }
+
+  // ──────────────── Job Status ────────────────
+  @Get('job-status')
+  @Roles('superadmin', 'campus_director')
+  async getJobStatus(
+    @Query('academicYear') academicYear: string,
+    @Query('semester') semester: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.timetableService.getJobStatus(academicYear, Number(semester), user)
+  }
+
+  // ──────────────── Publish ────────────────
+  @Post('publish')
+  @Roles('superadmin', 'campus_director')
+  async publish(
+    @Body() body: { academicYear: string; semester: number },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.timetableService.publish(body.academicYear, body.semester, user)
+  }
+}
