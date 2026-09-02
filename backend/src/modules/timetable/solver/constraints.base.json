@@ -53,23 +53,17 @@
     "extended_period_policy": "Use Period 6 only when no other slot is available"
   },
   "hard_constraints": [
-    "A student must never have two courses scheduled in the same time slot",
-    "No class of any kind may be scheduled during the lunch break (12:30 to 13:30)",
-    "Lab blocks (practical sessions) must occupy exactly 2 consecutive periods on the same day",
-    "A lab block must never span from Period 3 into Period 4 as this crosses the lunch break",
-    "Valid lab blocks are: P1+P2, P2+P3, P4+P5, P5+P6 only",
-    "Each course must be assigned exactly its theory_hours_per_week theory slots per week",
-    "Each course must be assigned exactly its practical_hours_per_week practical hours per week, placed as 2-hour lab blocks",
-    "Do not assign more slots than a course requires — stop exactly at the required hours",
-    "Theory hours should be spread across different days of the week where possible",
-    "Lab blocks are preferred in the morning and afternoon  (P1+P2, P2+P3, P4+P5, P5+P6)",
-    "Period 6 (extended) should be used as a last resort only",
-    "Parallel Block Synchronization: When elective courses run in parallel for a department batch, they must occupy the exact same time slots. A 1-hour theory course must NEVER be scheduled parallel to only one half of a 2-hour lab block. If a course has a 2-hour block (e.g. P4+P5), any parallel elective running in that block must also occupy BOTH periods (P4 and P5) so that no students in the batch are left idle during either period."
+    "No student may have two courses scheduled in the same time slot",
+    "No classes during lunch break (12:30 to 13:30)",
+    "Lab blocks must be exactly 2 consecutive periods on the same day (valid: P1+P2, P2+P3, P4+P5, P5+P6 only; never cross lunch)",
+    "Assign exactly the required theory and practical hours per course (no more, no less)",
+    "Use Period 6 only as a last resort",
+    "Parallel electives for a batch must occupy identical time slots for the full block duration (never pair 1-hour theory with half of a 2-hour lab)"
   ],
   "soft_constraints": [
     "Single-department courses are preferred in the morning (P1, P2, P3)",
     "Cross-department courses are preferred in the afternoon (P4, P5)",
-    "Avoid placing all theory hours of one course on the same day"
+    "Spread theory hours across different days of the week (avoid multiple theory sessions on the same day)"
   ],
   "semester_constraints": {
     "1": {

@@ -70,8 +70,9 @@ export function buildTimetablePrompt(
       .filter((other) => other.courseId !== c.courseId && [...c.studentIds].some((s) => other.studentIds.has(s)))
       .map((other) => activeIdMap.get(other.courseId) || other.courseId);
 
+    const catStr = c.category ? ` [${c.category}]` : '';
     const confStr = conflictAliases.length > 0 ? `Conflicts: [${conflictAliases.join(',')}]` : 'No conflicts';
-    return `${alias} (${c.courseCode} - ${c.courseTitle}): T=${c.theoryHours}h, P=${c.practicalHours}h. ${confStr}`;
+    return `${alias} (${c.courseCode} - ${c.courseTitle}${catStr}): T=${c.theoryHours}h, P=${c.practicalHours}h. ${confStr}`;
   });
   sections.push(`## Courses to Schedule (${courses.length} courses):\n${courseLines.join('\n')}`);
 

@@ -25,17 +25,17 @@ export function formatAIErrorMessage(rawErrorText: string): string {
     const msg = parsed.error?.message || parsed.message || '';
 
     if (code === 503 || status === 'UNAVAILABLE' || msg.toLowerCase().includes('high demand')) {
-      return 'The Gemini AI model is temporarily experiencing high server demand from Google. Please wait a few moments and try clicking "⚡ Generate AI Timetable" again.';
+      return 'The AI model is temporarily experiencing high server demand. Please wait a few moments and try clicking "⚡ Generate AI Timetable" again.';
     }
     if (code === 429 || status === 'RESOURCE_EXHAUSTED' || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('rate limit')) {
-      return 'Google AI rate limit reached. Please wait a moment before trying again.';
+      return 'AI rate limit reached. Please wait a moment before trying again.';
     }
     if (msg) {
       return msg;
     }
   } catch {
     if (rawErrorText.includes('503') || rawErrorText.toLowerCase().includes('high demand') || rawErrorText.toLowerCase().includes('unavailable')) {
-      return 'The Gemini AI model is temporarily experiencing high server demand from Google. Please wait a few moments and try clicking "⚡ Generate AI Timetable" again.';
+      return 'The AI model is temporarily experiencing high server demand. Please wait a few moments and try clicking "⚡ Generate AI Timetable" again.';
     }
   }
   return rawErrorText;
@@ -77,7 +77,7 @@ async function callLLM(prompt: string): Promise<string> {
     }
 
     throw new Error(
-      'Missing Gemini API key. Please set GEMINI_API_KEY in your .env file (obtain a free key at https://aistudio.google.com/app/apikey).'
+      'Missing AI API key. Please set GEMINI_API_KEY in your .env file.'
     );
   }
 
@@ -135,7 +135,7 @@ async function callLLM(prompt: string): Promise<string> {
             continue;
           }
         } else {
-          throw new Error(`Gemini API error: ${formatAIErrorMessage(lastErrorText)}`);
+          throw new Error(`AI API error: ${formatAIErrorMessage(lastErrorText)}`);
         }
       }
     } catch (fetchErr: any) {
@@ -145,7 +145,7 @@ async function callLLM(prompt: string): Promise<string> {
         if (modelIndex < modelsToTry.length - 1) {
           continue;
         }
-      } else if (fetchErr.message && fetchErr.message.startsWith('Gemini API error:')) {
+      } else if (fetchErr.message && fetchErr.message.startsWith('AI API error:')) {
         throw fetchErr;
       } else {
         lastErrorText = fetchErr.message || String(fetchErr);
@@ -156,7 +156,7 @@ async function callLLM(prompt: string): Promise<string> {
     }
   }
 
-  throw new Error(`Gemini API error: ${formatAIErrorMessage(lastErrorText)}`);
+  throw new Error(`AI API error: ${formatAIErrorMessage(lastErrorText)}`);
 }
 
 function parseAIResponse(
@@ -278,11 +278,11 @@ export async function runAIGeneration(
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     if (attempt === 1) {
-      await onProgress?.(40, '🧠 Sending schedule requirements to Gemini AI scheduler...');
+      await onProgress?.(40, '🧠 Sending schedule requirements to AI scheduler...');
     } else {
       await onProgress?.(
         40 + attempt * 8,
-        `🔄 Refining schedule with Gemini AI (correction attempt ${attempt}/${MAX_RETRIES})...`
+        `🔄 Refining schedule with AI (correction attempt ${attempt}/${MAX_RETRIES})...`
       );
     }
 

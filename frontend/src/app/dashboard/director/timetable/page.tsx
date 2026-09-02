@@ -1109,7 +1109,7 @@ export default function CampusDirectorTimetablePage() {
               </div>
               <div style={{ flex: 1 }}>
                 <h3 className={styles.generationModalTitle}>
-                  <span>Gemini AI Timetable Scheduler</span>
+                  <span>AI Timetable Scheduler</span>
                   {(jobStatus === 'running' || jobStatus === 'queued') && (
                     <span style={{ fontSize: '0.7rem', color: '#818cf8', background: 'rgba(99, 102, 241, 0.2)', padding: '0.15rem 0.5rem', borderRadius: '0.25rem', fontWeight: 600 }}>
                       LIVE PROCESSING
@@ -1120,7 +1120,7 @@ export default function CampusDirectorTimetablePage() {
                   {jobStatus === 'completed' && (stepMessage || '🎉 Timetable generation complete! All department schedules placed.')}
                   {jobStatus === 'failed' && (jobError || '❌ Generation interrupted due to scheduling constraints.')}
                   {(jobStatus === 'running' || jobStatus === 'queued') && (
-                    stepMessage || '🧠 Processing scheduling constraints and student registrations with Gemini AI...'
+                    stepMessage || '🧠 Processing scheduling constraints and student registrations with AI...'
                   )}
                 </p>
               </div>

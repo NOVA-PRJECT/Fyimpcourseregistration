@@ -65,10 +65,10 @@ export async function runGenerationJob(
       if (simulatedProgress < 68) {
         simulatedProgress += 3;
         const messages = [
-          '🧠 Gemini AI is evaluating student schedule conflict graphs...',
-          '🧠 Gemini AI is assigning parallel elective groups and 2-hour lab blocks...',
-          '🧠 Gemini AI is balancing weekly day spread across departments...',
-          '🧠 Gemini AI is validating hard constraints and lunch break...',
+          '🧠 AI is evaluating student schedule conflict graphs...',
+          '🧠 AI is assigning parallel elective groups and 2-hour lab blocks...',
+          '🧠 AI is balancing weekly day spread across departments...',
+          '🧠 AI is validating hard constraints and lunch break...',
         ];
         const msgIdx = Math.floor((simulatedProgress - 40) / 7) % messages.length;
         reportProgress(simulatedProgress, messages[msgIdx], loadStats).catch(() => {});
