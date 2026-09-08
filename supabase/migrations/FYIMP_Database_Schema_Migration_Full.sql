@@ -144,18 +144,7 @@ COMMENT ON TABLE students IS 'Enrolled university students with program and seme
 -- STEP 5: REGISTRATION & BLUEPRINT TABLES
 -- =============================================================================
 
--- 8. REGISTRATION_WINDOWS TABLE
-CREATE TABLE registration_windows (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    academic_year TEXT NOT NULL,
-    semester SMALLINT NOT NULL,
-    campus_id UUID REFERENCES campuses(id) ON DELETE CASCADE,
-    is_closed BOOLEAN NOT NULL DEFAULT false,
-    closed_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(academic_year, semester)
-);
-
-COMMENT ON TABLE registration_windows IS 'Lifecycle windows controlling student registration availability.';
+-- 8. (DEPRECATED & DROPPED: registration_windows consolidated into campus_settings)
 
 -- 9. SEMESTER_BLUEPRINTS TABLE
 CREATE TABLE semester_blueprints (
@@ -323,7 +312,6 @@ CREATE INDEX idx_timetable_entries_time_slot_id ON timetable_entries(time_slot_i
 CREATE INDEX idx_timetable_entries_status ON timetable_entries(status);
 CREATE INDEX idx_timetable_conflicts_course_id ON timetable_conflicts(course_id);
 CREATE INDEX idx_timetable_conflicts_academic_year ON timetable_conflicts(academic_year, semester);
-CREATE INDEX idx_registration_windows_academic_year ON registration_windows(academic_year, semester);
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
 
@@ -334,7 +322,6 @@ ALTER TABLE time_slots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE timetable_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE timetable_conflicts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE timetable_generation_jobs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE registration_windows ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
   -- 1. Time slots: Read for all authenticated
@@ -387,23 +374,6 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'timetable_conflicts' AND policyname = 'Allow write access to timetable_conflicts for directors and superadmins') THEN
     CREATE POLICY "Allow write access to timetable_conflicts for directors and superadmins"
       ON timetable_conflicts FOR ALL TO authenticated
-      USING (
-        (auth.jwt() -> 'app_metadata' ->> 'role') IN ('campus_director', 'superadmin')
-        OR (auth.jwt() ->> 'role') IN ('campus_director', 'superadmin')
-        OR (auth.jwt() -> 'user_metadata' ->> 'role') IN ('campus_director', 'superadmin')
-      );
-  END IF;
-
-  -- 5. Registration windows: Read for authenticated
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'registration_windows' AND policyname = 'Allow read access to registration_windows for authenticated users') THEN
-    CREATE POLICY "Allow read access to registration_windows for authenticated users"
-      ON registration_windows FOR SELECT TO authenticated USING (true);
-  END IF;
-
-  -- Registration windows: Write for directors & superadmins
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'registration_windows' AND policyname = 'Allow write access to registration_windows for directors and superadmins') THEN
-    CREATE POLICY "Allow write access to registration_windows for directors and superadmins"
-      ON registration_windows FOR ALL TO authenticated
       USING (
         (auth.jwt() -> 'app_metadata' ->> 'role') IN ('campus_director', 'superadmin')
         OR (auth.jwt() ->> 'role') IN ('campus_director', 'superadmin')

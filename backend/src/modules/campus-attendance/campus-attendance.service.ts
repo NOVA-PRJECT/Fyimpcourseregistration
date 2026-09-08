@@ -192,6 +192,7 @@ export class CampusAttendanceService {
         campus_id: campus.id,
         session_type: sessionType,
         signed_in_at: now.toISOString(),
+        signed_in_date: ist.dateString,
         location_accuracy_meters: Math.round(accuracy * 10) / 10,
         status: status,
         source: 'gps',

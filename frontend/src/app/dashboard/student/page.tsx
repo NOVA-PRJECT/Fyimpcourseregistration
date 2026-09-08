@@ -12,10 +12,24 @@ interface StudentInfo {
   campus_name: string
 }
 
+export interface EnrolledCourse {
+  slotNumber: number
+  id: string
+  courseCode: string
+  title: string
+  credits: number
+  category: string
+  departmentName: string
+  status: string
+  isConfirmed: boolean
+}
+
 export default function StudentDashboardPage() {
   const router = useRouter()
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null)
   const [hasSubmission, setHasSubmission] = useState(false)
+  const [enrolledCourses, setEnrolledCourses] = useState<EnrolledCourse[]>([])
+  const [totalRegisteredCredits, setTotalRegisteredCredits] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -42,6 +56,8 @@ export default function StudentDashboardPage() {
         }
         setStudentInfo(data.studentInfo)
         setHasSubmission(data.hasSubmission)
+        setEnrolledCourses(data.enrolledCourses || [])
+        setTotalRegisteredCredits(data.totalRegisteredCredits || 0)
       } catch {
         router.replace('/login')
       } finally {
@@ -63,6 +79,8 @@ export default function StudentDashboardPage() {
     <StudentDashboardClient
       studentInfo={studentInfo}
       hasSubmission={hasSubmission}
+      enrolledCourses={enrolledCourses}
+      totalRegisteredCredits={totalRegisteredCredits}
     />
   )
 }

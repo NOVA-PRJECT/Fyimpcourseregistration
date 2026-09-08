@@ -241,15 +241,23 @@ export class TimetableService {
 
   // ──────────────── Generate ────────────────
   async generate(academicYear: string, semester: number, dynamicConstraints: any[] | undefined, user: AuthUser) {
-    const { data: regWindow } = await this.supabase.admin
-      .from('registration_windows')
-      .select('is_closed')
-      .eq('academic_year', academicYear)
-      .eq('semester', semester)
-      .maybeSingle()
+    let settingsQuery = this.supabase.admin
+      .from('campus_settings')
+      .select('deadline, academic_year')
 
-    if (regWindow && !regWindow.is_closed) {
-      throw new BadRequestException('Registration window is still open for this semester. Close registrations before generating timetable.')
+    if (user.campus_id) {
+      settingsQuery = settingsQuery.eq('campus_id', user.campus_id)
+    }
+
+    const { data: campusSettings } = await settingsQuery.maybeSingle()
+
+    if (campusSettings?.deadline) {
+      const deadline = new Date(campusSettings.deadline)
+      if (new Date() < deadline) {
+        throw new BadRequestException(
+          `Registration window is still open until ${deadline.toLocaleString('en-IN')}. Please close registrations before generating timetable.`,
+        )
+      }
     }
 
     let jobQuery = this.supabase.admin

@@ -235,6 +235,45 @@ export default function DirectorDashboard() {
     }
   }
 
+  async function handleCloseImmediately() {
+    if (!confirm('Are you sure you want to close course registration immediately for this campus? Students will no longer be able to submit choices.')) {
+      return
+    }
+    const nowIso = new Date().toISOString()
+    setSavingWindow(true)
+    setWindowError('')
+    setWindowSuccess('')
+
+    const response = await fetch('/api/director/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deadline: nowIso }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      setWindowError(data.error ?? 'Failed to close registration window.')
+      setSavingWindow(false)
+      return
+    }
+
+    setCurrentDeadline(nowIso)
+    setDeadline(nowIso.slice(0, 16))
+    setWindowSuccess('Registration window closed successfully. Timetable generation is now unlocked.')
+    setSavingWindow(false)
+
+    if (typeof window !== 'undefined') {
+      const cached = sessionStorage.getItem('fyimp_director_settings_cache')
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached)
+          parsed.settings = { ...(parsed.settings || {}), deadline: nowIso }
+          sessionStorage.setItem('fyimp_director_settings_cache', JSON.stringify(parsed))
+        } catch {}
+      }
+    }
+  }
+
   // Promote students
   async function handlePromoteStudents() {
     setPromoting(true)
@@ -391,16 +430,37 @@ export default function DirectorDashboard() {
 
               </div>
 
-              <button
-                className={styles.primaryBtn}
-                onClick={handleSaveWindow}
-                disabled={savingWindow}
-              >
-                {savingWindow
-                  ? <><span className={styles.spinner} /> Saving...</>
-                  : 'Save Settings →'
-                }
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  className={styles.primaryBtn}
+                  onClick={handleSaveWindow}
+                  disabled={savingWindow}
+                >
+                  {savingWindow
+                    ? <><span className={styles.spinner} /> Saving...</>
+                    : 'Save Settings →'
+                  }
+                </button>
+                {windowIsOpen && (
+                  <button
+                    type="button"
+                    style={{
+                      background: '#dc2626',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '0.65rem 1.25rem',
+                      borderRadius: '0.375rem',
+                      fontWeight: 600,
+                      fontSize: '0.85rem',
+                      cursor: savingWindow ? 'not-allowed' : 'pointer',
+                    }}
+                    onClick={handleCloseImmediately}
+                    disabled={savingWindow}
+                  >
+                    🔒 Close Registration Immediately
+                  </button>
+                )}
+              </div>
 
             </div>
           </div>

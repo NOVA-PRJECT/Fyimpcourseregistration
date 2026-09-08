@@ -128,6 +128,10 @@ export default function CampusDirectorTimetablePage() {
   const [exportTargetDept, setExportTargetDept] = useState<string>('all');
   const [printTargetDept, setPrintTargetDept] = useState<string>('all');
 
+  // Publish state
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+
   // Feedback banners
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -419,6 +423,21 @@ export default function CampusDirectorTimetablePage() {
     fetchEntries(true);
   }, [fetchEntries]);
 
+  // Check live registration status from campus settings
+  useEffect(() => {
+    fetch('/api/director/settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.settings?.deadline) {
+          const isClosed = new Date() >= new Date(data.settings.deadline);
+          setRegistrationClosed(isClosed);
+        } else {
+          setRegistrationClosed(true);
+        }
+      })
+      .catch(() => setRegistrationClosed(true));
+  }, []);
+
   // Set default selected department once data loads (prefer first department with active entries)
   useEffect(() => {
     if (departments.length > 0 && (!selectedDeptId || (selectedDeptId !== 'VIEW_ALL_CONFLICTS' && !departments.some((d) => d.id === selectedDeptId)))) {
@@ -536,6 +555,34 @@ export default function CampusDirectorTimetablePage() {
     } catch {
       setErrorMsg('Network error starting timetable generation');
       setJobError('Network error starting timetable generation');
+    }
+  }
+
+  async function handlePublish() {
+    setPublishing(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await fetch('/api/timetable/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ academicYear, semester }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const msg = typeof data.message === 'string' 
+          ? data.message 
+          : data.message?.error || data.error || 'Failed to publish timetable';
+        setErrorMsg(msg);
+      } else {
+        setSuccessMsg(data.message || 'Timetable published successfully');
+        setShowPublishModal(false);
+        invalidateCache();
+      }
+    } catch (err) {
+      setErrorMsg('Network error while publishing timetable');
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -790,6 +837,15 @@ export default function CampusDirectorTimetablePage() {
                     title="Export timetable as PDF"
                   >
                     📄 Export PDF
+                  </button>
+
+                  <button
+                    className={styles.exportExcelBtn}
+                    onClick={() => setShowPublishModal(true)}
+                    title="Publish timetable for students and faculty"
+                    style={{ background: '#059669' }}
+                  >
+                    🚀 Publish Timetable
                   </button>
                 </>
               )}
@@ -1908,6 +1964,52 @@ export default function CampusDirectorTimetablePage() {
                 onClick={handleConfirmExport}
               >
                 {exportType === 'excel' ? 'Download Excel →' : 'Print / Export PDF →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Publish Modal */}
+      {showPublishModal && (
+        <div className={styles.overlay}>
+          <div className={styles.modalCard} style={{ maxWidth: '400px' }}>
+            <h3 style={{ margin: '0 0 1rem 0', color: '#1e293b' }}>Confirm Publish</h3>
+            <p style={{ margin: '0 0 1.5rem 0', color: '#475569', fontSize: '0.9rem', lineHeight: '1.4' }}>
+              Are you sure you want to publish the timetable for Semester {semester} ({academicYear})? This will make it visible to all students and faculty.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #cbd5e1',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.375rem',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setShowPublishModal(false)}
+                disabled={publishing}
+              >
+                Cancel
+              </button>
+              <button
+                style={{
+                  background: '#059669',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '0.5rem 1.25rem',
+                  borderRadius: '0.375rem',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: publishing ? 'not-allowed' : 'pointer',
+                  opacity: publishing ? 0.7 : 1,
+                }}
+                onClick={handlePublish}
+                disabled={publishing}
+              >
+                {publishing ? 'Publishing...' : 'Yes, Publish'}
               </button>
             </div>
           </div>

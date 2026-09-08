@@ -130,7 +130,6 @@ export class CreditLedgerService {
         slot_5_course_id,
         slot_6_course_id,
         total_credits,
-        selected_courses,
         selections
       `)
       .eq('student_id', targetStudentId)
@@ -159,16 +158,20 @@ export class CreditLedgerService {
         }
       }
 
-      // B. Check selected_courses JSONB
-      const selectedList = (reg.selected_courses || reg.selections || []) as any[]
-      if (Array.isArray(selectedList)) {
-        for (const item of selectedList) {
-          const cid = typeof item === 'string' ? item : item?.id || item?.course_id
-          if (cid) {
-            courseIdSet.add(cid)
-            if (!courseSemesterMap.has(cid)) {
-              courseSemesterMap.set(cid, sem)
-            }
+      // B. Check selections JSONB (array or { courses: [...] })
+      const rawSelections = (reg as any).selections
+      const selectedList = Array.isArray(rawSelections)
+        ? rawSelections
+        : Array.isArray(rawSelections?.courses)
+          ? rawSelections.courses
+          : []
+
+      for (const item of selectedList) {
+        const cid = typeof item === 'string' ? item : item?.id || item?.course_id
+        if (cid) {
+          courseIdSet.add(cid)
+          if (!courseSemesterMap.has(cid)) {
+            courseSemesterMap.set(cid, sem)
           }
         }
       }

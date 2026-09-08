@@ -18,13 +18,26 @@ export class ServerLoggerService {
     this.logger.error(`[${route}] ${errorMessage}`, errorStack)
 
     try {
-      await this.supabase.admin.from('server_error_logs').insert({
+      const { error: dbError } = await this.supabase.admin.from('system_logs').insert({
+        log_type: 'server_error',
+        status: 'error',
         route,
         error_message: errorMessage,
         error_stack: errorStack ?? null,
         user_id: context?.userId ?? null,
-        context: context ?? null,
+        metadata: context ?? null,
       })
+
+      if (dbError) {
+        // Fallback to legacy server_error_logs table
+        await this.supabase.admin.from('server_error_logs').insert({
+          route,
+          error_message: errorMessage,
+          error_stack: errorStack ?? null,
+          user_id: context?.userId ?? null,
+          context: context ?? null,
+        })
+      }
     } catch {
       // Fire-and-forget: do not let logging failure crash the request
     }

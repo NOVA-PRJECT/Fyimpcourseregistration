@@ -232,10 +232,30 @@ export class RegistrationsService {
 
     const { data: existingReg } = await this.supabase.admin
       .from('student_registrations')
-      .select('id, selected_courses, pathway_id, preferences, allocation_metadata, submitted_at, total_credits, slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
+      .select('id, pathway_id, preferences, allocation_metadata, submitted_at, total_credits, slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
       .eq('student_id', user.userId)
       .eq('semester', semester)
       .maybeSingle()
+
+    let preferences = existingReg?.preferences && Object.keys(existingReg.preferences).length > 0 ? existingReg.preferences : {}
+    let allocationMetadata = existingReg?.allocation_metadata && Object.keys(existingReg.allocation_metadata).length > 0 ? existingReg.allocation_metadata : {}
+
+    if (existingReg && Object.keys(preferences).length === 0) {
+      const derivedPrefs: Record<string, { course_id: string; rank: number }[]> = {}
+      const derivedMeta: Record<string, any> = { ...allocationMetadata }
+      for (let s = 1; s <= 6; s++) {
+        const slotKey = `slot_${s}`
+        const cid = (existingReg as any)[`${slotKey}_course_id`]
+        if (cid) {
+          derivedPrefs[slotKey] = [{ course_id: cid, rank: 1 }]
+          if (!derivedMeta[slotKey]) {
+            derivedMeta[slotKey] = { allocated_by: 'fixed', course_id: cid }
+          }
+        }
+      }
+      preferences = derivedPrefs
+      allocationMetadata = derivedMeta
+    }
 
     return {
       success: true,
@@ -247,10 +267,14 @@ export class RegistrationsService {
       pathways,
       selectedPathwayId: existingReg?.pathway_id ?? defaultPathway.id,
       slots,
-      existingRegistration: existingReg ? existingReg.selected_courses : null,
-      existingPreferences: existingReg?.preferences ?? {},
-      allocationMetadata: existingReg?.allocation_metadata ?? {},
+      existingRegistration: existingReg ? preferences : null,
+      existingPreferences: preferences,
+      allocationMetadata: allocationMetadata,
       submittedAt: existingReg?.submitted_at ?? null,
+      student: {
+        full_name: user.full_name || '',
+        current_semester: user.current_semester ?? 1,
+      },
       existingSlots: existingReg
         ? {
             slot_1: existingReg.slot_1_course_id,

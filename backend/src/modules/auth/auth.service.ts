@@ -157,15 +157,32 @@ export class AuthService {
     return { role: null, redirectTo: null }
   }
 
-  async logout(user: AuthUser, ip: string) {
-    if (user?.userId) {
+  async logout(userOrToken: AuthUser | string | undefined, ip: string) {
+    let resolvedUser: AuthUser | undefined = typeof userOrToken === 'object' ? userOrToken : undefined
+
+    if (!resolvedUser && typeof userOrToken === 'string' && userOrToken) {
+      try {
+        const { data } = await this.supabase.admin.auth.getUser(userOrToken)
+        if (data?.user) {
+          resolvedUser = {
+            userId: data.user.id,
+            email: data.user.email || '',
+            role: (data.user.app_metadata?.role || 'student') as any,
+          }
+        }
+      } catch {
+        // session may already be expired/invalid
+      }
+    }
+
+    if (resolvedUser?.userId) {
       await this.auditLogger.log({
         eventType: AuditEvents.USER_LOGOUT,
-        userId: user.userId,
-        userRole: user.role,
+        userId: resolvedUser.userId,
+        userRole: resolvedUser.role,
         action: 'user logged out',
         resourceType: 'user',
-        resourceId: user.userId,
+        resourceId: resolvedUser.userId,
         status: 'success',
         ipAddress: ip,
       })

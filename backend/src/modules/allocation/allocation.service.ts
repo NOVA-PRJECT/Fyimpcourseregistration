@@ -78,7 +78,8 @@ export class AllocationService {
       .single()
 
     if (runErr || !run) {
-      throw new InternalServerErrorException('Failed to initialize allocation run')
+      this.logger.error(`Failed to initialize allocation run: ${runErr?.message}`, runErr?.details)
+      throw new InternalServerErrorException(`Failed to initialize allocation run: ${runErr?.message || 'Unknown database error'}`)
     }
 
     try {

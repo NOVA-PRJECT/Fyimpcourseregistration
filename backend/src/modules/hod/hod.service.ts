@@ -474,8 +474,14 @@ export class HodService {
       .select(`
         student_id,
         semester,
-        students!inner(full_name, department_id),
-        selected_courses
+        slot_1_course_id,
+        slot_2_course_id,
+        slot_3_course_id,
+        slot_4_course_id,
+        slot_5_course_id,
+        slot_6_course_id,
+        selections,
+        students!inner(full_name, department_id)
       `)
       .eq('students.department_id', user.department_id)
 
@@ -486,18 +492,60 @@ export class HodService {
     const { data: registrations, error } = await query
     if (error) throw new InternalServerErrorException('Failed to fetch registration records')
 
+    // Collect all course IDs from registrations to lookup titles
+    const allCourseIds = new Set<string>()
+    for (const reg of registrations ?? []) {
+      for (let i = 1; i <= 6; i++) {
+        const cid = (reg as any)[`slot_${i}_course_id`]
+        if (cid) allCourseIds.add(cid)
+      }
+      const rawSel = (reg as any).selections
+      const list = Array.isArray(rawSel) ? rawSel : Array.isArray(rawSel?.courses) ? rawSel.courses : []
+      for (const item of list) {
+        const cid = typeof item === 'string' ? item : item?.id || item?.course_id
+        if (cid) allCourseIds.add(cid)
+      }
+    }
+
+    const courseTitleMap = new Map<string, string>()
+    if (allCourseIds.size > 0) {
+      const { data: courseList } = await this.supabase.admin
+        .from('courses')
+        .select('id, title, course_code')
+        .in('id', Array.from(allCourseIds))
+      for (const c of courseList ?? []) {
+        courseTitleMap.set(c.id, `${c.title} (${c.course_code})`)
+      }
+    }
+
     const rows = (registrations ?? []).map((reg: any) => {
       const student = reg.students
-      const courses: any[] = reg.selected_courses ?? []
+      const papers: string[] = []
+      for (let i = 1; i <= 6; i++) {
+        const cid = reg[`slot_${i}_course_id`]
+        if (cid && courseTitleMap.has(cid)) {
+          papers.push(courseTitleMap.get(cid)!)
+        }
+      }
+      if (papers.length === 0) {
+        const rawSel = reg.selections
+        const list = Array.isArray(rawSel) ? rawSel : Array.isArray(rawSel?.courses) ? rawSel.courses : []
+        for (const item of list) {
+          const cid = typeof item === 'string' ? item : item?.id || item?.course_id
+          const title = item?.title || (cid ? courseTitleMap.get(cid) : '')
+          if (title) papers.push(title)
+        }
+      }
+
       return {
         name: student?.full_name ?? '—',
         sem: reg.semester,
-        paper_1: courses[0]?.title ?? '',
-        paper_2: courses[1]?.title ?? '',
-        paper_3: courses[2]?.title ?? '',
-        paper_4: courses[3]?.title ?? '',
-        paper_5: courses[4]?.title ?? '',
-        paper_6: courses[5]?.title ?? '',
+        paper_1: papers[0] ?? '',
+        paper_2: papers[1] ?? '',
+        paper_3: papers[2] ?? '',
+        paper_4: papers[3] ?? '',
+        paper_5: papers[4] ?? '',
+        paper_6: papers[5] ?? '',
       }
     })
 

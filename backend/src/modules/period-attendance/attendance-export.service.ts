@@ -88,7 +88,6 @@ export class AttendanceExportService {
           slot_4_course_id,
           slot_5_course_id,
           slot_6_course_id,
-          selected_courses,
           selections
         `)
         .eq('semester', semester)
@@ -106,13 +105,12 @@ export class AttendanceExportService {
             enrolledCourseSet.add(`${sId}_${cid}`);
           }
         }
-        const selected = (reg.selected_courses || reg.selections || []) as any[];
-        if (Array.isArray(selected)) {
-          for (const item of selected) {
-            const cid = typeof item === 'string' ? item : item?.id || item?.course_id;
-            if (cid) {
-              enrolledCourseSet.add(`${sId}_${cid}`);
-            }
+        const rawSel = (reg as any).selections;
+        const selected = (Array.isArray(rawSel) ? rawSel : Array.isArray(rawSel?.courses) ? rawSel.courses : []) as any[];
+        for (const item of selected) {
+          const cid = typeof item === 'string' ? item : item?.id || item?.course_id;
+          if (cid) {
+            enrolledCourseSet.add(`${sId}_${cid}`);
           }
         }
       }

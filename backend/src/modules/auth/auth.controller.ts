@@ -55,7 +55,6 @@ export class AuthController {
 
     return {
       redirectTo: result.redirectTo,
-      token: result.token,
       role: result.role,
     }
   }
@@ -67,8 +66,10 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const ip = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown'
-    const user = (req as any).user as AuthUser
-    await this.authService.logout(user, ip)
+    const token = (req as any).cookies?.auth_token || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : undefined)
+    const user = (req as any).user as AuthUser | undefined
+
+    await this.authService.logout(user || token, ip)
 
     res.clearCookie('auth_token', { path: '/' })
     res.clearCookie('user_role', { path: '/' })

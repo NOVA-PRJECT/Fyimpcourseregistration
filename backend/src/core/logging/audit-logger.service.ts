@@ -59,7 +59,8 @@ export class AuditLoggerService {
         ...(isValidUuid ? {} : { attempted_identifier: entry.userId }),
       }
 
-      const { error } = await this.supabase.admin.from('audit_logs').insert({
+      const logPayload = {
+        log_type: 'audit_event',
         event_type: entry.eventType,
         user_id: validUserId,
         user_role: entry.userRole,
@@ -70,10 +71,29 @@ export class AuditLoggerService {
         ip_address: entry.ipAddress ?? null,
         user_agent: entry.userAgent ?? null,
         metadata: enrichedMetadata,
-      })
+      }
+
+      // 1. Attempt writing to unified system_logs table
+      const { error } = await this.supabase.admin.from('system_logs').insert(logPayload)
 
       if (error) {
-        this.logger.warn(`Failed to persist audit log: ${error.message}`)
+        // 2. Fallback to audit_logs view / legacy table
+        const { error: fallbackError } = await this.supabase.admin.from('audit_logs').insert({
+          event_type: entry.eventType,
+          user_id: validUserId,
+          user_role: entry.userRole,
+          action: entry.action,
+          resource_type: entry.resourceType,
+          resource_id: entry.resourceId ?? null,
+          status: entry.status,
+          ip_address: entry.ipAddress ?? null,
+          user_agent: entry.userAgent ?? null,
+          metadata: enrichedMetadata,
+        })
+
+        if (fallbackError) {
+          this.logger.warn(`Failed to persist audit log: ${fallbackError.message}`)
+        }
       }
     } catch (err: any) {
       this.logger.warn(`Exception writing audit log: ${err.message}`)

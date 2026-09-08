@@ -248,18 +248,7 @@ export class FacultyService {
       studentsError: studentsRes.error,
     })
 
-    let academicYear = settingsRes.data?.academic_year
-    if (!academicYear) {
-      const { data: win } = await this.supabase.admin
-        .from('registration_windows')
-        .select('academic_year')
-        .eq('campus_id', campusId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      academicYear = win?.academic_year || '2026-27'
-    }
-
+    const academicYear = settingsRes.data?.academic_year || '2026-27'
     const students = studentsRes.data ?? []
 
     if (students.length === 0) {
