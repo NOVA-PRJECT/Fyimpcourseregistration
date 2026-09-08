@@ -22,6 +22,8 @@ export interface CourseNode {
 export interface ParallelGroup {
   groupId: string;
   departmentId: string;
+  category?: string;
+  isCampusWide?: boolean;
   courseIds: string[];
   courseCodes: string[]; // for prompt readability
 }
@@ -83,7 +85,9 @@ export interface ValidationViolation {
     | 'invalid_lab_block'
     | 'lunch_overlap'
     | 'hours_exceeded'
-    | 'half_block_overlap';
+    | 'half_block_overlap'
+    | 'category_slot_mismatch'
+    | 'mixed_category_conflict';
   courseId?: string;
   studentId?: string;
   day?: number;

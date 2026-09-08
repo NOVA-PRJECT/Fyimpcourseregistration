@@ -13,6 +13,7 @@ import { ServerLoggerService } from '../../core/logging/server-logger.service'
 import { AuthUser } from '../../core/auth/types'
 import { runGenerationJob } from './solver/job'
 import { getRedisClient } from './solver/redisClient'
+import { z } from 'zod'
 
 const CONSTRAINTS_PATH = path.join(__dirname, 'solver/constraints.base.json')
 
@@ -64,6 +65,20 @@ export class TimetableService {
   }
 
   async updateConstraints(body: any) {
+    const ConstraintsSchema = z.object({
+      schedule: z.record(z.any()).optional(),
+      universal_hard_constraints: z.array(z.any()).optional(),
+      hard_constraints: z.array(z.any()).optional(),
+      universal_soft_constraints: z.array(z.any()).optional(),
+      soft_constraints: z.array(z.any()).optional(),
+      semester_constraints: z.record(z.any()).optional(),
+    })
+
+    const parsed = ConstraintsSchema.safeParse(body)
+    if (!parsed.success) {
+      throw new BadRequestException('Invalid constraints payload schema')
+    }
+
     const current = this.readConstraintsFile()
     const updated = {
       schedule: body.schedule || current.schedule,
@@ -163,11 +178,64 @@ export class TimetableService {
       status: entry.status,
     }))
 
+    // Query unresolved conflicts for this academic year & semester
+    let conflictQuery = this.supabase.admin
+      .from('timetable_conflicts')
+      .select(`
+        id,
+        course_id,
+        blocking_course_id,
+        reason,
+        conflicting_student_count,
+        courses:course_id (
+          id,
+          course_code,
+          title,
+          department_id,
+          departments (
+            id,
+            name,
+            code
+          )
+        )
+      `)
+      .eq('academic_year', academicYear)
+      .eq('semester', semester)
+      .eq('resolved', false)
+
+    const { data: rawConflicts, error: conflictErr } = await conflictQuery
+    if (conflictErr) {
+      console.error('[Timetable getEntries conflictQuery error]', conflictErr)
+    }
+
+    let formattedConflicts = (rawConflicts || []).map((c: any) => ({
+      id: c.id,
+      courseId: c.course_id,
+      courseCode: c.courses?.course_code,
+      courseName: c.courses?.title || 'Unknown Course',
+      departmentId: c.courses?.department_id,
+      departmentName: c.courses?.departments?.name,
+      departmentCode: c.courses?.departments?.code,
+      reason: c.reason,
+      conflictingStudentCount: c.conflicting_student_count || 0,
+    }))
+
+    if (user.campus_id && campusDeptIds.length > 0) {
+      formattedConflicts = formattedConflicts.filter(
+        (c: any) => !c.departmentId || campusDeptIds.includes(c.departmentId),
+      )
+    }
+
+    if (departmentId) {
+      formattedConflicts = formattedConflicts.filter((c: any) => c.departmentId === departmentId)
+    }
+
     return {
       academicYear,
       semester,
       departments: allDepartmentsData || [],
       entries: formattedEntries,
+      conflicts: formattedConflicts,
     }
   }
 

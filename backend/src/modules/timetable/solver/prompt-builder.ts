@@ -44,7 +44,18 @@ export function buildTimetablePrompt(
 2. [HARD] Exact Hours: Allocate exactly T theory slots and P practical slots per course.
 3. [HARD] 2h Lab Blocks (L): Practical hours must be paired as consecutive periods on the same day (P1+P2, P2+P3, P4+P5, P5+P6). Both slots marked "L".
 4. [HARD] Parallel Electives: Courses in the same Parallel Group MUST be assigned identical time slots.
-5. [SOFT] Distribution: Distribute multi-hour theory courses across distinct days.`);
+5. [HARD] Campus-Wide Category Synchronization: All courses with category MDC must be assigned identical time slots and days across all departments campus-wide. All VAC courses must share identical time slots and days campus-wide. All SEC courses must share identical time slots and days campus-wide. All AEC courses must share identical time slots and days campus-wide.
+6. [HARD] Category Purity in Parallelization: Only parallelize courses belonging to the exact same category. NEVER mix multiple categories (e.g. never combine MDC with VAC, SEC, AEC, or DSC).
+7. [SOFT] Distribution: Distribute multi-hour theory courses across distinct days.`);
+
+  // ── Semester-Specific Base Rules ──────────────────────────────────────────────
+  if (semBase?.hard_constraints?.length || semBase?.soft_constraints?.length) {
+    const semRules: string[] = [
+      ...(semBase.hard_constraints || []).map((r: string) => `- [HARD] ${r}`),
+      ...(semBase.soft_constraints || []).map((r: string) => `- [SOFT] ${r}`),
+    ];
+    sections.push(`## Base Rules for Semester ${semester || 1}:\n${semRules.join('\n')}`);
+  }
 
   // ── Custom Dynamic Constraints ────────────────────────────────────────────────
   if (dynamicConstraints.length > 0) {
@@ -58,9 +69,12 @@ export function buildTimetablePrompt(
   if (parallelGroups.length > 0) {
     const groupLines = parallelGroups.map((g, i) => {
       const aliases = g.courseIds.map((id) => activeIdMap.get(id) || id);
-      return `Group ${i + 1}: [${aliases.join(', ')}] (${g.courseCodes.join(' / ')}) — MUST share identical slots.`;
+      const scopeLabel = g.isCampusWide
+        ? `Campus-Wide [${g.category || 'Common'}] Basket`
+        : `Dept Elective [${g.category || 'General'}]`;
+      return `Group ${i + 1} (${scopeLabel}): [${aliases.join(', ')}] (${g.courseCodes.join(' / ')}) — MUST share identical slots across all departments.`;
     });
-    sections.push(`## Elective Parallel Groups:\n${groupLines.join('\n')}`);
+    sections.push(`## Elective Parallel Groups (Must be strictly same category):\n${groupLines.join('\n')}`);
   }
 
   // ── Compact Course List ───────────────────────────────────────────────────────

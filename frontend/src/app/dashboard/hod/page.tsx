@@ -1,6 +1,10 @@
 'use client'
 
 import BlueprintTab from './BlueprintTab'
+import TeacherAssignmentTab from './TeacherAssignmentTab'
+import PeriodMarkingTab from './PeriodMarkingTab'
+import CampusAttendanceTab from './CampusAttendanceTab'
+import ManualAllocationTab from './ManualAllocationTab'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -43,7 +47,7 @@ interface UploadResult {
   results?: { row: number; email: string; status: string; issues?: string[] }[]
 }
 
-type Tab = 'defaulters' | 'upload' | 'students' | 'blueprint' | 'courses'
+type Tab = 'defaulters' | 'upload' | 'students' | 'blueprint' | 'courses' | 'assignments' | 'period-marking' | 'campus-attendance' | 'manual-allocation'
 
 function getAcademicYearOptions(): string[] {
   const now = new Date()
@@ -166,7 +170,7 @@ export default function HodDashboard() {
   // Load active tab from sessionStorage on mount (hydration-safe)
   useEffect(() => {
     const storedTab = sessionStorage.getItem('hod_active_tab') as Tab | null
-    const validTabs: Tab[] = ['defaulters', 'upload', 'students', 'blueprint', 'courses']
+    const validTabs: Tab[] = ['defaulters', 'upload', 'students', 'blueprint', 'courses', 'assignments', 'period-marking', 'campus-attendance']
     if (storedTab && validTabs.includes(storedTab)) {
       setActiveTab(storedTab)
     }
@@ -483,6 +487,18 @@ export default function HodDashboard() {
         <button className={`${styles.tabBtn} ${activeTab === 'courses' ? styles.tabActive : ''}`} onClick={() => changeTab('courses')}>
           📚 Courses
         </button>
+        <button className={`${styles.tabBtn} ${activeTab === 'assignments' ? styles.tabActive : ''}`} onClick={() => changeTab('assignments')}>
+          👨‍🏫 Faculty Assignment
+        </button>
+        <button className={`${styles.tabBtn} ${activeTab === 'period-marking' ? styles.tabActive : ''}`} onClick={() => changeTab('period-marking')}>
+          ⏱️ Period Attendance
+        </button>
+        <button className={`${styles.tabBtn} ${activeTab === 'campus-attendance' ? styles.tabActive : ''}`} onClick={() => changeTab('campus-attendance')}>
+          🏛️ Campus Attendance
+        </button>
+        <button className={`${styles.tabBtn} ${activeTab === 'manual-allocation' ? styles.tabActive : ''}`} onClick={() => changeTab('manual-allocation')}>
+          🎯 Manual Allocation
+        </button>
       </div>
 
       {/* Main Content */}
@@ -795,6 +811,9 @@ export default function HodDashboard() {
 
         {activeTab === 'blueprint' && <BlueprintTab view="blueprint" />}
         {activeTab === 'courses' && <BlueprintTab view="courses" />}
+        {activeTab === 'assignments' && <TeacherAssignmentTab />}
+        {activeTab === 'period-marking' && <PeriodMarkingTab />}
+        {activeTab === 'campus-attendance' && <CampusAttendanceTab />}
 
         {/* ══ DEFAULTERS TAB ══ */}
         {activeTab === 'defaulters' && (
@@ -910,6 +929,8 @@ export default function HodDashboard() {
           </>
         )}
 
+        {/* ══ MANUAL ALLOCATION TAB ══ */}
+        {activeTab === 'manual-allocation' && <ManualAllocationTab />}
       </div>
 
       {/* Unified Success Modal Overlay */}

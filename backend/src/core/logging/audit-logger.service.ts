@@ -36,6 +36,8 @@ export const AuditEvents = {
   REGISTRATION_SUBMITTED: 'registration_submitted',
   TIMETABLE_GENERATED: 'timetable_generated',
   TIMETABLE_PUBLISHED: 'timetable_published',
+  ALLOCATION_RUN_COMPLETED: 'allocation_run_completed',
+  MANUAL_ALLOCATION: 'manual_allocation',
 } as const
 
 @Injectable()
@@ -44,11 +46,22 @@ export class AuditLoggerService {
 
   constructor(private readonly supabase: SupabaseService) {}
 
+  private static readonly UUID_REGEX =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
   async log(entry: AuditLogEntry): Promise<void> {
     try {
+      const isValidUuid = entry.userId && AuditLoggerService.UUID_REGEX.test(entry.userId)
+      const validUserId = isValidUuid ? entry.userId : null
+
+      const enrichedMetadata = {
+        ...entry.metadata,
+        ...(isValidUuid ? {} : { attempted_identifier: entry.userId }),
+      }
+
       const { error } = await this.supabase.admin.from('audit_logs').insert({
         event_type: entry.eventType,
-        user_id: entry.userId,
+        user_id: validUserId,
         user_role: entry.userRole,
         action: entry.action,
         resource_type: entry.resourceType,
@@ -56,7 +69,7 @@ export class AuditLoggerService {
         status: entry.status,
         ip_address: entry.ipAddress ?? null,
         user_agent: entry.userAgent ?? null,
-        metadata: entry.metadata ?? null,
+        metadata: enrichedMetadata,
       })
 
       if (error) {

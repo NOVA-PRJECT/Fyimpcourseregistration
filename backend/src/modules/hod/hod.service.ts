@@ -143,6 +143,9 @@ export class HodService {
       practical_hours_per_week,
       category,
       tag,
+      seat_limit,
+      prerequisite_course_ids,
+      allowed_department_ids,
     } = body
 
     const { data: created, error } = await this.supabase.admin
@@ -157,6 +160,9 @@ export class HodService {
         category,
         tag: tag || null,
         department_id: user.department_id,
+        seat_limit: seat_limit ? Number(seat_limit) : 60,
+        prerequisite_course_ids: Array.isArray(prerequisite_course_ids) ? prerequisite_course_ids : [],
+        allowed_department_ids: Array.isArray(allowed_department_ids) ? allowed_department_ids : [],
       })
       .select('id')
       .single()
@@ -190,19 +196,34 @@ export class HodService {
       practical_hours_per_week,
       category,
       tag,
+      seat_limit,
+      prerequisite_course_ids,
+      allowed_department_ids,
     } = body
+
+    const updatePayload: Record<string, any> = {
+      course_code: course_code.toUpperCase(),
+      title,
+      credits,
+      theory_hours_per_week: theory_hours_per_week ?? 0,
+      practical_hours_per_week: practical_hours_per_week ?? 0,
+      category,
+      tag: tag || null,
+    }
+
+    if (seat_limit !== undefined) {
+      updatePayload.seat_limit = seat_limit ? Number(seat_limit) : 60
+    }
+    if (prerequisite_course_ids !== undefined) {
+      updatePayload.prerequisite_course_ids = Array.isArray(prerequisite_course_ids) ? prerequisite_course_ids : []
+    }
+    if (allowed_department_ids !== undefined) {
+      updatePayload.allowed_department_ids = Array.isArray(allowed_department_ids) ? allowed_department_ids : []
+    }
 
     const { error } = await this.supabase.admin
       .from('courses')
-      .update({
-        course_code: course_code.toUpperCase(),
-        title,
-        credits,
-        theory_hours_per_week: theory_hours_per_week ?? 0,
-        practical_hours_per_week: practical_hours_per_week ?? 0,
-        category,
-        tag: tag || null,
-      })
+      .update(updatePayload)
       .eq('id', id)
       .eq('department_id', user.department_id)
 

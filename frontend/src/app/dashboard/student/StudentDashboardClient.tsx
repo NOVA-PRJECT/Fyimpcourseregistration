@@ -98,9 +98,23 @@ export default function StudentDashboardClient({ studentInfo, hasSubmission }: S
               >
                 {hasSubmission ? 'Update Track & Course Selection →' : 'Select Track & Register Courses →'}
               </Link>
+              <Link
+                href="/dashboard/student/credits"
+                className={styles.registerLink}
+                style={{
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                  marginTop: '0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                📊 View Degree Credit Ledger (Exit Milestones) →
+              </Link>
               <p className={styles.registerHint}>
                 {hasSubmission
-                  ? 'You have already submitted your track selection. Click to view or update your choices.'
+                  ? 'Track your credit accumulation across categories, level bands, and degree exit points.'
                   : 'First select your academic track, then choose your paper preferences for this semester.'}
               </p>
             </div>

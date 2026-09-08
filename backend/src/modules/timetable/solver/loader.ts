@@ -27,11 +27,14 @@ function buildConflictSummary(
     : 'No conflicts with other courses';
 }
 
+const CAMPUS_WIDE_CATEGORIES = new Set(['MDC', 'VAC', 'SEC', 'AEC']);
+
 /**
  * Auto-detect parallel groups from live registration data.
- * Courses taken by the same student department batch in the same category with
- * matching theory/practical hour structures and zero student overlap across ALL pairs
- * are treated as elective alternatives and grouped to share identical time slots.
+ * For campus-wide categories (MDC, VAC, SEC, AEC), courses are grouped campus-wide
+ * by category and matching session hour structures.
+ * For department-specific categories (DSC, DSE), courses are grouped by student department.
+ * Category purity is strictly enforced: courses with different categories are NEVER mixed.
  */
 export function detectParallelGroups(
   courses: CourseNode[],
@@ -39,25 +42,39 @@ export function detectParallelGroups(
 ): ParallelGroup[] {
   const parallelGroups: ParallelGroup[] = [];
 
-  // Group courses by student batch department + category + matching hours structure
+  // Group courses by scope + category + matching hours structure
   const buckets = new Map<string, CourseNode[]>();
-  for (const course of courses) {
-    const studentDepts = new Set<string>();
-    for (const studentId of course.studentIds) {
-      const deptId = studentDeptMap.get(studentId);
-      if (deptId) studentDepts.add(deptId);
-    }
-    if (studentDepts.size === 0) {
-      studentDepts.add(course.departmentId);
-    }
 
-    for (const deptId of studentDepts) {
-      // Include theory and practical hours so parallel courses always have matching session structures
-      const key = `${deptId}:${course.category || 'General'}:T${course.theoryHours}:P${course.practicalHours}`;
+  for (const course of courses) {
+    const rawCategory = (course.category || '').toUpperCase().trim();
+    const isCampusWide = CAMPUS_WIDE_CATEGORIES.has(rawCategory);
+
+    if (isCampusWide) {
+      // Campus-wide grouping: all departments share identical slots for this category
+      const key = `campus:${rawCategory}:T${course.theoryHours}:P${course.practicalHours}`;
       if (!buckets.has(key)) buckets.set(key, []);
       const list = buckets.get(key)!;
       if (!list.some((c) => c.courseId === course.courseId)) {
         list.push(course);
+      }
+    } else {
+      // Department-level grouping: by student batch department + category + hours
+      const studentDepts = new Set<string>();
+      for (const studentId of course.studentIds) {
+        const deptId = studentDeptMap.get(studentId);
+        if (deptId) studentDepts.add(deptId);
+      }
+      if (studentDepts.size === 0) {
+        studentDepts.add(course.departmentId);
+      }
+
+      for (const deptId of studentDepts) {
+        const key = `${deptId}:${rawCategory || 'General'}:T${course.theoryHours}:P${course.practicalHours}`;
+        if (!buckets.has(key)) buckets.set(key, []);
+        const list = buckets.get(key)!;
+        if (!list.some((c) => c.courseId === course.courseId)) {
+          list.push(course);
+        }
       }
     }
   }
@@ -65,7 +82,10 @@ export function detectParallelGroups(
   for (const [key, bucket] of buckets) {
     // Need at least 2 courses to form a parallel group
     if (bucket.length < 2) continue;
-    const deptId = key.split(':')[0];
+    const parts = key.split(':');
+    const scopeOrDept = parts[0];
+    const category = parts[1];
+    const isCampusWide = scopeOrDept === 'campus';
 
     // Check if ALL pairs in this bucket have zero student overlap.
     let allZeroOverlap = true;
@@ -85,7 +105,9 @@ export function detectParallelGroups(
     if (allZeroOverlap) {
       parallelGroups.push({
         groupId: crypto.randomUUID(), // runtime only — never stored in DB
-        departmentId: deptId,
+        departmentId: isCampusWide ? 'CAMPUS_WIDE' : scopeOrDept,
+        category,
+        isCampusWide,
         courseIds: bucket.map((c) => c.courseId),
         courseCodes: bucket.map((c) => c.courseCode),
       });

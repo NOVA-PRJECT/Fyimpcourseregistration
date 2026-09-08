@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -15,6 +16,8 @@ import { RolesGuard } from '../../core/auth/guards/roles.guard'
 import { Roles } from '../../core/auth/decorators/roles.decorator'
 import { CurrentUser } from '../../core/auth/decorators/current-user.decorator'
 import { AuthUser } from '../../core/auth/types'
+import { RateLimitGuard } from '../../core/security/rate-limit.guard'
+import { RateLimit } from '../../core/security/rate-limit.decorator'
 import { z } from 'zod'
 
 const ChangePasswordSchema = z
@@ -44,6 +47,8 @@ export class StudentController {
   }
 
   @Post('change-password')
+  @RateLimit('password_change')
+  @UseGuards(RateLimitGuard)
   @HttpCode(HttpStatus.OK)
   async changePassword(
     @Body() body: unknown,
@@ -52,7 +57,7 @@ export class StudentController {
   ) {
     const parsed = ChangePasswordSchema.safeParse(body)
     if (!parsed.success) {
-      return res.status(HttpStatus.BAD_REQUEST).json({ error: parsed.error.issues[0].message })
+      throw new BadRequestException(parsed.error.issues[0].message)
     }
 
     const result = await this.studentService.changePassword(parsed.data.new_password, user)
@@ -67,6 +72,6 @@ export class StudentController {
       })
     }
 
-    return res.json({ success: true, message: result.message })
+    return { success: true, message: result.message }
   }
 }

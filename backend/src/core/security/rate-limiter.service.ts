@@ -10,6 +10,9 @@ export class RateLimiterService {
   public readonly emailLoginLimiter: Ratelimit
   public readonly adminCrudLimiter: Ratelimit
   public readonly timetableGenerateLimiter: Ratelimit
+  public readonly registrationSubmitLimiter: Ratelimit
+  public readonly passwordChangeLimiter: Ratelimit
+  public readonly campusSignInLimiter: Ratelimit
   private readonly redis: Redis
 
   constructor(private readonly config: ConfigService) {
@@ -41,9 +44,42 @@ export class RateLimiterService {
 
     this.timetableGenerateLimiter = new Ratelimit({
       redis: this.redis,
-      limiter: Ratelimit.slidingWindow(2, '60 s'),
+      limiter: Ratelimit.slidingWindow(3, '60 s'),
       prefix: 'ratelimit:timetable_generate',
     })
+
+    this.registrationSubmitLimiter = new Ratelimit({
+      redis: this.redis,
+      limiter: Ratelimit.slidingWindow(5, '60 s'),
+      prefix: 'ratelimit:registration_submit',
+    })
+
+    this.passwordChangeLimiter = new Ratelimit({
+      redis: this.redis,
+      limiter: Ratelimit.slidingWindow(5, '15 m'),
+      prefix: 'ratelimit:password_change',
+    })
+
+    this.campusSignInLimiter = new Ratelimit({
+      redis: this.redis,
+      limiter: Ratelimit.slidingWindow(5, '60 s'),
+      prefix: 'ratelimit:campus_sign_in',
+    })
+  }
+
+  /**
+   * Safely check rate limit, failing open if Redis is unavailable or unconfigured.
+   */
+  async checkLimit(
+    limiter: Ratelimit,
+    identifier: string,
+  ): Promise<{ success: boolean; remaining: number; reset: number }> {
+    try {
+      return await limiter.limit(identifier)
+    } catch (err: any) {
+      this.logger.warn(`Rate limiter check failed: ${err.message}. Failing open to avoid denial of service.`)
+      return { success: true, remaining: 1, reset: Date.now() + 60000 }
+    }
   }
 
   async resetLoginLimits(ip: string, email: string): Promise<void> {

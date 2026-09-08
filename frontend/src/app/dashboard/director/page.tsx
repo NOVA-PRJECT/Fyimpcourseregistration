@@ -10,7 +10,7 @@ export default function DirectorDashboard() {
   useBfcacheGuard()
   const router = useRouter()
 
-  const [activeTab, setActiveTab] = useState<'registration' | 'timetable' | 'promotion'>('registration')
+  const [activeTab, setActiveTab] = useState<'registration' | 'timetable' | 'promotion' | 'allocation'>('registration')
 
   const [directorName, setDirectorName] = useState('')
   const [campusName, setCampusName] = useState('')
@@ -33,6 +33,15 @@ export default function DirectorDashboard() {
   const [promoteStep, setPromoteStep] = useState<0 | 1 | 2>(0)
   const [loggingOut, setLoggingOut] = useState(false)
   const [lastPromotedAt, setLastPromotedAt] = useState<string | null>(null)
+
+  // Allocation state
+  const [allocationSemester, setAllocationSemester] = useState<number>(1)
+  const [allocationAcademicYear, setAllocationAcademicYear] = useState<string>('')
+  const [allocationRun, setAllocationRun] = useState<any | null>(null)
+  const [triggeringRun, setTriggeringRun] = useState(false)
+  const [showRerunConfirm, setShowRerunConfirm] = useState(false)
+  const [allocationError, setAllocationError] = useState('')
+  const [allocationSuccess, setAllocationSuccess] = useState('')
 
   // Derived window status
   const windowIsOpen = currentDeadline !== null && new Date() < new Date(currentDeadline)
@@ -102,6 +111,78 @@ export default function DirectorDashboard() {
     const year = now.getFullYear()
     if (month >= 6) return `${year}-${String(year + 1).slice(2)}`
     return `${year - 1}-${String(year).slice(2)}`
+  }
+
+  // Initialize allocation academic year
+  useEffect(() => {
+    if (!allocationAcademicYear) {
+      setAllocationAcademicYear(getAcademicYear())
+    }
+  }, [])
+
+  // Poll allocation status while running
+  useEffect(() => {
+    if (activeTab !== 'allocation') return
+    const year = allocationAcademicYear || getAcademicYear()
+
+    let timer: any = null
+    async function checkStatus() {
+      try {
+        const res = await fetch(
+          `/api/allocation/status?academicYear=${encodeURIComponent(year)}&semester=${allocationSemester}`,
+        )
+        const data = await res.json()
+        if (res.ok) {
+          setAllocationRun(data.run)
+        }
+      } catch {}
+    }
+
+    checkStatus()
+
+    if (allocationRun?.status === 'running') {
+      timer = setInterval(checkStatus, 2000)
+    }
+
+    return () => {
+      if (timer) clearInterval(timer)
+    }
+  }, [activeTab, allocationSemester, allocationAcademicYear, allocationRun?.status])
+
+  async function handleRunAllocation(forceRerun: boolean = false) {
+    if (!forceRerun && allocationRun?.status === 'completed') {
+      setShowRerunConfirm(true)
+      return
+    }
+
+    setTriggeringRun(true)
+    setShowRerunConfirm(false)
+    setAllocationError('')
+    setAllocationSuccess('')
+
+    try {
+      const year = allocationAcademicYear || getAcademicYear()
+      const res = await fetch('/api/allocation/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          academicYear: year,
+          semester: allocationSemester,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to start course allocation')
+      }
+
+      setAllocationSuccess(`Course allocation run initiated! (Run ID: ${data.run_id})`)
+      setAllocationRun({ status: 'running', triggered_at: new Date().toISOString() })
+    } catch (err: any) {
+      setAllocationError(err.message || 'Error triggering allocation')
+    } finally {
+      setTriggeringRun(false)
+    }
   }
 
   // Save window settings
@@ -246,6 +327,12 @@ export default function DirectorDashboard() {
           onClick={() => setActiveTab('promotion')}
         >
           🎓 Semester Promotion
+        </button>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'allocation' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('allocation')}
+        >
+          🎯 Course Allocation
         </button>
       </div>
 
@@ -437,6 +524,232 @@ export default function DirectorDashboard() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ── TAB 4: COURSE ALLOCATION ── */}
+        {activeTab === 'allocation' && (
+          <div>
+            <p className={styles.sectionTitle}>Scored Course Allocation System</p>
+
+            {allocationError && <div className={styles.errorBanner}>{allocationError}</div>}
+            {allocationSuccess && <div className={styles.successBanner}>✓ {allocationSuccess}</div>}
+
+            <div className={styles.windowCard}>
+              <p className={styles.windowDescription}>
+                Trigger the 3-round allocation algorithm for this semester. The engine ranks student elective preferences based on prerequisite completion and semester proximity, taking into account fixed slot capacities.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1.25rem' }}>
+                <div className={styles.field}>
+                  <label className={styles.label}>Academic Year</label>
+                  <input
+                    type="text"
+                    className={styles.input}
+                    value={allocationAcademicYear}
+                    onChange={(e) => setAllocationAcademicYear(e.target.value)}
+                    placeholder="e.g. 2026-27"
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Semester</label>
+                  <select
+                    className={styles.input}
+                    value={allocationSemester}
+                    onChange={(e) => setAllocationSemester(Number(e.target.value))}
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                      <option key={s} value={s}>
+                        Semester {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Status Display Card */}
+              <div
+                style={{
+                  marginTop: '1.5rem',
+                  padding: '1.25rem',
+                  borderRadius: '10px',
+                  background: '#0f172a',
+                  border: '1px solid #334155',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#cbd5e1' }}>
+                    Latest Run Status ({allocationAcademicYear || 'Current Year'} • Semester {allocationSemester}):
+                  </span>
+
+                  {!allocationRun ? (
+                    <span
+                      style={{
+                        padding: '0.25rem 0.65rem',
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        background: '#334155',
+                        color: '#94a3b8',
+                      }}
+                    >
+                      Not Started
+                    </span>
+                  ) : allocationRun.status === 'running' ? (
+                    <span
+                      style={{
+                        padding: '0.25rem 0.65rem',
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        background: 'rgba(245, 158, 11, 0.2)',
+                        color: '#fbbf24',
+                        border: '1px solid rgba(245, 158, 11, 0.4)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                      }}
+                    >
+                      <span className={styles.spinner} style={{ width: 12, height: 12 }} />
+                      Algorithm Running (Rounds 1–3)...
+                    </span>
+                  ) : allocationRun.status === 'completed' ? (
+                    <span
+                      style={{
+                        padding: '0.25rem 0.65rem',
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        background: 'rgba(34, 197, 94, 0.2)',
+                        color: '#4ade80',
+                        border: '1px solid rgba(34, 197, 94, 0.4)',
+                      }}
+                    >
+                      ✓ Completed
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        padding: '0.25rem 0.65rem',
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        background: 'rgba(239, 68, 68, 0.2)',
+                        color: '#f87171',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                      }}
+                    >
+                      ✕ Failed
+                    </span>
+                  )}
+                </div>
+
+                {allocationRun && (
+                  <div style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <div>
+                      Triggered at: <strong>{new Date(allocationRun.triggered_at).toLocaleString()}</strong>
+                    </div>
+                    {allocationRun.completed_at && (
+                      <div>
+                        Completed at: <strong>{new Date(allocationRun.completed_at).toLocaleString()}</strong>
+                      </div>
+                    )}
+                    {allocationRun.error_message && (
+                      <div style={{ color: '#f87171', background: 'rgba(239,68,68,0.1)', padding: '0.5rem', borderRadius: '6px' }}>
+                        Error: {allocationRun.error_message}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Button */}
+              <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <button
+                  className={styles.primaryBtn}
+                  onClick={() => handleRunAllocation(false)}
+                  disabled={triggeringRun || allocationRun?.status === 'running'}
+                  style={{
+                    background: allocationRun?.status === 'completed' ? '#0284c7' : '#059669',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                  }}
+                >
+                  {triggeringRun || allocationRun?.status === 'running' ? (
+                    <>
+                      <span className={styles.spinner} />
+                      Allocating Courses...
+                    </>
+                  ) : allocationRun?.status === 'completed' ? (
+                    'Re-Run Allocation →'
+                  ) : (
+                    'Run Course Allocation →'
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Re-Run Warning Confirmation Modal */}
+            {showRerunConfirm && (
+              <div
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(0, 0, 0, 0.8)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1000,
+                  padding: '1rem',
+                }}
+              >
+                <div
+                  style={{
+                    background: '#0f172a',
+                    border: '1px solid #ef4444',
+                    borderRadius: '12px',
+                    padding: '1.75rem',
+                    maxWidth: '480px',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1rem',
+                  }}
+                >
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f87171', margin: 0 }}>
+                    ⚠️ Re-Run Allocation Confirmation
+                  </h3>
+                  <p style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5, margin: 0 }}>
+                    This will reset all elective allocations including any manual HOD placements. Fixed slot assignments are preserved.
+                  </p>
+                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: 0 }}>
+                    Are you sure you want to proceed with re-running the allocation engine for Semester {allocationSemester}?
+                  </p>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                    <button
+                      className={styles.primaryBtn}
+                      onClick={() => setShowRerunConfirm(false)}
+                      style={{ background: '#334155' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className={styles.primaryBtn}
+                      onClick={() => handleRunAllocation(true)}
+                      style={{ background: '#dc2626' }}
+                    >
+                      Yes, Re-Run Allocation →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

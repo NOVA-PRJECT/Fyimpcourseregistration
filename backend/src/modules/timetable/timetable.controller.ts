@@ -15,6 +15,8 @@ import { RolesGuard } from '../../core/auth/guards/roles.guard'
 import { Roles } from '../../core/auth/decorators/roles.decorator'
 import { CurrentUser } from '../../core/auth/decorators/current-user.decorator'
 import { AuthUser } from '../../core/auth/types'
+import { RateLimitGuard } from '../../core/security/rate-limit.guard'
+import { RateLimit } from '../../core/security/rate-limit.decorator'
 
 @Controller('api/timetable')
 @UseGuards(AuthGuard, RolesGuard)
@@ -49,6 +51,8 @@ export class TimetableController {
   // ──────────────── Generate ────────────────
   @Post('generate')
   @Roles('superadmin', 'campus_director')
+  @RateLimit('timetable')
+  @UseGuards(RateLimitGuard)
   async generate(
     @Body() body: { academicYear: string; semester: number; dynamicConstraints?: any[] },
     @CurrentUser() user: AuthUser,

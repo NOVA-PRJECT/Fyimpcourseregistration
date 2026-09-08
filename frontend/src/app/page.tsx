@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import Footer from '@/component/Footer'
 import styles from './home.module.css'
 import { ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
 import { Role } from '@/core/constants/roles'
@@ -106,10 +107,7 @@ export default function Home() {
         </Link>
       </div>
 
-      {/* Footer */}
-      <footer className={styles.footer}>
-        2026 Kannur University Mangattuparamba Campus
-      </footer>
+      <Footer />
     </div>
   )
 }

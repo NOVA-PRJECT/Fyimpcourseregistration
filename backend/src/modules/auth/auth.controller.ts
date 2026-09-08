@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -34,7 +35,7 @@ export class AuthController {
   ) {
     const parsed = LoginSchema.safeParse(body)
     if (!parsed.success) {
-      return res.status(HttpStatus.BAD_REQUEST).json({ error: parsed.error.issues[0].message })
+      throw new BadRequestException(parsed.error.issues[0].message)
     }
 
     const ip = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown'
@@ -52,11 +53,11 @@ export class AuthController {
     res.cookie('auth_token', result.token, cookieOptions)
     res.cookie('user_role', result.role, cookieOptions)
 
-    return res.json({
+    return {
       redirectTo: result.redirectTo,
       token: result.token,
       role: result.role,
-    })
+    }
   }
 
   @Post('logout')
@@ -72,7 +73,7 @@ export class AuthController {
     res.clearCookie('auth_token', { path: '/' })
     res.clearCookie('user_role', { path: '/' })
 
-    return res.json({ success: true })
+    return { success: true }
   }
 
   @Get('profile')

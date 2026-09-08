@@ -411,3 +411,38 @@
     font-size: 1rem;
   }
 }
+
+.termsWrapper {
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.termsCheckbox {
+  margin-top: 0.2rem;
+  accent-color: #002147;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.termsLabel {
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: #4a5568;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.termsLink {
+  color: #002147;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.termsLink:hover {
+  color: #d4af37;
+}
+

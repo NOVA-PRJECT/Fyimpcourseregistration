@@ -87,10 +87,15 @@ export class RegistrationsService {
 
         let query = this.supabase.admin
           .from('courses')
-          .select('id, course_code, title, department_id, semester, credits, category, tag')
+          .select('id, course_code, title, department_id, semester, credits, category, tag, seat_limit, prerequisite_course_ids, allowed_department_ids')
 
         if (fixedCourseIds.length > 0) {
           query = query.not('id', 'in', `(${fixedCourseIds.join(',')})`)
+        }
+
+        const isDeptAllowed = (c: any) => {
+          if (!c.allowed_department_ids || c.allowed_department_ids.length === 0) return true
+          return c.allowed_department_ids.includes(user.department_id)
         }
 
         if (rule === SLOT_RULES.DEPT_RESTRICTED) {
@@ -105,7 +110,7 @@ export class RegistrationsService {
             .in('category', ['DSC', 'DSE'])
 
           const filtered = (options ?? []).filter((c) =>
-            isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isDeptAllowed(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -126,7 +131,7 @@ export class RegistrationsService {
             .eq('category', 'MDC')
 
           const filtered = (options ?? []).filter((c) =>
-            isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isDeptAllowed(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -143,7 +148,7 @@ export class RegistrationsService {
             .eq('semester', user.current_semester)
 
           const filtered = (options ?? []).filter((c) =>
-            isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isDeptAllowed(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -160,7 +165,7 @@ export class RegistrationsService {
           }
           const { data: options } = await q
           const filtered = (options ?? []).filter((c) =>
-            isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isDeptAllowed(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -227,7 +232,7 @@ export class RegistrationsService {
 
     const { data: existingReg } = await this.supabase.admin
       .from('student_registrations')
-      .select('selected_courses, pathway_id')
+      .select('id, selected_courses, pathway_id, preferences, allocation_metadata, submitted_at, total_credits, slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
       .eq('student_id', user.userId)
       .eq('semester', semester)
       .maybeSingle()
@@ -243,7 +248,24 @@ export class RegistrationsService {
       selectedPathwayId: existingReg?.pathway_id ?? defaultPathway.id,
       slots,
       existingRegistration: existingReg ? existingReg.selected_courses : null,
+      existingPreferences: existingReg?.preferences ?? {},
+      allocationMetadata: existingReg?.allocation_metadata ?? {},
+      submittedAt: existingReg?.submitted_at ?? null,
+      existingSlots: existingReg
+        ? {
+            slot_1: existingReg.slot_1_course_id,
+            slot_2: existingReg.slot_2_course_id,
+            slot_3: existingReg.slot_3_course_id,
+            slot_4: existingReg.slot_4_course_id,
+            slot_5: existingReg.slot_5_course_id,
+            slot_6: existingReg.slot_6_course_id,
+          }
+        : null,
     }
+  }
+
+  async getMyRegistration(user: AuthUser) {
+    return this.getBlueprint(user)
   }
 
   async getPathwaySlots(pathwayId: string, user: AuthUser) {
@@ -280,14 +302,15 @@ export class RegistrationsService {
   }
 
   async submitCourses(
-    body: { semester: number; pathway_id: string; courses: string[] },
+    body: {
+      semester: number
+      pathway_id: string
+      courses?: string[]
+      preferences?: Record<string, { course_id: string; rank: number }[]>
+    },
     user: AuthUser,
   ) {
-    const { semester, pathway_id, courses } = body
-
-    if (new Set(courses).size !== courses.length) {
-      throw new BadRequestException('Duplicate courses detected in submission')
-    }
+    const { semester, pathway_id, courses, preferences } = body
 
     if (semester !== user.current_semester) {
       throw new BadRequestException('Submitted semester does not match current semester')
@@ -322,43 +345,125 @@ export class RegistrationsService {
     const pathway = pathways.find((p) => p.id === pathway_id)
     if (!pathway) throw new BadRequestException('Invalid pathway selected')
 
-    // Fetch details of selected courses
-    const { data: courseData, error: courseErr } = await this.supabase.admin
-      .from('courses')
-      .select('id, course_code, title, credits, department_id, category')
-      .in('id', courses)
+    // Fetch existing registration to freeze submitted_at
+    const { data: existingReg } = await this.supabase.admin
+      .from('student_registrations')
+      .select('id, submitted_at, allocation_metadata, preferences')
+      .eq('student_id', user.userId)
+      .eq('semester', semester)
+      .eq('academic_year', settings.academic_year)
+      .maybeSingle()
 
-    if (courseErr || !courseData || courseData.length !== courses.length) {
-      throw new BadRequestException('One or more selected courses are invalid')
-    }
+    // Step 3 tiebreaker rule: frozen on first submission. Re-ranking preferences never resets this timestamp.
+    const submittedAt = existingReg?.submitted_at ?? new Date().toISOString()
+    const allocationMetadata: Record<string, any> = { ...(existingReg?.allocation_metadata || {}) }
 
-    const totalCredits = courseData.reduce((sum, c) => sum + (c.credits ?? 0), 0)
-    const minCredits = blueprint.min_credits ?? settings.min_credits ?? 20
-    const maxCredits = blueprint.max_credits ?? settings.max_credits ?? 24
+    // Resolve fixed targets from blueprint
+    const fixedTargets: string[] = []
+    pathway.slots.forEach((s) => {
+      if (
+        s.rule === SLOT_RULES.FIXED ||
+        s.rule === SLOT_RULES.AEC_ELECT ||
+        s.rule === SLOT_RULES.CAMPUS_FIXED
+      ) {
+        if (s.target) fixedTargets.push(s.target)
+      }
+    })
 
-    if (totalCredits < minCredits || totalCredits > maxCredits) {
-      throw new BadRequestException(
-        `Total credits (${totalCredits}) must be between ${minCredits} and ${maxCredits}`,
-      )
+    let fixedCoursesMap: Record<string, any> = {}
+    if (fixedTargets.length > 0) {
+      const { data: fixedCourses } = await this.supabase.admin
+        .from('courses')
+        .select('id, course_code, title, credits, department_id, category')
+        .in('course_code', fixedTargets)
+      if (fixedCourses) {
+        fixedCoursesMap = Object.fromEntries(fixedCourses.map((c) => [c.course_code, c]))
+      }
     }
 
     const slotPayload: Record<string, any> = {
       student_id: user.userId,
+      campus_id: user.campus_id,
       semester,
       academic_year: settings.academic_year,
       pathway_id,
-      total_credits: totalCredits,
-      selected_courses: courseData,
-      submitted_at: new Date().toISOString(),
+      submitted_at: submittedAt,
     }
 
-    for (let i = 0; i < 6; i++) {
-      slotPayload[`slot_${i + 1}_course_id`] = courses[i] || null
+    const validatedPreferences: Record<string, { course_id: string; rank: number }[]> = {}
+    const evaluatedCourses: any[] = []
+
+    pathway.slots.forEach((s, i) => {
+      const slotKey = `slot_${i + 1}`
+      const isFixed =
+        s.rule === SLOT_RULES.FIXED ||
+        s.rule === SLOT_RULES.AEC_ELECT ||
+        s.rule === SLOT_RULES.CAMPUS_FIXED
+
+      if (isFixed && s.target && fixedCoursesMap[s.target]) {
+        const fc = fixedCoursesMap[s.target]
+        slotPayload[`${slotKey}_course_id`] = fc.id
+        allocationMetadata[slotKey] = { allocated_by: 'fixed' }
+        evaluatedCourses.push(fc)
+      } else {
+        // Elective slot: student submits up to 3 preferences
+        if (preferences && preferences[slotKey]) {
+          const slotPrefs = preferences[slotKey]
+          if (slotPrefs.length > 3) {
+            throw new BadRequestException(`Maximum 3 preferences allowed for ${slotKey}`)
+          }
+          validatedPreferences[slotKey] = slotPrefs
+        } else if (courses && courses[i]) {
+          validatedPreferences[slotKey] = [{ course_id: courses[i], rank: 1 }]
+        }
+        // Elective slot course ID remains unassigned until allocation runs
+        slotPayload[`${slotKey}_course_id`] = null
+      }
+    })
+
+    slotPayload.preferences = validatedPreferences
+    slotPayload.allocation_metadata = allocationMetadata
+
+    // Collect all elective courses mentioned to validate department restriction
+    const allElectiveCourseIds = new Set<string>()
+    Object.values(validatedPreferences).forEach((prefs) => {
+      prefs.forEach((p) => allElectiveCourseIds.add(p.course_id))
+    })
+
+    if (allElectiveCourseIds.size > 0) {
+      const { data: electiveCourses } = await this.supabase.admin
+        .from('courses')
+        .select('id, course_code, title, credits, department_id, category, allowed_department_ids')
+        .in('id', Array.from(allElectiveCourseIds))
+
+      for (const ec of electiveCourses ?? []) {
+        if (
+          ec.allowed_department_ids &&
+          ec.allowed_department_ids.length > 0 &&
+          !ec.allowed_department_ids.includes(user.department_id)
+        ) {
+          throw new BadRequestException(
+            `Course ${ec.course_code} is restricted and not available for your department`,
+          )
+        }
+      }
+
+      // Compute total credits based on fixed courses + rank 1 electives for credit check
+      const rank1ElectiveIds = Object.values(validatedPreferences)
+        .map((prefs) => prefs.find((p) => p.rank === 1)?.course_id)
+        .filter((id): id is string => !!id)
+
+      const rank1Courses = (electiveCourses ?? []).filter((c) => rank1ElectiveIds.includes(c.id))
+      evaluatedCourses.push(...rank1Courses)
     }
+
+    const totalCredits = evaluatedCourses.reduce((sum, c) => sum + (c.credits ?? 0), 0)
+    slotPayload.total_credits = totalCredits
+    slotPayload.selected_courses = evaluatedCourses
 
     const { error: upsertErr } = await this.supabase.admin
       .from('student_registrations')
-      .upsert(slotPayload, { onConflict: 'student_id,semester' })
+      .upsert(slotPayload, { onConflict: 'student_id,semester,academic_year' })
 
     if (upsertErr) {
       throw new InternalServerErrorException('Failed to save course registration')
@@ -368,12 +473,16 @@ export class RegistrationsService {
       eventType: AuditEvents.REGISTRATION_SUBMITTED,
       userId: user.userId,
       userRole: user.role,
-      action: `submitted course registration for semester ${semester}`,
+      action: `submitted course registration preferences for semester ${semester}`,
       resourceType: 'registration',
       status: 'success',
-      metadata: { totalCredits, coursesCount: courses.length },
+      metadata: { totalCredits, coursesCount: evaluatedCourses.length },
     })
 
-    return { success: true, message: 'Course registration submitted successfully' }
+    return {
+      success: true,
+      message: 'Course registration preferences submitted successfully',
+      total_credits: totalCredits,
+    }
   }
 }

@@ -14,10 +14,26 @@ import { validateTimetable, violationsToText } from './validator';
 
 const MAX_RETRIES = 3;
 const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash';
+
 export function formatAIErrorMessage(rawErrorText: string): string {
   if (!rawErrorText) {
     return 'The AI timetable scheduler timed out. Please try clicking "⚡ Generate AI Timetable" again.';
   }
+
+  const lower = rawErrorText.toLowerCase();
+
+  // Network connection / DNS / Supabase / Google connectivity errors
+  if (
+    lower.includes('econnreset') ||
+    lower.includes('connecttimeouterror') ||
+    lower.includes('und_err_connect_timeout') ||
+    lower.includes('etimedout') ||
+    lower.includes('fetch failed') ||
+    lower.includes('econnrefused')
+  ) {
+    return 'Network connection to database or AI service timed out. Please check your internet connection and try clicking "⚡ Generate AI Timetable" again.';
+  }
+
   try {
     const parsed = JSON.parse(rawErrorText);
     const code = parsed.error?.code || parsed.code;
@@ -34,7 +50,7 @@ export function formatAIErrorMessage(rawErrorText: string): string {
       return msg;
     }
   } catch {
-    if (rawErrorText.includes('503') || rawErrorText.toLowerCase().includes('high demand') || rawErrorText.toLowerCase().includes('unavailable')) {
+    if (rawErrorText.includes('503') || lower.includes('high demand') || lower.includes('unavailable')) {
       return 'The AI model is temporarily experiencing high server demand. Please wait a few moments and try clicking "⚡ Generate AI Timetable" again.';
     }
   }
@@ -44,8 +60,7 @@ export function formatAIErrorMessage(rawErrorText: string): string {
 async function callLLM(prompt: string): Promise<string> {
   const apiKey =
     process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    process.env.GOOGLE_API_KEY;
 
   if (!apiKey) {
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
@@ -54,7 +69,7 @@ async function callLLM(prompt: string): Promise<string> {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-key': anthropicKey,
+          'x-api-key': anthropicKey,
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
@@ -86,71 +101,93 @@ async function callLLM(prompt: string): Promise<string> {
   const modelsToTry = Array.from(new Set(candidateModels));
 
   let lastErrorText = '';
+
   for (let modelIndex = 0; modelIndex < modelsToTry.length; modelIndex++) {
     const model = modelsToTry[modelIndex];
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-    const controller = new AbortController();
-    // 180-second timeout to allow complete deep schedule generation
-    const timeoutId = setTimeout(() => controller.abort(), 180000);
+    // Retry loop for transient network glitches per model
+    for (let netAttempt = 1; netAttempt <= 3; netAttempt++) {
+      const controller = new AbortController();
+      // 360-second (6-minute) timeout to allow complete deep schedule generation
+      const timeoutId = setTimeout(() => controller.abort(), 360000);
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: prompt }],
-            },
-          ],
-          generationConfig: {
-            response_mime_type: 'application/json',
-            temperature: 0.1,
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
           },
-        }),
-      });
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: prompt }],
+              },
+            ],
+            generationConfig: {
+              response_mime_type: 'application/json',
+              temperature: 0.1,
+            },
+          }),
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-      if (response.ok) {
-        const data = await response.json();
-        const text =
-          data.candidates?.[0]?.content?.parts
-            ?.filter((p: any) => typeof p.text === 'string')
-            ?.map((p: any) => p.text)
-            ?.join('') || '';
+        if (response.ok) {
+          const data = await response.json();
+          const text =
+            data.candidates?.[0]?.content?.parts
+              ?.filter((p: any) => typeof p.text === 'string')
+              ?.map((p: any) => p.text)
+              ?.join('') || '';
 
-        if (text) {
-          return text;
-        }
-      } else {
-        lastErrorText = await response.text();
-        // If high demand (503), rate limit (429), or model not found (404), backoff slightly and try alternative model
-        if (response.status === 503 || response.status === 429 || response.status === 404) {
-          if (modelIndex < modelsToTry.length - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 1500 * (modelIndex + 1)));
-            continue;
+          if (text) {
+            return text;
           }
         } else {
-          throw new Error(`AI API error: ${formatAIErrorMessage(lastErrorText)}`);
+          lastErrorText = await response.text();
+          // If high demand (503), rate limit (429), or model not found (404), backoff slightly and try alternative model
+          if (response.status === 503 || response.status === 429 || response.status === 404) {
+            if (modelIndex < modelsToTry.length - 1) {
+              await new Promise((resolve) => setTimeout(resolve, 1500 * (modelIndex + 1)));
+              break; // Try next model
+            }
+          } else {
+            throw new Error(`AI API error: ${formatAIErrorMessage(lastErrorText)}`);
+          }
         }
-      }
-    } catch (fetchErr: any) {
-      clearTimeout(timeoutId);
-      if (fetchErr.name === 'AbortError') {
-        lastErrorText = `Request timed out after 180s on ${model}`;
-        if (modelIndex < modelsToTry.length - 1) {
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId);
+        const errMsg = fetchErr.message || String(fetchErr);
+        lastErrorText = errMsg;
+
+        if (fetchErr.name === 'AbortError') {
+          lastErrorText = `Request timed out after 360s on ${model}`;
+          break; // Try next candidate model
+        }
+
+        if (errMsg.startsWith('AI API error:')) {
+          throw fetchErr;
+        }
+
+        // Check if transient network drop (e.g. fetch failed, ECONNRESET)
+        const isTransientNetwork =
+          errMsg.includes('fetch failed') ||
+          errMsg.includes('ECONNRESET') ||
+          errMsg.includes('UND_ERR_CONNECT_TIMEOUT') ||
+          errMsg.includes('ConnectTimeoutError');
+
+        if (isTransientNetwork && netAttempt < 3) {
+          // Exponential backoff before retrying same model
+          await new Promise((resolve) => setTimeout(resolve, 2000 * netAttempt));
           continue;
         }
-      } else if (fetchErr.message && fetchErr.message.startsWith('AI API error:')) {
-        throw fetchErr;
-      } else {
-        lastErrorText = fetchErr.message || String(fetchErr);
+
         if (modelIndex < modelsToTry.length - 1) {
-          continue;
+          break; // Try next model
         }
       }
     }

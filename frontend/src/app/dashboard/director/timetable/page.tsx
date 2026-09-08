@@ -108,8 +108,8 @@ export default function CampusDirectorTimetablePage() {
   const [jobError, setJobError] = useState<string | null>(null);
   const [stepMessage, setStepMessage] = useState<string | null>(null);
 
-  // ETC Countdown Timer
-  const [etcSeconds, setEtcSeconds] = useState<number>(180);
+  // ETC Countdown Timer (5m 30s estimated duration)
+  const [etcSeconds, setEtcSeconds] = useState<number>(330);
   const etcIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Timetable data state
@@ -437,10 +437,21 @@ export default function CampusDirectorTimetablePage() {
   useEffect(() => {
     if (jobStatus !== 'running' && jobStatus !== 'queued') return;
 
+    let consecutiveErrors = 0;
+
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/timetable/job-status?academicYear=${academicYear}&semester=${semester}`);
-        if (!res.ok) return;
+        if (!res.ok) {
+          consecutiveErrors++;
+          if (consecutiveErrors >= 6) {
+            clearInterval(interval);
+            setJobStatus('failed');
+            setJobError('Unable to reach server to check generation progress. Please check your network connection and retry.');
+          }
+          return;
+        }
+        consecutiveErrors = 0;
         const data = await res.json();
 
         setJobStatus(data.status);
@@ -462,7 +473,13 @@ export default function CampusDirectorTimetablePage() {
           setJobError(data.errorMessage || data.error || 'Generation job failed');
         }
       } catch (err) {
+        consecutiveErrors++;
         console.error('Job status polling error:', err);
+        if (consecutiveErrors >= 6) {
+          clearInterval(interval);
+          setJobStatus('failed');
+          setJobError('Network connection to server timed out. Please check your internet connection and try clicking "Retry Generation".');
+        }
       }
     }, 1500);
 
@@ -492,7 +509,7 @@ export default function CampusDirectorTimetablePage() {
     setErrorMsg(null);
     setSuccessMsg(null);
     setJobError(null);
-    setEtcSeconds(180); // 3 minutes, independent of progress
+    setEtcSeconds(330); // 5 minutes 30 seconds (5 to 6 min range), independent of progress
     setShowGenerationOverlay(true);
 
     try {
@@ -1203,7 +1220,25 @@ export default function CampusDirectorTimetablePage() {
 
             {/* Footer Buttons for Failed or Completed States */}
             {(jobStatus === 'failed' || jobStatus === 'completed') && (
-              <div className={styles.generationModalFooter}>
+              <div className={styles.generationModalFooter} style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                {jobStatus === 'failed' && (
+                  <button
+                    style={{
+                      background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '0.5rem',
+                      padding: '0.65rem 1.25rem',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 4px rgba(79, 70, 229, 0.3)',
+                    }}
+                    onClick={handleGenerate}
+                  >
+                    ⚡ Retry Generation
+                  </button>
+                )}
                 <button
                   className={styles.generationModalCloseBtn}
                   onClick={() => setShowGenerationOverlay(false)}

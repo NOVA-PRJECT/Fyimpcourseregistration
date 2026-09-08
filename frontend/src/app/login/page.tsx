@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
+import Footer from '@/component/Footer'
 import styles from './login.module.css'
 import { ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
 import { Role } from '@/core/constants/roles'
@@ -15,6 +16,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
@@ -26,6 +28,15 @@ export default function LoginPage() {
         if (response.ok) {
           const data = await response.json()
           if (data.role) {
+            // Check consent status before redirecting to dashboard
+            const consentRes = await fetch('/api/consent/status')
+            if (consentRes.ok) {
+              const consentData = await consentRes.json()
+              if (!consentData.accepted) {
+                router.replace('/consent')
+                return
+              }
+            }
             const target = ROLE_DASHBOARD_MAP[data.role as Role] || '/dashboard/student'
             router.replace(target)
             return // Redirection triggered, leave checking as true to keep content hidden
@@ -93,6 +104,11 @@ export default function LoginPage() {
   async function handleLogin() {
     if (!validate()) return
 
+    if (!acceptedTerms) {
+      setError('Please review and accept the Terms of Use and Privacy Policy to sign in.')
+      return
+    }
+
     setLoading(true)
     setError('')
 
@@ -110,6 +126,16 @@ export default function LoginPage() {
         setError(data.error || 'Something went wrong. Please try again.')
         setLoading(false)
         return
+      }
+
+      // Verify consent status for active policy version before landing on dashboard
+      const consentCheck = await fetch('/api/consent/status').catch(() => null)
+      if (consentCheck && consentCheck.ok) {
+        const cData = await consentCheck.json()
+        if (!cData.accepted) {
+          window.location.href = '/consent'
+          return
+        }
       }
 
       // Redirect to correct dashboard
@@ -159,37 +185,46 @@ export default function LoginPage() {
           {/* Form Fields */}
           <div className={styles.fieldGroup}>
 
-            <div className={styles.field}>
-              <label className={styles.label}>Email Address</label>
+            {/* Email */}
+            <div className={styles.inputGroup}>
+              <label className={styles.label} htmlFor="email">
+                Email Address
+              </label>
               <input
+                id="email"
                 type="email"
                 className={`${styles.input} ${fieldErrors.email ? styles.inputError : ''}`}
-                placeholder="your@email.com"
+                placeholder="student@kannuruniv.ac.in"
                 value={email}
-                onChange={e => {
+                onChange={(e) => {
                   setEmail(e.target.value)
-                  setFieldErrors(prev => ({ ...prev, email: undefined }))
+                  if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: undefined })
                 }}
+                disabled={loading}
                 autoComplete="email"
-                inputMode="email"
               />
               {fieldErrors.email && (
                 <p className={styles.errorMsg}>{fieldErrors.email}</p>
               )}
             </div>
 
-            <div className={styles.field}>
-              <label className={styles.label}>Password</label>
-              <div className="password-wrapper">
+            {/* Password */}
+            <div className={styles.inputGroup}>
+              <label className={styles.label} htmlFor="password">
+                Password
+              </label>
+              <div className={styles.passwordWrapper}>
                 <input
+                  id="password"
                   type={showPassword ? 'text' : 'password'}
-                  className={`${styles.input} password-input ${fieldErrors.password ? styles.inputError : ''}`}
+                  className={`${styles.input} ${styles.passwordInput} ${fieldErrors.password ? styles.inputError : ''}`}
                   placeholder="••••••••"
                   value={password}
-                  onChange={e => {
+                  onChange={(e) => {
                     setPassword(e.target.value)
-                    setFieldErrors(prev => ({ ...prev, password: undefined }))
+                    if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: undefined })
                   }}
+                  disabled={loading}
                   autoComplete="current-password"
                 />
                 <button
@@ -206,6 +241,31 @@ export default function LoginPage() {
               )}
             </div>
 
+          </div>
+
+          {/* Terms & Privacy Policy Acceptance Checkbox */}
+          <div className={styles.termsWrapper}>
+            <input
+              type="checkbox"
+              id="acceptTerms"
+              checked={acceptedTerms}
+              onChange={(e) => {
+                setAcceptedTerms(e.target.checked)
+                if (error) setError('')
+              }}
+              className={styles.termsCheckbox}
+            />
+            <label htmlFor="acceptTerms" className={styles.termsLabel}>
+              I accept the{' '}
+              <Link href="/terms-of-use" target="_blank" className={styles.termsLink}>
+                Terms of Use
+              </Link>{' '}
+              and acknowledge the{' '}
+              <Link href="/privacy-policy" target="_blank" className={styles.termsLink}>
+                Privacy Policy
+              </Link>
+              .
+            </label>
           </div>
 
           {/* Submit */}
@@ -230,22 +290,12 @@ export default function LoginPage() {
             <span className={styles.dividerText}></span>
             <div className={styles.dividerLine} />
           </div>
-
-          {/*
-          <p className={styles.forgotLink}>
-            <Link href="/reset-password">Forgot password?</Link>
-          </p>
-          */}
         </div>
 
       </div>
 
-      {/* Footer */}
-      <p className={styles.footer}>
-        © 2026 Kannur University • Internal Systems Division
-      </p>
+      <Footer />
 
     </div>
   )
 }
-                                                                                                                            

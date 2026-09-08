@@ -31,8 +31,8 @@ export class AuthService {
 
   async login(email: string, password: string, ip: string) {
     const [ipLimit, emailLimit] = await Promise.all([
-      this.rateLimiter.loginLimiter.limit(ip),
-      this.rateLimiter.emailLoginLimiter.limit(email.toLowerCase()),
+      this.rateLimiter.checkLimit(this.rateLimiter.loginLimiter, ip),
+      this.rateLimiter.checkLimit(this.rateLimiter.emailLoginLimiter, email.toLowerCase()),
     ])
 
     if (!ipLimit.success) {

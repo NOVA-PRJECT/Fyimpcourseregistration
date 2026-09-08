@@ -1,0 +1,224 @@
+.pageContainer {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0a;
+  color: #e4e4e7;
+  font-family: inherit;
+}
+
+.header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 10, 10, 0.8);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 1rem 1.5rem;
+}
+
+.headerContent {
+  max-width: 1000px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+}
+
+.logoBadge {
+  background: linear-gradient(135deg, #1e3a8a, #2563eb);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  letter-spacing: 0.05em;
+}
+
+.logoText {
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.backButton {
+  color: #d4af37;
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.backButton:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.main {
+  flex: 1;
+  max-width: 900px;
+  width: 100%;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+}
+
+.documentCard {
+  background: rgba(24, 24, 27, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 2.5rem;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.docHeader {
+  margin-bottom: 1.5rem;
+}
+
+.versionBadge {
+  display: inline-block;
+  background: rgba(212, 175, 55, 0.15);
+  color: #d4af37;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 9999px;
+  margin-bottom: 0.75rem;
+}
+
+.docTitle {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.02em;
+}
+
+.docSubtitle {
+  color: #a1a1aa;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 1.5rem 0 2rem 0;
+}
+
+.section {
+  margin-bottom: 2rem;
+}
+
+.section h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 0.75rem;
+  border-left: 3px solid #d4af37;
+  padding-left: 0.75rem;
+}
+
+.section p {
+  color: #d4d4d8;
+  line-height: 1.7;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.section ul {
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.section li {
+  color: #d4d4d8;
+  line-height: 1.6;
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.dataBlock {
+  background: rgba(39, 39, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin: 1rem 0;
+}
+
+.dataBlock h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f4f4f5;
+  margin: 0 0 0.4rem 0;
+}
+
+.dataBlock p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #a1a1aa;
+}
+
+.highlightBlock {
+  border-color: rgba(212, 175, 55, 0.3);
+  background: rgba(212, 175, 55, 0.05);
+}
+
+.highlightBlock h3 {
+  color: #d4af37;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+  margin: 1.25rem 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.dataTable th {
+  background: rgba(30, 58, 138, 0.35);
+  color: #93c5fd;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dataTable td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #d4d4d8;
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.dataTable tr:last-child td {
+  border-bottom: none;
+}
+
+.dataTable tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (max-width: 640px) {
+  .documentCard {
+    padding: 1.5rem;
+  }
+  .docTitle {
+    font-size: 1.75rem;
+  }
+}

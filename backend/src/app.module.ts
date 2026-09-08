@@ -11,6 +11,12 @@ import { StudentModule } from './modules/student/student.module'
 import { RegistrationsModule } from './modules/registrations/registrations.module'
 import { DirectorModule } from './modules/director/director.module'
 import { TimetableModule } from './modules/timetable/timetable.module'
+import { ConsentModule } from './modules/consent/consent.module'
+import { AssignmentsModule } from './modules/assignments/assignments.module'
+import { PeriodAttendanceModule } from './modules/period-attendance/period-attendance.module'
+import { CampusAttendanceModule } from './modules/campus-attendance/campus-attendance.module'
+import { CreditLedgerModule } from './modules/credit-ledger/credit-ledger.module'
+import { AllocationModule } from './modules/allocation/allocation.module'
 
 @Module({
   imports: [
@@ -29,6 +35,12 @@ import { TimetableModule } from './modules/timetable/timetable.module'
     RegistrationsModule,
     DirectorModule,
     TimetableModule,
+    ConsentModule,
+    AssignmentsModule,
+    PeriodAttendanceModule,
+    CampusAttendanceModule,
+    CreditLedgerModule,
+    AllocationModule,
   ],
 })
 export class AppModule {}

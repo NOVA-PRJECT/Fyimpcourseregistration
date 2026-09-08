@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common'
@@ -95,6 +96,21 @@ export class AuthGuard implements CanActivate {
       current_semester: currentSemester,
       full_name: fullName,
       token,
+    }
+
+    const reqPath = request.originalUrl || request.path || request.url || ''
+    const isAllowedPwdPath =
+      reqPath.includes('/api/student/change-password') ||
+      reqPath.includes('/api/student/dashboard-summary') ||
+      reqPath.includes('/api/auth/logout')
+
+    if (authUser.must_change_password && !isAllowedPwdPath) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: 'Password change is required before accessing other portal features.',
+        must_change_password: true,
+      })
     }
 
     request.user = authUser

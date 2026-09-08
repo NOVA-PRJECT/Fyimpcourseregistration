@@ -12,6 +12,8 @@ import { RolesGuard } from '../../core/auth/guards/roles.guard'
 import { Roles } from '../../core/auth/decorators/roles.decorator'
 import { CurrentUser } from '../../core/auth/decorators/current-user.decorator'
 import { AuthUser } from '../../core/auth/types'
+import { RateLimitGuard } from '../../core/security/rate-limit.guard'
+import { RateLimit } from '../../core/security/rate-limit.decorator'
 
 @Controller('api/registrations')
 @UseGuards(AuthGuard, RolesGuard)
@@ -24,6 +26,11 @@ export class RegistrationsController {
     return this.registrationsService.getBlueprint(user)
   }
 
+  @Get('my')
+  async getMyRegistration(@CurrentUser() user: AuthUser) {
+    return this.registrationsService.getMyRegistration(user)
+  }
+
   @Get('pathway-slots')
   async getPathwaySlots(
     @Query('pathway_id') pathwayId: string,
@@ -33,8 +40,16 @@ export class RegistrationsController {
   }
 
   @Post('submit')
+  @RateLimit('registration')
+  @UseGuards(RateLimitGuard)
   async submitCourses(
-    @Body() body: { semester: number; pathway_id: string; courses: string[] },
+    @Body()
+    body: {
+      semester: number
+      pathway_id: string
+      courses?: string[]
+      preferences?: Record<string, { course_id: string; rank: number }[]>
+    },
     @CurrentUser() user: AuthUser,
   ) {
     return this.registrationsService.submitCourses(body, user)

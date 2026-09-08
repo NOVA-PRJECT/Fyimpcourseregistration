@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "FYIMP Portal",
+    "slug": "fyimp-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "fyimp",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#1E3A8A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.fyimp.mobile",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "FYIMP uses your location to verify your presence on campus during morning and evening sign-ins."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1E3A8A"
+      },
+      "package": "org.fyimp.mobile",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

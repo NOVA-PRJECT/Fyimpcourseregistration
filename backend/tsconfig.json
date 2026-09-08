@@ -21,6 +21,8 @@
     "noFallthroughCasesInSwitch": false,
     "paths": {
       "@/*": ["src/*"]
-    }
-  }
+    },
+    "types": ["node", "jest"]
+  },
+  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
 }

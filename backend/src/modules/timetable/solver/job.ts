@@ -30,10 +30,20 @@ export async function runGenerationJob(
       jobId,
     };
     await redis.set(redisKey, JSON.stringify(payload), { ex: 3600 });
-    await dbClient
-      .from('timetable_generation_jobs')
-      .update({ progress, updated_at: new Date().toISOString() })
-      .eq('id', jobId);
+    try {
+      const { error: dbErr } = await dbClient
+        .from('timetable_generation_jobs')
+        .update({ progress, updated_at: new Date().toISOString() })
+        .eq('id', jobId);
+      if (dbErr) {
+        await dbClient
+          .from('timetable_generation_jobs')
+          .update({ progress })
+          .eq('id', jobId);
+      }
+    } catch {
+      // Non-blocking progress sync
+    }
   };
 
   try {
@@ -212,22 +222,32 @@ export async function runGenerationJob(
 
     const friendlyError = formatAIErrorMessage(err.message || String(err));
 
-    await dbClient
-      .from('timetable_generation_jobs')
-      .update({
+    // 1. Attempt Redis update first (fast in-memory notification for frontend polling)
+    try {
+      const failPayload = {
         status: 'failed',
-        error_message: friendlyError,
-        completed_at: new Date().toISOString(),
-      })
-      .eq('id', jobId);
+        progress: 0,
+        stepMessage: `Generation failed: ${friendlyError}`,
+        errorMessage: friendlyError,
+        jobId,
+      };
+      await redis.set(redisKey, JSON.stringify(failPayload), { ex: 3600 });
+    } catch (redisErr) {
+      console.error('Warning: Failed to update Redis job failure status:', redisErr);
+    }
 
-    const failPayload = {
-      status: 'failed',
-      progress: 0,
-      stepMessage: `Generation failed: ${friendlyError}`,
-      errorMessage: friendlyError,
-      jobId,
-    };
-    await redis.set(redisKey, JSON.stringify(failPayload), { ex: 3600 });
+    // 2. Attempt Database record update
+    try {
+      await dbClient
+        .from('timetable_generation_jobs')
+        .update({
+          status: 'failed',
+          error_message: friendlyError,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', jobId);
+    } catch (dbErr) {
+      console.error('Warning: Failed to update DB job failure status:', dbErr);
+    }
   }
 }

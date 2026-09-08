@@ -58,6 +58,9 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   const [coursePracticalHours, setCoursePracticalHours] = useState<number | '' | null>(null)
   const [courseCategory, setCourseCategory] = useState<string | null>(null)
   const [courseTag, setCourseTag] = useState('')
+  const [courseSeatLimit, setCourseSeatLimit] = useState<number | ''>(60)
+  const [courseAllowedDepts, setCourseAllowedDepts] = useState<string[]>([])
+  const [coursePrereqs, setCoursePrereqs] = useState<string[]>([])
   const [savingCourse, setSavingCourse] = useState(false)
   const [deletingCourse, setDeletingCourse] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -345,13 +348,28 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     const finalPractical = coursePracticalHours !== null && coursePracticalHours !== '' ? Number(coursePracticalHours) : 0
 
     const isEdit = !!editCourse
+    const bodyPayload: any = {
+      course_code: courseCode.trim().toUpperCase(),
+      title: courseTitle.trim(),
+      credits: courseCredits,
+      theory_hours_per_week: finalTheory,
+      practical_hours_per_week: finalPractical,
+      category: courseCategory,
+      tag: courseTag.trim(),
+      seat_limit: courseSeatLimit !== '' ? Number(courseSeatLimit) : 60,
+      allowed_department_ids: courseAllowedDepts,
+      prerequisite_course_ids: coursePrereqs,
+    }
+    if (isEdit) {
+      bodyPayload.id = editCourse.id
+    } else {
+      bodyPayload.semester = semester
+    }
+
     const res = await fetch('/api/hod/courses', {
       method: isEdit ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(isEdit
-        ? { id: editCourse.id, course_code: courseCode.trim().toUpperCase(), title: courseTitle.trim(), credits: courseCredits, theory_hours_per_week: finalTheory, practical_hours_per_week: finalPractical, category: courseCategory, tag: courseTag.trim() }
-        : { course_code: courseCode.trim().toUpperCase(), title: courseTitle.trim(), semester, credits: courseCredits, theory_hours_per_week: finalTheory, practical_hours_per_week: finalPractical, category: courseCategory, tag: courseTag.trim() }
-      ),
+      body: JSON.stringify(bodyPayload),
     })
     const data = await res.json()
 
@@ -362,6 +380,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       setShowAddCourse(false)
       setEditCourse(null)
       setCourseCode(''); setCourseTitle(''); setCourseCredits(null); setCourseTheoryHours(null); setCoursePracticalHours(null); setCourseCategory(null); setCourseTag('')
+      setCourseSeatLimit(60); setCourseAllowedDepts([]); setCoursePrereqs([])
       fetchCourses()
     }
     setSavingCourse(false)
@@ -926,6 +945,9 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                   setCoursePracticalHours(null)
                   setCourseCategory(null)
                   setCourseTag('')
+                  setCourseSeatLimit(60)
+                  setCourseAllowedDepts([])
+                  setCoursePrereqs([])
                   setEditCourse(null)
                   setShowAddCourse(true)
                   setError('')
@@ -948,7 +970,18 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                 ) : (
                   <table className={styles.table}>
                     <thead className={styles.tableHead}>
-                      <tr><th>Code</th><th>Title</th><th>Cr</th><th>Theory Hrs</th><th>Practical Hrs</th><th>Cat</th><th>Tag</th><th></th></tr>
+                      <tr>
+                        <th>Code</th>
+                        <th>Title</th>
+                        <th>Cr</th>
+                        <th>Seats</th>
+                        <th>Theory Hrs</th>
+                        <th>Practical Hrs</th>
+                        <th>Cat</th>
+                        <th>Tag</th>
+                        <th>Allowed Depts</th>
+                        <th></th>
+                      </tr>
                     </thead>
                     <tbody>
                       {(view === 'courses' ? courses.filter(c => c.is_own_dept !== false) : courses).map(course => (
@@ -956,10 +989,18 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                           <td style={{ fontSize: '0.68rem', fontFamily: 'monospace' }}>{course.course_code}</td>
                           <td style={{ fontSize: '0.78rem' }}>{course.title}</td>
                           <td>{course.credits}</td>
+                          <td><strong>{course.seat_limit ?? 60}</strong></td>
                           <td>{course.theory_hours_per_week ?? course.credits}</td>
                           <td>{course.practical_hours_per_week ?? 0}</td>
                           <td><span className={styles.codeBadge}>{course.category}</span></td>
                           <td style={{ fontSize: '0.68rem', color: '#9ba1ab' }}>{course.tag ?? '—'}</td>
+                          <td style={{ fontSize: '0.72rem' }}>
+                            {course.allowed_department_ids && course.allowed_department_ids.length > 0 ? (
+                              <span style={{ color: '#38bdf8' }}>{course.allowed_department_ids.length} dept(s)</span>
+                            ) : (
+                              <span style={{ color: '#94a3b8' }}>All</span>
+                            )}
+                          </td>
                           <td>
                             <div className={styles.actionBtns}>
                               <button className={styles.editBtn} onClick={() => {
@@ -971,6 +1012,9 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                                 setCoursePracticalHours(course.practical_hours_per_week ?? 0)
                                 setCourseCategory(course.category)
                                 setCourseTag(course.tag ?? '')
+                                setCourseSeatLimit(course.seat_limit ?? 60)
+                                setCourseAllowedDepts(course.allowed_department_ids ?? [])
+                                setCoursePrereqs(course.prerequisite_course_ids ?? [])
                                 setError(''); setSuccess('')
                               }}>✏️</button>
                               <button className={styles.deleteBtn} onClick={() => {
@@ -994,7 +1038,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
           {/* Add/Edit Course Modal */}
           {(showAddCourse || editCourse) && (
             <div className={styles.modalOverlay}>
-              <div className={styles.modal}>
+              <div className={styles.modal} style={{ maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
                 <h3 className={styles.modalTitle}>{editCourse ? 'Edit Course' : 'Add Course'}</h3>
                 <div className={styles.fieldGroup}>
                   <div className={styles.field}>
@@ -1014,6 +1058,16 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                       onChange={e => {
                         const val = e.target.value
                         setCourseCredits(val === '' ? null : Number(val))
+                      }} />
+                  </div>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Seat Limit (Capacity across Fixed + Elective)</label>
+                    <input type="number" className={styles.input} min={1} max={500}
+                      placeholder="e.g. 60"
+                      value={courseSeatLimit ?? ''}
+                      onChange={e => {
+                        const val = e.target.value
+                        setCourseSeatLimit(val === '' ? '' : Number(val))
                       }} />
                   </div>
                   <div className={styles.field}>
@@ -1050,11 +1104,86 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                         setCoursePracticalHours(val === '' ? null : Number(val))
                       }} />
                   </div>
+
+                  {/* Allowed Departments Multi-Select */}
+                  <div className={styles.field} style={{ gridColumn: '1 / -1' }}>
+                    <label className={styles.label}>Allowed Departments (empty = all allowed)</label>
+                    <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #334155', borderRadius: '6px', padding: '0.5rem', background: '#0f172a' }}>
+                      {departments.length === 0 ? (
+                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>No departments loaded</span>
+                      ) : (
+                        departments.map((d) => {
+                          const isChecked = courseAllowedDepts.includes(d.id)
+                          return (
+                            <label key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem', marginBottom: '0.25rem', cursor: 'pointer', color: '#cbd5e1' }}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setCourseAllowedDepts([...courseAllowedDepts, d.id])
+                                  } else {
+                                    setCourseAllowedDepts(courseAllowedDepts.filter((id) => id !== d.id))
+                                  }
+                                }}
+                              />
+                              <span><strong>{d.code}</strong> — {d.name}</span>
+                            </label>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Prerequisites Multi-Select */}
+                  <div className={styles.field} style={{ gridColumn: '1 / -1' }}>
+                    <label className={styles.label}>Prerequisite Courses (+1 scoring point each)</label>
+                    <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #334155', borderRadius: '6px', padding: '0.5rem', background: '#0f172a' }}>
+                      {courses.filter(c => c.id !== editCourse?.id).length === 0 ? (
+                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>No other courses available</span>
+                      ) : (
+                        courses.filter(c => c.id !== editCourse?.id).map((c) => {
+                          const isChecked = coursePrereqs.includes(c.id)
+                          return (
+                            <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem', marginBottom: '0.25rem', cursor: 'pointer', color: '#cbd5e1' }}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setCoursePrereqs([...coursePrereqs, c.id])
+                                  } else {
+                                    setCoursePrereqs(coursePrereqs.filter((id) => id !== c.id))
+                                  }
+                                }}
+                              />
+                              <span><strong style={{ fontFamily: 'monospace' }}>{c.course_code}</strong> — {c.title} (Sem {c.semester})</span>
+                            </label>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
                 </div>
-                {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{error}</div>}
+
+                {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem', marginTop: '0.5rem' }}>{error}</div>}
                 <div className={styles.modalActions}>
                   <button className={styles.modalCancelBtn}
-                    onClick={() => { setShowAddCourse(false); setEditCourse(null); setCourseCode(''); setCourseTitle(''); setCourseCredits(null); setCourseTheoryHours(null); setCoursePracticalHours(null); setCourseCategory(null); setCourseTag(''); setError('') }}
+                    onClick={() => {
+                      setShowAddCourse(false)
+                      setEditCourse(null)
+                      setCourseCode('')
+                      setCourseTitle('')
+                      setCourseCredits(null)
+                      setCourseTheoryHours(null)
+                      setCoursePracticalHours(null)
+                      setCourseCategory(null)
+                      setCourseTag('')
+                      setCourseSeatLimit(60)
+                      setCourseAllowedDepts([])
+                      setCoursePrereqs([])
+                      setError('')
+                    }}
                     disabled={savingCourse}>Cancel</button>
                   <button className={styles.modalConfirmBtn} onClick={handleSaveCourse} disabled={savingCourse}>
                     {savingCourse ? 'Saving...' : editCourse ? 'Save Changes →' : 'Add Course →'}
