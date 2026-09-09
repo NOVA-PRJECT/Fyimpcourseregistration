@@ -1,6 +1,5 @@
-import { Test, TestingModule } from '@nestjs/testing'
 import { CreditLedgerService } from './credit-ledger.service'
-import { SupabaseService } from '../../core/supabase/supabase.service'
+import { SupabaseService } from '../../core/database/supabase.service'
 
 describe('CreditLedgerService', () => {
   let service: CreditLedgerService
@@ -9,20 +8,10 @@ describe('CreditLedgerService', () => {
     admin: {
       from: jest.fn(),
     },
-  }
+  } as unknown as SupabaseService
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CreditLedgerService,
-        {
-          provide: SupabaseService,
-          useValue: mockSupabaseService,
-        },
-      ],
-    }).compile()
-
-    service = module.get<CreditLedgerService>(CreditLedgerService)
+  beforeEach(() => {
+    service = new CreditLedgerService(mockSupabaseService)
   })
 
   describe('deriveLevelBand', () => {

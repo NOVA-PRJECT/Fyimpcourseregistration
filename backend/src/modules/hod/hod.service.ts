@@ -184,7 +184,7 @@ export class HodService {
       status: 'success',
     })
 
-    return { success: true, message: 'Course added successfully' }
+    return { success: true, message: 'Course added successfully', id: created?.id }
   }
 
   async updateCourse(id: string, body: any, user: AuthUser) {

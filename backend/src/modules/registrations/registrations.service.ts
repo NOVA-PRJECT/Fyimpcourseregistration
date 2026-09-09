@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common'
 import { SupabaseService } from '../../core/database/supabase.service'
@@ -15,6 +16,8 @@ import { isCourseEligibleForSlot } from '../../core/utils/slotRules'
 
 @Injectable()
 export class RegistrationsService {
+  private readonly logger = new Logger(RegistrationsService.name)
+
   constructor(
     private readonly supabase: SupabaseService,
     private readonly auditLogger: AuditLoggerService,
@@ -230,17 +233,50 @@ export class RegistrationsService {
     const defaultPathway = pathways[0]
     const slots = await this.resolvePathwaySlots(defaultPathway, user, deptMap, deptIdToName)
 
-    const { data: existingReg } = await this.supabase.admin
-      .from('student_registrations')
-      .select('id, pathway_id, preferences, allocation_metadata, submitted_at, total_credits, slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
-      .eq('student_id', user.userId)
-      .eq('semester', semester)
-      .maybeSingle()
+    const [prefRes, regRes] = await Promise.all([
+      this.supabase.admin
+        .from('registration_preferences')
+        .select('id, pathway_id, preferences, allocation_metadata, submitted_at')
+        .eq('student_id', user.userId)
+        .eq('semester', semester)
+        .eq('academic_year', settings.academic_year)
+        .maybeSingle(),
+      this.supabase.admin
+        .from('student_registrations')
+        .select('id, pathway_id, preferences, allocation_metadata, submitted_at, total_credits, slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
+        .eq('student_id', user.userId)
+        .eq('semester', semester)
+        .eq('academic_year', settings.academic_year)
+        .maybeSingle(),
+    ])
 
-    let preferences = existingReg?.preferences && Object.keys(existingReg.preferences).length > 0 ? existingReg.preferences : {}
-    let allocationMetadata = existingReg?.allocation_metadata && Object.keys(existingReg.allocation_metadata).length > 0 ? existingReg.allocation_metadata : {}
+    const existingPref = prefRes.data
+    const existingReg = regRes.data
 
-    if (existingReg && Object.keys(preferences).length === 0) {
+    let preferences: Record<string, { course_id: string; rank: number }[]> = {}
+    let allocationMetadata: Record<string, any> = {
+      ...(typeof existingPref?.allocation_metadata === 'object' && existingPref?.allocation_metadata ? existingPref.allocation_metadata : {}),
+      ...(typeof existingReg?.allocation_metadata === 'object' && existingReg?.allocation_metadata ? existingReg.allocation_metadata : {}),
+    }
+
+    if (existingPref?.preferences) {
+      const raw = existingPref.preferences
+      if (Array.isArray(raw)) {
+        for (const item of raw) {
+          const slotKey = `slot_${item.slot}`
+          if (Array.isArray(item.choices)) {
+            preferences[slotKey] = item.choices
+          }
+        }
+      } else if (typeof raw === 'object') {
+        preferences = raw as any
+      }
+    } else if (existingReg?.preferences && Object.keys(existingReg.preferences).length > 0) {
+      preferences = existingReg.preferences as any
+    }
+
+    // If no explicit preferences stored yet, derive from confirmed slots
+    if (Object.keys(preferences).length === 0 && existingReg) {
       const derivedPrefs: Record<string, { course_id: string; rank: number }[]> = {}
       const derivedMeta: Record<string, any> = { ...allocationMetadata }
       for (let s = 1; s <= 6; s++) {
@@ -257,6 +293,8 @@ export class RegistrationsService {
       allocationMetadata = derivedMeta
     }
 
+    const submittedAt = existingPref?.submitted_at ?? existingReg?.submitted_at ?? null
+
     return {
       success: true,
       windowOpen,
@@ -265,12 +303,12 @@ export class RegistrationsService {
       minCredits: blueprint.min_credits ?? settings.min_credits ?? 20,
       maxCredits: blueprint.max_credits ?? settings.max_credits ?? 24,
       pathways,
-      selectedPathwayId: existingReg?.pathway_id ?? defaultPathway.id,
+      selectedPathwayId: existingPref?.pathway_id ?? existingReg?.pathway_id ?? defaultPathway.id,
       slots,
-      existingRegistration: existingReg ? preferences : null,
+      existingRegistration: Object.keys(preferences).length > 0 ? preferences : null,
       existingPreferences: preferences,
       allocationMetadata: allocationMetadata,
-      submittedAt: existingReg?.submitted_at ?? null,
+      submittedAt: submittedAt,
       student: {
         full_name: user.full_name || '',
         current_semester: user.current_semester ?? 1,
@@ -369,18 +407,33 @@ export class RegistrationsService {
     const pathway = pathways.find((p) => p.id === pathway_id)
     if (!pathway) throw new BadRequestException('Invalid pathway selected')
 
-    // Fetch existing registration to freeze submitted_at
-    const { data: existingReg } = await this.supabase.admin
-      .from('student_registrations')
-      .select('id, submitted_at, allocation_metadata, preferences')
-      .eq('student_id', user.userId)
-      .eq('semester', semester)
-      .eq('academic_year', settings.academic_year)
-      .maybeSingle()
+    // Fetch existing preferences record to freeze submitted_at
+    const [existingPrefRes, existingRegRes] = await Promise.all([
+      this.supabase.admin
+        .from('registration_preferences')
+        .select('id, submitted_at, allocation_metadata, preferences')
+        .eq('student_id', user.userId)
+        .eq('semester', semester)
+        .eq('academic_year', settings.academic_year)
+        .maybeSingle(),
+      this.supabase.admin
+        .from('student_registrations')
+        .select('id, submitted_at, allocation_metadata')
+        .eq('student_id', user.userId)
+        .eq('semester', semester)
+        .eq('academic_year', settings.academic_year)
+        .maybeSingle(),
+    ])
+
+    const existingPref = existingPrefRes.data
+    const existingReg = existingRegRes.data
 
     // Step 3 tiebreaker rule: frozen on first submission. Re-ranking preferences never resets this timestamp.
-    const submittedAt = existingReg?.submitted_at ?? new Date().toISOString()
-    const allocationMetadata: Record<string, any> = { ...(existingReg?.allocation_metadata || {}) }
+    const submittedAt = existingPref?.submitted_at ?? existingReg?.submitted_at ?? new Date().toISOString()
+    const allocationMetadata: Record<string, any> = {
+      ...(typeof existingPref?.allocation_metadata === 'object' && existingPref?.allocation_metadata ? existingPref.allocation_metadata : {}),
+      ...(typeof existingReg?.allocation_metadata === 'object' && existingReg?.allocation_metadata ? existingReg.allocation_metadata : {}),
+    }
 
     // Resolve fixed targets from blueprint
     const fixedTargets: string[] = []
@@ -405,20 +458,20 @@ export class RegistrationsService {
       }
     }
 
-    const slotPayload: Record<string, any> = {
-      student_id: user.userId,
-      campus_id: user.campus_id,
-      semester,
-      academic_year: settings.academic_year,
-      pathway_id,
-      submitted_at: submittedAt,
-    }
+    const unifiedPreferences: {
+      slot: number
+      rule: string
+      name?: string
+      is_fixed: boolean
+      choices: { course_id: string; rank: number }[]
+    }[] = []
 
-    const validatedPreferences: Record<string, { course_id: string; rank: number }[]> = {}
     const evaluatedCourses: any[] = []
+    const fixedCourseAssignments: Record<string, string> = {}
 
     pathway.slots.forEach((s, i) => {
-      const slotKey = `slot_${i + 1}`
+      const slotNum = i + 1
+      const slotKey = `slot_${slotNum}`
       const isFixed =
         s.rule === SLOT_RULES.FIXED ||
         s.rule === SLOT_RULES.AEC_ELECT ||
@@ -426,32 +479,45 @@ export class RegistrationsService {
 
       if (isFixed && s.target && fixedCoursesMap[s.target]) {
         const fc = fixedCoursesMap[s.target]
-        slotPayload[`${slotKey}_course_id`] = fc.id
+        unifiedPreferences.push({
+          slot: slotNum,
+          rule: s.rule,
+          name: s.name,
+          is_fixed: true,
+          choices: [{ course_id: fc.id, rank: 1 }],
+        })
         allocationMetadata[slotKey] = { allocated_by: 'fixed' }
+        fixedCourseAssignments[slotKey] = fc.id
         evaluatedCourses.push(fc)
       } else {
         // Elective slot: student submits up to 3 preferences
+        let slotChoices: { course_id: string; rank: number }[] = []
         if (preferences && preferences[slotKey]) {
-          const slotPrefs = preferences[slotKey]
-          if (slotPrefs.length > 3) {
-            throw new BadRequestException(`Maximum 3 preferences allowed for ${slotKey}`)
-          }
-          validatedPreferences[slotKey] = slotPrefs
+          slotChoices = preferences[slotKey]
         } else if (courses && courses[i]) {
-          validatedPreferences[slotKey] = [{ course_id: courses[i], rank: 1 }]
+          slotChoices = [{ course_id: courses[i], rank: 1 }]
         }
-        // Elective slot course ID remains unassigned until allocation runs
-        slotPayload[`${slotKey}_course_id`] = null
+
+        if (slotChoices.length > 3) {
+          throw new BadRequestException(`Maximum 3 preferences allowed for ${slotKey}`)
+        }
+
+        unifiedPreferences.push({
+          slot: slotNum,
+          rule: s.rule,
+          name: s.name,
+          is_fixed: false,
+          choices: slotChoices,
+        })
       }
     })
 
-    slotPayload.preferences = validatedPreferences
-    slotPayload.allocation_metadata = allocationMetadata
-
     // Collect all elective courses mentioned to validate department restriction
     const allElectiveCourseIds = new Set<string>()
-    Object.values(validatedPreferences).forEach((prefs) => {
-      prefs.forEach((p) => allElectiveCourseIds.add(p.course_id))
+    unifiedPreferences.forEach((sItem) => {
+      if (!sItem.is_fixed) {
+        sItem.choices.forEach((p) => allElectiveCourseIds.add(p.course_id))
+      }
     })
 
     if (allElectiveCourseIds.size > 0) {
@@ -473,8 +539,9 @@ export class RegistrationsService {
       }
 
       // Compute total credits based on fixed courses + rank 1 electives for credit check
-      const rank1ElectiveIds = Object.values(validatedPreferences)
-        .map((prefs) => prefs.find((p) => p.rank === 1)?.course_id)
+      const rank1ElectiveIds = unifiedPreferences
+        .filter((s) => !s.is_fixed)
+        .map((s) => s.choices.find((c) => c.rank === 1)?.course_id)
         .filter((id): id is string => !!id)
 
       const rank1Courses = (electiveCourses ?? []).filter((c) => rank1ElectiveIds.includes(c.id))
@@ -482,15 +549,54 @@ export class RegistrationsService {
     }
 
     const totalCredits = evaluatedCourses.reduce((sum, c) => sum + (c.credits ?? 0), 0)
-    slotPayload.total_credits = totalCredits
-    slotPayload.selected_courses = evaluatedCourses
 
-    const { error: upsertErr } = await this.supabase.admin
+    // 1. Save unified preferences to registration_preferences table
+    const prefUpsertPayload = {
+      student_id: user.userId,
+      campus_id: user.campus_id,
+      semester,
+      academic_year: settings.academic_year,
+      pathway_id,
+      preferences: unifiedPreferences,
+      allocation_metadata: allocationMetadata,
+      submitted_at: submittedAt,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { error: prefErr } = await this.supabase.admin
+      .from('registration_preferences')
+      .upsert(prefUpsertPayload, { onConflict: 'student_id,semester,academic_year' })
+
+    if (prefErr) {
+      this.logger.error(`Failed to save registration preferences: ${prefErr.message}`)
+      throw new InternalServerErrorException('Failed to save course preferences')
+    }
+
+    // 2. Write confirmed fixed slots to student_registrations table (keeping elective slots NULL until allocation runs)
+    const regPayload: Record<string, any> = {
+      student_id: user.userId,
+      campus_id: user.campus_id,
+      semester,
+      academic_year: settings.academic_year,
+      pathway_id,
+      total_credits: totalCredits,
+      allocation_metadata: allocationMetadata,
+      submitted_at: submittedAt,
+      slot_1_course_id: fixedCourseAssignments.slot_1 ?? null,
+      slot_2_course_id: fixedCourseAssignments.slot_2 ?? null,
+      slot_3_course_id: fixedCourseAssignments.slot_3 ?? null,
+      slot_4_course_id: fixedCourseAssignments.slot_4 ?? null,
+      slot_5_course_id: fixedCourseAssignments.slot_5 ?? null,
+      slot_6_course_id: fixedCourseAssignments.slot_6 ?? null,
+    }
+
+    const { error: regErr } = await this.supabase.admin
       .from('student_registrations')
-      .upsert(slotPayload, { onConflict: 'student_id,semester,academic_year' })
+      .upsert(regPayload, { onConflict: 'student_id,semester,academic_year' })
 
-    if (upsertErr) {
-      throw new InternalServerErrorException('Failed to save course registration')
+    if (regErr) {
+      this.logger.error(`Failed to write confirmed fixed slots to student_registrations: ${regErr.message}`)
+      // Not fatal to preferences, but log error
     }
 
     await this.auditLogger.log({

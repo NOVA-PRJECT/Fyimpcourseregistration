@@ -35,27 +35,35 @@ export class StudentService {
       throw new NotFoundException('Student record not found')
     }
 
-    const { data: reg } = await this.supabase.admin
-      .from('student_registrations')
-      .select(`
-        id,
-        semester,
-        academic_year,
-        pathway_id,
-        total_credits,
-        slot_1_course_id,
-        slot_2_course_id,
-        slot_3_course_id,
-        slot_4_course_id,
-        slot_5_course_id,
-        slot_6_course_id,
-        allocation_metadata,
-        preferences,
-        selections
-      `)
-      .eq('student_id', user.userId)
-      .eq('semester', student.current_semester)
-      .maybeSingle()
+    const [regRes, prefRes] = await Promise.all([
+      this.supabase.admin
+        .from('student_registrations')
+        .select(`
+          id,
+          total_credits,
+          slot_1_course_id,
+          slot_2_course_id,
+          slot_3_course_id,
+          slot_4_course_id,
+          slot_5_course_id,
+          slot_6_course_id,
+          allocation_metadata,
+          preferences,
+          selections
+        `)
+        .eq('student_id', user.userId)
+        .eq('semester', student.current_semester)
+        .maybeSingle(),
+      this.supabase.admin
+        .from('registration_preferences')
+        .select('id, preferences, allocation_metadata, submitted_at')
+        .eq('student_id', user.userId)
+        .eq('semester', student.current_semester)
+        .maybeSingle(),
+    ])
+
+    const reg = regRes.data
+    const pref = prefRes.data
 
     const studentInfo = {
       full_name: student.full_name ?? '',
@@ -69,16 +77,32 @@ export class StudentService {
     const enrolledCourses: any[] = []
     let totalRegisteredCredits = 0
 
-    if (reg) {
+    if (reg || pref) {
       const courseIdsToFetch = new Set<string>()
       const slotCourseMap = new Map<number, { courseId: string; status: string; isConfirmed: boolean }>()
 
-      const meta = (reg as any).allocation_metadata || {}
-      const prefs = (reg as any).preferences || {}
+      const meta = {
+        ...(typeof pref?.allocation_metadata === 'object' && pref?.allocation_metadata ? pref.allocation_metadata : {}),
+        ...(typeof reg?.allocation_metadata === 'object' && reg?.allocation_metadata ? reg.allocation_metadata : {}),
+      }
+
+      // Reconstruct preferences map
+      const prefs: Record<string, { course_id: string; rank: number }[]> = {}
+      if (pref?.preferences) {
+        if (Array.isArray(pref.preferences)) {
+          for (const item of pref.preferences) {
+            prefs[`slot_${item.slot}`] = item.choices || []
+          }
+        } else if (typeof pref.preferences === 'object') {
+          Object.assign(prefs, pref.preferences)
+        }
+      } else if (reg?.preferences && typeof reg.preferences === 'object') {
+        Object.assign(prefs, reg.preferences)
+      }
 
       for (let s = 1; s <= 6; s++) {
         const slotKey = `slot_${s}`
-        const cid = (reg as any)[`${slotKey}_course_id`]
+        const cid = (reg as any)?.[`${slotKey}_course_id`]
         const slotMeta = meta[slotKey]
         const slotPrefs = prefs[slotKey]
 
@@ -86,22 +110,26 @@ export class StudentService {
           courseIdsToFetch.add(cid)
           let statusText = 'Confirmed Enrolled'
           if (slotMeta?.allocated_by === 'fixed') statusText = 'Core Fixed'
+          else if (slotMeta?.allocated_by?.startsWith('rank_')) statusText = `Allocated by Algorithm (${slotMeta.allocated_by.replace('_', ' ')})`
           else if (slotMeta?.allocated_by === 'algorithm') statusText = 'Allocated by Algorithm'
           else if (slotMeta?.allocated_by === 'hod') statusText = 'Allocated by HOD'
 
           slotCourseMap.set(s, { courseId: cid, status: statusText, isConfirmed: true })
         } else if (Array.isArray(slotPrefs) && slotPrefs.length > 0) {
-          // Preference submitted, pending allocation
           const rank1Id = slotPrefs.find((p: any) => p.rank === 1)?.course_id
           if (rank1Id) {
             courseIdsToFetch.add(rank1Id)
-            slotCourseMap.set(s, { courseId: rank1Id, status: 'Preference Choice 1 (Pending)', isConfirmed: false })
+            const isUnallocated = slotMeta?.allocated_by === 'unallocated'
+            const statusText = isUnallocated
+              ? 'Unallocated (Pending HOD Resolution)'
+              : 'Preference Choice 1 (Pending)'
+            slotCourseMap.set(s, { courseId: rank1Id, status: statusText, isConfirmed: false })
           }
         }
       }
 
       // If flat slots were empty, check selections JSONB
-      if (courseIdsToFetch.size === 0 && (reg as any).selections) {
+      if (courseIdsToFetch.size === 0 && (reg as any)?.selections) {
         const rawSel = (reg as any).selections
         const list = Array.isArray(rawSel) ? rawSel : Array.isArray(rawSel?.courses) ? rawSel.courses : []
         let idx = 1
@@ -156,7 +184,7 @@ export class StudentService {
 
     return {
       studentInfo,
-      hasSubmission: !!reg,
+      hasSubmission: !!reg || !!pref,
       must_change_password: student.must_change_password,
       enrolledCourses,
       totalRegisteredCredits: totalRegisteredCredits || (reg ? Number(reg.total_credits) || 0 : 0),

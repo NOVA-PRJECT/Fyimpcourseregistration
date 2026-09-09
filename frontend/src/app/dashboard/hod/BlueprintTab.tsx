@@ -61,6 +61,19 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   const [courseSeatLimit, setCourseSeatLimit] = useState<number | ''>(60)
   const [courseAllowedDepts, setCourseAllowedDepts] = useState<string[]>([])
   const [coursePrereqs, setCoursePrereqs] = useState<string[]>([])
+
+  // Prerequisite Rule Engine state
+  interface PrerequisiteRuleItem {
+    id?: string
+    course_id?: string
+    rule: 'COMPLETED_COURSE' | 'COMPLETED_SEMESTER' | 'DEPARTMENT'
+    target: string
+  }
+  const [courseRules, setCourseRules] = useState<PrerequisiteRuleItem[]>([])
+  const [loadingRules, setLoadingRules] = useState(false)
+  const [newRuleType, setNewRuleType] = useState<'COMPLETED_COURSE' | 'COMPLETED_SEMESTER' | 'DEPARTMENT'>('COMPLETED_COURSE')
+  const [newRuleTarget, setNewRuleTarget] = useState('')
+
   const [savingCourse, setSavingCourse] = useState(false)
   const [deletingCourse, setDeletingCourse] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -329,6 +342,82 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     setSaving(false)
   }
 
+  async function loadCourseRules(courseId: string) {
+    setLoadingRules(true)
+    try {
+      const res = await fetch(`/api/allocation/config/prerequisites/${courseId}`)
+      const data = await res.json()
+      if (res.ok && data.rules) {
+        setCourseRules(data.rules)
+      } else {
+        setCourseRules([])
+      }
+    } catch {
+      setCourseRules([])
+    } finally {
+      setLoadingRules(false)
+    }
+  }
+
+  async function handleAddRule() {
+    const trimmed = newRuleTarget.trim()
+    if (!trimmed) {
+      setError('Please specify a target for the prerequisite rule')
+      return
+    }
+    setError('')
+
+    if (editCourse?.id) {
+      try {
+        const res = await fetch(`/api/allocation/config/prerequisites/${editCourse.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rule: newRuleType, target: trimmed }),
+        })
+        const data = await res.json()
+        if (res.ok && data.rule) {
+          setCourseRules([...courseRules, data.rule])
+          setNewRuleTarget('')
+        } else {
+          setError(data.error || data.message || 'Failed to add prerequisite rule')
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to add prerequisite rule')
+      }
+    } else {
+      const exists = courseRules.some(
+        (r) => r.rule === newRuleType && r.target.toUpperCase() === trimmed.toUpperCase(),
+      )
+      if (exists) {
+        setError('This prerequisite rule is already added')
+        return
+      }
+      setCourseRules([...courseRules, { rule: newRuleType, target: trimmed }])
+      setNewRuleTarget('')
+    }
+  }
+
+  async function handleDeleteRule(rule: PrerequisiteRuleItem, idx: number) {
+    setError('')
+    if (rule.id) {
+      try {
+        const res = await fetch(`/api/allocation/config/prerequisites/${rule.id}`, {
+          method: 'DELETE',
+        })
+        if (res.ok) {
+          setCourseRules(courseRules.filter((r) => r.id !== rule.id))
+        } else {
+          const data = await res.json()
+          setError(data.error || data.message || 'Failed to delete prerequisite rule')
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to delete prerequisite rule')
+      }
+    } else {
+      setCourseRules(courseRules.filter((_, i) => i !== idx))
+    }
+  }
+
   async function handleSaveCourse() {
     if (!courseCode.trim()) { setError('Course code is required'); return }
     if (!courseTitle.trim()) { setError('Course title is required'); return }
@@ -375,12 +464,26 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
 
     if (!res.ok) { setError(data.error ?? 'Failed to save course') }
     else {
+      // If newly created course had staged rules, persist them
+      if (!isEdit && data.id && courseRules.length > 0) {
+        for (const rule of courseRules) {
+          try {
+            await fetch(`/api/allocation/config/prerequisites/${data.id}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ rule: rule.rule, target: rule.target }),
+            })
+          } catch {
+            // best effort
+          }
+        }
+      }
       setSuccess(data.message)
       setTimeout(() => setSuccess(''), 1000)
       setShowAddCourse(false)
       setEditCourse(null)
       setCourseCode(''); setCourseTitle(''); setCourseCredits(null); setCourseTheoryHours(null); setCoursePracticalHours(null); setCourseCategory(null); setCourseTag('')
-      setCourseSeatLimit(60); setCourseAllowedDepts([]); setCoursePrereqs([])
+      setCourseSeatLimit(60); setCourseAllowedDepts([]); setCoursePrereqs([]); setCourseRules([]); setNewRuleTarget('')
       fetchCourses()
     }
     setSavingCourse(false)
@@ -948,6 +1051,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                   setCourseSeatLimit(60)
                   setCourseAllowedDepts([])
                   setCoursePrereqs([])
+                  setCourseRules([])
+                  setNewRuleTarget('')
                   setEditCourse(null)
                   setShowAddCourse(true)
                   setError('')
@@ -1015,6 +1120,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                                 setCourseSeatLimit(course.seat_limit ?? 60)
                                 setCourseAllowedDepts(course.allowed_department_ids ?? [])
                                 setCoursePrereqs(course.prerequisite_course_ids ?? [])
+                                loadCourseRules(course.id)
                                 setError(''); setSuccess('')
                               }}>✏️</button>
                               <button className={styles.deleteBtn} onClick={() => {
@@ -1135,33 +1241,210 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                     </div>
                   </div>
 
-                  {/* Prerequisites Multi-Select */}
+                  {/* Prerequisite Rules Engine */}
                   <div className={styles.field} style={{ gridColumn: '1 / -1' }}>
-                    <label className={styles.label}>Prerequisite Courses (+1 scoring point each)</label>
-                    <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #334155', borderRadius: '6px', padding: '0.5rem', background: '#0f172a' }}>
-                      {courses.filter(c => c.id !== editCourse?.id).length === 0 ? (
-                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>No other courses available</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <label className={styles.label} style={{ margin: 0 }}>
+                        Prerequisite Rules (+1 scoring point per matched rule)
+                      </label>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                        Courses without rules score 0 pts (not disqualified)
+                      </span>
+                    </div>
+
+                    {/* Rules List */}
+                    <div style={{
+                      background: '#0f172a',
+                      border: '1px solid #334155',
+                      borderRadius: '6px',
+                      padding: '0.6rem',
+                      marginBottom: '0.6rem',
+                      maxHeight: '140px',
+                      overflowY: 'auto'
+                    }}>
+                      {loadingRules ? (
+                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Loading rules...</span>
+                      ) : courseRules.length === 0 ? (
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', padding: '0.25rem 0' }}>
+                          No prerequisite rules configured yet. Add rules below.
+                        </div>
                       ) : (
-                        courses.filter(c => c.id !== editCourse?.id).map((c) => {
-                          const isChecked = coursePrereqs.includes(c.id)
-                          return (
-                            <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem', marginBottom: '0.25rem', cursor: 'pointer', color: '#cbd5e1' }}>
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setCoursePrereqs([...coursePrereqs, c.id])
-                                  } else {
-                                    setCoursePrereqs(coursePrereqs.filter((id) => id !== c.id))
-                                  }
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                          {courseRules.map((rule, idx) => {
+                            let badgeBg = 'rgba(56, 189, 248, 0.15)'
+                            let badgeColor = '#38bdf8'
+                            let label = ''
+
+                            if (rule.rule === 'COMPLETED_COURSE') {
+                              badgeBg = 'rgba(168, 85, 247, 0.15)'
+                              badgeColor = '#c084fc'
+                              const courseMatch = courses.find(c => c.course_code === rule.target)
+                              label = `Completed Course: ${rule.target}${courseMatch ? ` (${courseMatch.title})` : ''}`
+                            } else if (rule.rule === 'COMPLETED_SEMESTER') {
+                              badgeBg = 'rgba(34, 197, 94, 0.15)'
+                              badgeColor = '#4ade80'
+                              label = `Completed Semester: Greater than Sem ${rule.target}`
+                            } else if (rule.rule === 'DEPARTMENT') {
+                              badgeBg = 'rgba(251, 146, 60, 0.15)'
+                              badgeColor = '#fb923c'
+                              const deptMatch = departments.find(d => d.code === rule.target)
+                              label = `Department Match: ${rule.target}${deptMatch ? ` (${deptMatch.name})` : ''}`
+                            }
+
+                            return (
+                              <div
+                                key={rule.id ?? `rule-${idx}`}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  background: '#1e293b',
+                                  border: '1px solid #334155',
+                                  borderRadius: '4px',
+                                  padding: '0.35rem 0.6rem',
                                 }}
-                              />
-                              <span><strong style={{ fontFamily: 'monospace' }}>{c.course_code}</strong> — {c.title} (Sem {c.semester})</span>
-                            </label>
-                          )
-                        })
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span style={{
+                                    fontSize: '0.65rem',
+                                    fontWeight: 700,
+                                    textTransform: 'uppercase',
+                                    padding: '0.15rem 0.4rem',
+                                    borderRadius: '3px',
+                                    background: badgeBg,
+                                    color: badgeColor,
+                                    letterSpacing: '0.04em'
+                                  }}>
+                                    {rule.rule === 'COMPLETED_COURSE' ? 'Course' : rule.rule === 'COMPLETED_SEMESTER' ? 'Semester' : 'Dept'}
+                                  </span>
+                                  <span style={{ fontSize: '0.75rem', color: '#e2e8f0' }}>{label}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRule(rule, idx)}
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#f87171',
+                                    cursor: 'pointer',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 700,
+                                    padding: '0.1rem 0.35rem',
+                                  }}
+                                  title="Delete rule"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
                       )}
+                    </div>
+
+                    {/* Add Rule Controls */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '160px 1fr auto',
+                      gap: '0.5rem',
+                      alignItems: 'center',
+                      background: '#1e293b',
+                      padding: '0.5rem',
+                      borderRadius: '6px',
+                      border: '1px dashed #475569'
+                    }}>
+                      <select
+                        className={styles.input}
+                        style={{ margin: 0, fontSize: '0.75rem', padding: '0.35rem' }}
+                        value={newRuleType}
+                        onChange={(e) => {
+                          const val = e.target.value as any
+                          setNewRuleType(val)
+                          setNewRuleTarget('')
+                        }}
+                      >
+                        <option value="COMPLETED_COURSE">Completed Course</option>
+                        <option value="COMPLETED_SEMESTER">Completed Semester</option>
+                        <option value="DEPARTMENT">Department Match</option>
+                      </select>
+
+                      {newRuleType === 'COMPLETED_COURSE' && (
+                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <select
+                            className={styles.input}
+                            style={{ margin: 0, fontSize: '0.75rem', padding: '0.35rem', flex: 1 }}
+                            value={newRuleTarget}
+                            onChange={(e) => setNewRuleTarget(e.target.value)}
+                          >
+                            <option value="">-- Select Prior Course --</option>
+                            {courses
+                              .filter(c => c.id !== editCourse?.id)
+                              .map(c => (
+                                <option key={c.id} value={c.course_code}>
+                                  {c.course_code} — {c.title} (Sem {c.semester})
+                                </option>
+                              ))}
+                          </select>
+                          <input
+                            type="text"
+                            placeholder="or code (e.g. IT101)"
+                            className={styles.input}
+                            style={{ margin: 0, fontSize: '0.75rem', width: '130px', textTransform: 'uppercase' }}
+                            value={newRuleTarget}
+                            onChange={(e) => setNewRuleTarget(e.target.value.toUpperCase())}
+                          />
+                        </div>
+                      )}
+
+                      {newRuleType === 'COMPLETED_SEMESTER' && (
+                        <select
+                          className={styles.input}
+                          style={{ margin: 0, fontSize: '0.75rem', padding: '0.35rem' }}
+                          value={newRuleTarget}
+                          onChange={(e) => setNewRuleTarget(e.target.value)}
+                        >
+                          <option value="">-- Select Completed Semester Threshold --</option>
+                          {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                            <option key={num} value={num}>
+                              Semester {num} completed (Student current sem &gt; {num})
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                      {newRuleType === 'DEPARTMENT' && (
+                        <select
+                          className={styles.input}
+                          style={{ margin: 0, fontSize: '0.75rem', padding: '0.35rem' }}
+                          value={newRuleTarget}
+                          onChange={(e) => setNewRuleTarget(e.target.value)}
+                        >
+                          <option value="">-- Select Department --</option>
+                          {departments.map(d => (
+                            <option key={d.id} value={d.code}>
+                              {d.code} — {d.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleAddRule}
+                        style={{
+                          background: '#0284c7',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '0.4rem 0.75rem',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        + Add Rule
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -12,20 +12,35 @@ import { AuditLoggerService, AuditEvents } from '../../core/logging/audit-logger
 import { ServerLoggerService } from '../../core/logging/server-logger.service'
 import { AuthUser } from '../../core/auth/types'
 
-interface CourseItem {
+export interface CourseItem {
   id: string
   course_code: string
   title: string
   semester: number
   department_id: string
   seat_limit: number
-  prerequisite_course_ids: string[]
   allowed_department_ids: string[]
 }
 
-interface PreferenceChoice {
+export interface PrerequisiteRule {
+  id: string
+  course_id: string
+  rule: 'COMPLETED_COURSE' | 'COMPLETED_SEMESTER' | 'DEPARTMENT'
+  target: string
+  created_at?: string
+}
+
+export interface PreferenceChoice {
   course_id: string
   rank: number
+}
+
+export interface UnifiedSlotPreference {
+  slot: number
+  rule?: string
+  name?: string
+  is_fixed?: boolean
+  choices: PreferenceChoice[]
 }
 
 @Injectable()
@@ -37,6 +52,152 @@ export class AllocationService {
     private readonly auditLogger: AuditLoggerService,
     private readonly serverLogger: ServerLoggerService,
   ) {}
+
+  // ──────────────── Prerequisite Rule Engine Endpoints ────────────────
+
+  async getPrerequisites(courseId: string, user: AuthUser) {
+    const { data: rules, error } = await this.supabase.admin
+      .from('course_prerequisite_rules')
+      .select('*')
+      .eq('course_id', courseId)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      this.logger.error(`Failed to fetch prerequisites for course ${courseId}: ${error.message}`)
+      throw new InternalServerErrorException('Failed to fetch course prerequisite rules')
+    }
+
+    return {
+      success: true,
+      rules: rules ?? [],
+    }
+  }
+
+  async addPrerequisite(
+    courseId: string,
+    body: { rule: string; target: string },
+    user: AuthUser,
+  ) {
+    const { rule, target } = body
+    if (!rule || !target) {
+      throw new BadRequestException('Both rule and target are required')
+    }
+
+    const validRules = ['COMPLETED_COURSE', 'COMPLETED_SEMESTER', 'DEPARTMENT']
+    if (!validRules.includes(rule)) {
+      throw new BadRequestException(
+        `Invalid rule type "${rule}". Must be one of: ${validRules.join(', ')}`,
+      )
+    }
+
+    let cleanTarget = target.trim()
+    if (!cleanTarget) {
+      throw new BadRequestException('Target cannot be empty')
+    }
+
+    if (rule === 'COMPLETED_SEMESTER') {
+      const semNum = parseInt(cleanTarget, 10)
+      if (isNaN(semNum) || semNum < 1 || semNum > 8) {
+        throw new BadRequestException('Target for COMPLETED_SEMESTER must be an integer between 1 and 8')
+      }
+      cleanTarget = String(semNum)
+    } else {
+      cleanTarget = cleanTarget.toUpperCase()
+    }
+
+    // Verify course exists
+    const { data: course, error: courseErr } = await this.supabase.admin
+      .from('courses')
+      .select('id, course_code, department_id')
+      .eq('id', courseId)
+      .single()
+
+    if (courseErr || !course) {
+      throw new NotFoundException('Course not found')
+    }
+
+    // If HOD, check department ownership
+    if (user.role === 'hod' && user.department_id && course.department_id !== user.department_id) {
+      throw new ForbiddenException('You can only configure prerequisite rules for courses in your department')
+    }
+
+    const { data: newRule, error: insertErr } = await this.supabase.admin
+      .from('course_prerequisite_rules')
+      .insert({
+        course_id: courseId,
+        rule,
+        target: cleanTarget,
+      })
+      .select('*')
+      .single()
+
+    if (insertErr) {
+      if (insertErr.code === '23505') {
+        throw new ConflictException('This prerequisite rule already exists for this course')
+      }
+      this.logger.error(`Failed to add prerequisite rule: ${insertErr.message}`)
+      throw new InternalServerErrorException('Failed to create prerequisite rule')
+    }
+
+    await this.auditLogger.log({
+      eventType: AuditEvents.COURSE_UPDATED,
+      userId: user.userId,
+      userRole: user.role,
+      action: `added prerequisite rule ${rule} (${cleanTarget}) to course ${course.course_code}`,
+      resourceType: 'course',
+      resourceId: courseId,
+      status: 'success',
+      metadata: { rule, target: cleanTarget },
+    })
+
+    return {
+      success: true,
+      rule: newRule,
+    }
+  }
+
+  async deletePrerequisite(ruleId: string, user: AuthUser) {
+    const { data: rule, error: fetchErr } = await this.supabase.admin
+      .from('course_prerequisite_rules')
+      .select('id, course_id, rule, target, courses(department_id, course_code)')
+      .eq('id', ruleId)
+      .single()
+
+    if (fetchErr || !rule) {
+      throw new NotFoundException('Prerequisite rule not found')
+    }
+
+    const courseDeptId = (rule.courses as any)?.department_id
+    if (user.role === 'hod' && user.department_id && courseDeptId !== user.department_id) {
+      throw new ForbiddenException('You can only delete prerequisite rules for courses in your department')
+    }
+
+    const { error: delErr } = await this.supabase.admin
+      .from('course_prerequisite_rules')
+      .delete()
+      .eq('id', ruleId)
+
+    if (delErr) {
+      this.logger.error(`Failed to delete prerequisite rule: ${delErr.message}`)
+      throw new InternalServerErrorException('Failed to delete prerequisite rule')
+    }
+
+    await this.auditLogger.log({
+      eventType: AuditEvents.COURSE_UPDATED,
+      userId: user.userId,
+      userRole: user.role,
+      action: `deleted prerequisite rule ${rule.rule} (${rule.target}) from course ${(rule.courses as any)?.course_code}`,
+      resourceType: 'course',
+      resourceId: rule.course_id,
+      status: 'success',
+      metadata: { rule: rule.rule, target: rule.target },
+    })
+
+    return {
+      success: true,
+      message: 'Prerequisite rule deleted successfully',
+    }
+  }
 
   // ──────────────── Campus Director: Trigger 3-Round Allocation ────────────────
   async runAllocation(
@@ -79,14 +240,16 @@ export class AllocationService {
 
     if (runErr || !run) {
       this.logger.error(`Failed to initialize allocation run: ${runErr?.message}`, runErr?.details)
-      throw new InternalServerErrorException(`Failed to initialize allocation run: ${runErr?.message || 'Unknown database error'}`)
+      throw new InternalServerErrorException(
+        `Failed to initialize allocation run: ${runErr?.message || 'Unknown database error'}`,
+      )
     }
 
     try {
       // Step C: Fetch all courses offered in this semester
       const { data: coursesData, error: courseErr } = await this.supabase.admin
         .from('courses')
-        .select('id, course_code, title, semester, department_id, seat_limit, prerequisite_course_ids, allowed_department_ids')
+        .select('id, course_code, title, semester, department_id, seat_limit, allowed_department_ids')
         .eq('semester', body.semester)
 
       if (courseErr) throw courseErr
@@ -98,46 +261,91 @@ export class AllocationService {
         semester: c.semester,
         department_id: c.department_id,
         seat_limit: c.seat_limit ? Number(c.seat_limit) : 60,
-        prerequisite_course_ids: Array.isArray(c.prerequisite_course_ids) ? c.prerequisite_course_ids : [],
         allowed_department_ids: Array.isArray(c.allowed_department_ids) ? c.allowed_department_ids : [],
       }))
 
       const courseMap = new Map<string, CourseItem>(courses.map((c) => [c.id, c]))
+      const courseIds = courses.map((c) => c.id)
 
-      // Step D: Fetch all student registrations for this campus, academic year, and semester
-      const { data: registrations, error: regErr } = await this.supabase.admin
-        .from('student_registrations')
+      // Step D: Fetch all prerequisite rules for these courses
+      const courseRulesMap = new Map<string, PrerequisiteRule[]>()
+      if (courseIds.length > 0) {
+        const { data: rulesData, error: rulesErr } = await this.supabase.admin
+          .from('course_prerequisite_rules')
+          .select('id, course_id, rule, target')
+          .in('course_id', courseIds)
+
+        if (!rulesErr && rulesData) {
+          for (const r of rulesData) {
+            if (!courseRulesMap.has(r.course_id)) {
+              courseRulesMap.set(r.course_id, [])
+            }
+            courseRulesMap.get(r.course_id)!.push(r as PrerequisiteRule)
+          }
+        }
+      }
+
+      // Step E: Fetch all student preference submissions from registration_preferences
+      // Only students who have a row in registration_preferences are processed!
+      const { data: preferencesList, error: prefErr } = await this.supabase.admin
+        .from('registration_preferences')
         .select(`
           id,
           student_id,
+          campus_id,
           semester,
           academic_year,
+          pathway_id,
           preferences,
           allocation_metadata,
           submitted_at,
-          slot_1_course_id,
-          slot_2_course_id,
-          slot_3_course_id,
-          slot_4_course_id,
-          slot_5_course_id,
-          slot_6_course_id,
           students!inner (
             id,
             department_id,
-            current_semester
+            current_semester,
+            departments (
+              id,
+              code
+            )
           )
         `)
         .eq('campus_id', campusId)
         .eq('academic_year', body.academicYear)
         .eq('semester', body.semester)
 
-      if (regErr) throw regErr
+      if (prefErr) throw prefErr
 
-      const studentList = registrations ?? []
-      const studentIds = studentList.map((r) => r.student_id)
+      const studentPrefList = preferencesList ?? []
+      const studentIds = studentPrefList.map((p) => p.student_id)
 
-      // Step E: Fetch prior completed registrations for scoring prerequisites
-      const studentCompletedCoursesMap = new Map<string, Set<string>>()
+      // Helper to normalize preferences into slot array
+      const extractSlots = (rawPrefs: any): UnifiedSlotPreference[] => {
+        if (Array.isArray(rawPrefs)) {
+          return rawPrefs.map((item: any, idx: number) => ({
+            slot: item.slot ?? idx + 1,
+            rule: item.rule,
+            name: item.name,
+            is_fixed: item.is_fixed ?? (item.rule === 'FIXED' || item.rule === 'CAMPUS_FIXED' || item.rule === 'AEC_ELECT'),
+            choices: Array.isArray(item.choices) ? item.choices : [],
+          }))
+        } else if (rawPrefs && typeof rawPrefs === 'object') {
+          // Object format { slot_1: [...] }
+          return Object.entries(rawPrefs).map(([k, v]: [string, any]) => {
+            const slotNum = parseInt(k.replace('slot_', ''), 10) || 1
+            const choices = Array.isArray(v) ? v : []
+            return {
+              slot: slotNum,
+              is_fixed: false,
+              choices,
+            }
+          })
+        }
+        return []
+      }
+
+      // Step F: Fetch prior completed registrations for scoring COMPLETED_COURSE
+      // We check courses the student was enrolled in prior semesters (semester < body.semester)
+      const studentCompletedCourseCodesMap = new Map<string, Set<string>>()
       if (studentIds.length > 0) {
         const { data: priorRegs } = await this.supabase.admin
           .from('student_registrations')
@@ -145,88 +353,244 @@ export class AllocationService {
           .in('student_id', studentIds)
           .lt('semester', body.semester)
 
+        const priorCourseIds = new Set<string>()
         for (const pr of priorRegs ?? []) {
-          if (!studentCompletedCoursesMap.has(pr.student_id)) {
-            studentCompletedCoursesMap.set(pr.student_id, new Set())
-          }
-          const set = studentCompletedCoursesMap.get(pr.student_id)!
           for (let s = 1; s <= 6; s++) {
             const cid = (pr as any)[`slot_${s}_course_id`]
-            if (cid) set.add(cid)
+            if (cid) priorCourseIds.add(cid)
           }
         }
-      }
 
-      // Step F: Compute Fixed Seat Counts and Initial Elective Capacity N
-      // N = seat_limit - count of students already confirmed for this course via fixed slot
-      const remainingElectiveSeats = new Map<string, number>()
-      for (const course of courses) {
-        let fixedCount = 0
-        for (const reg of studentList) {
-          const meta = (reg.allocation_metadata as Record<string, any>) || {}
+        const courseCodeLookup = new Map<string, string>()
+        if (priorCourseIds.size > 0) {
+          const { data: codeData } = await this.supabase.admin
+            .from('courses')
+            .select('id, course_code')
+            .in('id', Array.from(priorCourseIds))
+
+          for (const cd of codeData ?? []) {
+            courseCodeLookup.set(cd.id, cd.course_code.toUpperCase())
+          }
+        }
+
+        for (const pr of priorRegs ?? []) {
+          if (!studentCompletedCourseCodesMap.has(pr.student_id)) {
+            studentCompletedCourseCodesMap.set(pr.student_id, new Set())
+          }
+          const set = studentCompletedCourseCodesMap.get(pr.student_id)!
           for (let s = 1; s <= 6; s++) {
-            const slotKey = `slot_${s}`
-            const cid = (reg as any)[`${slotKey}_course_id`]
-            if (cid === course.id && meta[slotKey]?.allocated_by === 'fixed') {
-              fixedCount++
+            const cid = (pr as any)[`slot_${s}_course_id`]
+            if (cid && courseCodeLookup.has(cid)) {
+              set.add(courseCodeLookup.get(cid)!)
             }
           }
         }
-        const capacityN = Math.max(0, course.seat_limit - fixedCount)
-        remainingElectiveSeats.set(course.id, capacityN)
       }
 
-      // Track slot resolution status per registration
-      // slotKey -> { resolved: boolean, course_id: string | null }
-      const regSlotState = new Map<string, Map<string, { resolved: boolean; course_id: string | null }>>()
-      for (const reg of studentList) {
-        const meta = (reg.allocation_metadata as Record<string, any>) || {}
+      // Track slot resolution status per registration/student:
+      // student_id -> slotKey -> { resolved: boolean, course_id: string | null }
+      const studentSlotState = new Map<string, Map<string, { resolved: boolean; course_id: string | null }>>()
+      for (const pref of studentPrefList) {
         const slotMap = new Map<string, { resolved: boolean; course_id: string | null }>()
         for (let s = 1; s <= 6; s++) {
-          const slotKey = `slot_${s}`
-          const isFixed = meta[slotKey]?.allocated_by === 'fixed'
-          if (isFixed) {
-            slotMap.set(slotKey, { resolved: true, course_id: (reg as any)[`${slotKey}_course_id`] })
-          } else {
-            slotMap.set(slotKey, { resolved: false, course_id: null })
-          }
+          slotMap.set(`slot_${s}`, { resolved: false, course_id: null })
         }
-        regSlotState.set(reg.id, slotMap)
+        studentSlotState.set(pref.student_id, slotMap)
       }
 
-      // Scoring helper: Score = prerequisite_points + proximity_points
+      // Track available seats per course
+      const remainingElectiveSeats = new Map<string, number>()
+      for (const course of courses) {
+        remainingElectiveSeats.set(course.id, course.seat_limit)
+      }
+
+      // Step 1: Fixed Slot Write-Through
+      // Read all fixed slots from registration_preferences and write them directly to student_registrations
+      // Sets allocation_metadata on the slot to { allocated_by: 'fixed' }
+      // Deducts these seats from the course's available capacity before elective allocation begins
+      for (const pref of studentPrefList) {
+        const slots = extractSlots(pref.preferences)
+        const slotMap = studentSlotState.get(pref.student_id)!
+        const fixedPayload: Record<string, any> = {
+          student_id: pref.student_id,
+          campus_id: campusId,
+          semester: body.semester,
+          academic_year: body.academicYear,
+          pathway_id: pref.pathway_id,
+        }
+        const updatedMeta: Record<string, any> = {
+          ...(typeof pref.allocation_metadata === 'object' && pref.allocation_metadata ? pref.allocation_metadata : {}),
+        }
+
+        let hasFixedUpdates = false
+
+        for (const slotItem of slots) {
+          const slotKey = `slot_${slotItem.slot}`
+          if (slotItem.is_fixed && slotItem.choices.length > 0) {
+            const fixedCourseId = slotItem.choices[0].course_id
+            fixedPayload[`${slotKey}_course_id`] = fixedCourseId
+            updatedMeta[slotKey] = { allocated_by: 'fixed' }
+            slotMap.set(slotKey, { resolved: true, course_id: fixedCourseId })
+
+            // Deduct seat
+            const curRem = remainingElectiveSeats.get(fixedCourseId) ?? 0
+            remainingElectiveSeats.set(fixedCourseId, Math.max(0, curRem - 1))
+            hasFixedUpdates = true
+          }
+        }
+
+        if (hasFixedUpdates) {
+          fixedPayload.allocation_metadata = updatedMeta
+
+          // Upsert into student_registrations
+          await this.supabase.admin
+            .from('student_registrations')
+            .upsert(fixedPayload, { onConflict: 'student_id,semester,academic_year' })
+
+          // Update registration_preferences allocation_metadata
+          await this.supabase.admin
+            .from('registration_preferences')
+            .update({ allocation_metadata: updatedMeta })
+            .eq('id', pref.id)
+        }
+      }
+
+      // Scoring Function:
+      // Uses course_prerequisite_rules (+1 per matched rule) + semester proximity points
       const calculateStudentScore = (
         studentId: string,
         studentSemester: number,
+        studentDeptCode: string,
         course: CourseItem,
       ): number => {
+        const rules = courseRulesMap.get(course.id) || []
         let prereqPoints = 0
-        const priorSet = studentCompletedCoursesMap.get(studentId)
-        if (priorSet && course.prerequisite_course_ids.length > 0) {
-          for (const pid of course.prerequisite_course_ids) {
-            if (priorSet.has(pid)) prereqPoints += 1
+        const priorCodes = studentCompletedCourseCodesMap.get(studentId)
+
+        for (const r of rules) {
+          if (r.rule === 'COMPLETED_COURSE') {
+            if (priorCodes && priorCodes.has(r.target.trim().toUpperCase())) {
+              prereqPoints += 1
+            }
+          } else if (r.rule === 'COMPLETED_SEMESTER') {
+            const targetSem = parseInt(r.target.trim(), 10)
+            if (!isNaN(targetSem) && studentSemester > targetSem) {
+              prereqPoints += 1
+            }
+          } else if (r.rule === 'DEPARTMENT') {
+            if (studentDeptCode && studentDeptCode.toUpperCase() === r.target.trim().toUpperCase()) {
+              prereqPoints += 1
+            }
           }
         }
+
+        // Proximity points
         const proximityPoints = Math.max(0, studentSemester - course.semester)
         return prereqPoints + proximityPoints
       }
 
       const finalAllocations: {
-        registration_id: string
+        student_id: string
+        preference_id: string
         slot_key: string
         course_id: string
         metadata: any
       }[] = []
 
-      // Helper to run a specific allocation round (1, 2, or 3)
+      // ──────────────── Pre-Round Optimization: Direct Confirmation ────────────────
+      // If the total number of students who registered for a course is <= available seats,
+      // skip scoring entirely and confirm all of them directly.
+      const directlyConfirmedCourseIds = new Set<string>()
+
+      for (const course of courses) {
+        const availableSeats = remainingElectiveSeats.get(course.id) ?? 0
+        if (availableSeats <= 0) continue
+
+        // Collect all demands from students who listed this course in any unresolved elective slot
+        const demandingStudents: {
+          prefId: string
+          studentId: string
+          studentDeptId: string
+          slotKey: string
+          rank: number
+        }[] = []
+
+        for (const pref of studentPrefList) {
+          const slotMap = studentSlotState.get(pref.student_id)!
+          const slots = extractSlots(pref.preferences)
+          const studentDeptId = (pref.students as any)?.department_id ?? ''
+
+          // Check if course allows student's department
+          if (
+            course.allowed_department_ids.length > 0 &&
+            !course.allowed_department_ids.includes(studentDeptId)
+          ) {
+            continue
+          }
+
+          for (const slotItem of slots) {
+            const slotKey = `slot_${slotItem.slot}`
+            const currentSlot = slotMap.get(slotKey)
+            if (!currentSlot || currentSlot.resolved || slotItem.is_fixed) continue
+
+            const prefChoice = slotItem.choices.find((c) => c.course_id === course.id)
+            if (prefChoice) {
+              demandingStudents.push({
+                prefId: pref.id,
+                studentId: pref.student_id,
+                studentDeptId,
+                slotKey,
+                rank: prefChoice.rank,
+              })
+            }
+          }
+        }
+
+        const uniqueStudentIds = new Set(demandingStudents.map((d) => d.studentId))
+        const registeredCount = uniqueStudentIds.size
+
+        if (registeredCount > 0 && registeredCount <= availableSeats) {
+          // Confirm all registered students immediately
+          for (const demand of demandingStudents) {
+            const slotMap = studentSlotState.get(demand.studentId)!
+            if (slotMap.get(demand.slotKey)?.resolved) continue
+
+            slotMap.set(demand.slotKey, { resolved: true, course_id: course.id })
+            remainingElectiveSeats.set(
+              course.id,
+              Math.max(0, (remainingElectiveSeats.get(course.id) ?? 0) - 1),
+            )
+
+            finalAllocations.push({
+              student_id: demand.studentId,
+              preference_id: demand.prefId,
+              slot_key: demand.slotKey,
+              course_id: course.id,
+              metadata: {
+                allocated_by: 'algorithm',
+                run_id: run.id,
+                direct_confirm: true,
+                allocated_at: new Date().toISOString(),
+              },
+            })
+          }
+
+          directlyConfirmedCourseIds.add(course.id)
+          this.logger.log(
+            `Course ${course.course_code} directly confirmed for ${registeredCount} student(s) (${availableSeats} seats available) — skipped scoring`,
+          )
+        }
+      }
+
+      // Step 2 & 3: Run 3 Allocation Rounds for Elective Slots
       const executeRound = (roundNumber: 1 | 2 | 3) => {
-        // Collect candidates for each course for this round
         const courseCandidates = new Map<
           string,
           {
-            regId: string
+            prefId: string
             studentId: string
             studentDeptId: string
+            studentDeptCode: string
             studentSemester: number
             submittedAt: string
             slotKey: string
@@ -234,25 +598,27 @@ export class AllocationService {
           }[]
         >()
 
-        for (const reg of studentList) {
-          const slotMap = regSlotState.get(reg.id)!
-          const preferences = (reg.preferences as Record<string, PreferenceChoice[]>) || {}
-          const studentDeptId = (reg.students as any)?.department_id ?? ''
-          const studentSemester = (reg.students as any)?.current_semester ?? body.semester
+        for (const pref of studentPrefList) {
+          const slotMap = studentSlotState.get(pref.student_id)!
+          const slots = extractSlots(pref.preferences)
+          const studentDeptId = (pref.students as any)?.department_id ?? ''
+          const studentDeptCode = (pref.students as any)?.departments?.code ?? ''
+          const studentSemester = (pref.students as any)?.current_semester ?? body.semester
 
-          for (let s = 1; s <= 6; s++) {
-            const slotKey = `slot_${s}`
+          for (const slotItem of slots) {
+            const slotKey = `slot_${slotItem.slot}`
             const currentSlot = slotMap.get(slotKey)
             if (!currentSlot || currentSlot.resolved) continue
+            if (slotItem.is_fixed) continue
 
-            const slotPrefs = preferences[slotKey] || []
-            const targetPref = slotPrefs.find((p) => p.rank === roundNumber)
+            const targetPref = slotItem.choices.find((c) => c.rank === roundNumber)
             if (!targetPref) continue
 
             const course = courseMap.get(targetPref.course_id)
             if (!course) continue
+            if (directlyConfirmedCourseIds.has(course.id)) continue
 
-            // Department filter: check allowed_department_ids (empty array = all allowed)
+            // Department filter: allowed_department_ids (empty array = all allowed)
             if (
               course.allowed_department_ids.length > 0 &&
               !course.allowed_department_ids.includes(studentDeptId)
@@ -260,17 +626,24 @@ export class AllocationService {
               continue
             }
 
-            const score = calculateStudentScore(reg.student_id, studentSemester, course)
+            const score = calculateStudentScore(
+              pref.student_id,
+              studentSemester,
+              studentDeptCode,
+              course,
+            )
+
             if (!courseCandidates.has(course.id)) {
               courseCandidates.set(course.id, [])
             }
 
             courseCandidates.get(course.id)!.push({
-              regId: reg.id,
-              studentId: reg.student_id,
+              prefId: pref.id,
+              studentId: pref.student_id,
               studentDeptId,
+              studentDeptCode,
               studentSemester,
-              submittedAt: reg.submitted_at,
+              submittedAt: pref.submitted_at,
               slotKey,
               score,
             })
@@ -291,19 +664,19 @@ export class AllocationService {
           const winnersCount = Math.min(remSeats, candidates.length)
           for (let i = 0; i < winnersCount; i++) {
             const winner = candidates[i]
-            const slotMap = regSlotState.get(winner.regId)!
-            // Check if slot was already resolved in this pass
+            const slotMap = studentSlotState.get(winner.studentId)!
             if (slotMap.get(winner.slotKey)?.resolved) continue
 
             slotMap.set(winner.slotKey, { resolved: true, course_id: courseId })
             remainingElectiveSeats.set(courseId, remainingElectiveSeats.get(courseId)! - 1)
 
             finalAllocations.push({
-              registration_id: winner.regId,
+              student_id: winner.studentId,
+              preference_id: winner.prefId,
               slot_key: winner.slotKey,
               course_id: courseId,
               metadata: {
-                allocated_by: 'algorithm',
+                allocated_by: `rank_${roundNumber}`,
                 run_id: run.id,
                 round: roundNumber,
                 score: winner.score,
@@ -314,13 +687,42 @@ export class AllocationService {
         }
       }
 
-      // Step G: Run 3 Allocation Rounds
+      // Execute rounds 1, 2, 3
       executeRound(1)
       executeRound(2)
       executeRound(3)
 
-      // Step H: Commit allocations atomically
-      // First attempt using the transactional Postgres RPC function
+      // Collect unallocated slots
+      const unallocatedSlots: {
+        student_id: string
+        preference_id: string
+        slot_key: string
+        metadata: any
+      }[] = []
+
+      for (const pref of studentPrefList) {
+        const slotMap = studentSlotState.get(pref.student_id)!
+        const slots = extractSlots(pref.preferences)
+
+        for (const slotItem of slots) {
+          const slotKey = `slot_${slotItem.slot}`
+          const cur = slotMap.get(slotKey)
+          if (!cur?.resolved && !slotItem.is_fixed) {
+            unallocatedSlots.push({
+              student_id: pref.student_id,
+              preference_id: pref.id,
+              slot_key: slotKey,
+              metadata: {
+                allocated_by: 'unallocated',
+                run_id: run.id,
+                attempted_at: new Date().toISOString(),
+              },
+            })
+          }
+        }
+      }
+
+      // Step H: Commit allocations atomically via RPC
       const { data: rpcRes, error: rpcErr } = await this.supabase.admin.rpc(
         'apply_course_allocation',
         {
@@ -329,44 +731,25 @@ export class AllocationService {
           p_academic_year: body.academicYear,
           p_semester: body.semester,
           p_allocations: finalAllocations,
+          p_unallocated: unallocatedSlots,
         },
       )
 
       if (rpcErr) {
         this.logger.warn(
-          `RPC apply_course_allocation unavailable (${rpcErr.message}); executing direct fallback batch transaction`,
+          `RPC apply_course_allocation failed (${rpcErr.message}); executing direct fallback`,
         )
 
-        // Fallback: reset elective slots and batch update
-        for (const reg of studentList) {
-          const meta = (reg.allocation_metadata as Record<string, any>) || {}
-          const resetPayload: Record<string, any> = {}
-          const newMeta: Record<string, any> = {}
-
-          for (let s = 1; s <= 6; s++) {
-            const slotKey = `slot_${s}`
-            if (meta[slotKey]?.allocated_by === 'fixed') {
-              resetPayload[`${slotKey}_course_id`] = (reg as any)[`${slotKey}_course_id`]
-              newMeta[slotKey] = meta[slotKey]
-            } else {
-              resetPayload[`${slotKey}_course_id`] = null
-            }
-          }
-          resetPayload.allocation_metadata = newMeta
-
-          await this.supabase.admin
-            .from('student_registrations')
-            .update(resetPayload)
-            .eq('id', reg.id)
-        }
-
-        // Apply newly allocated elective slots
+        // Direct Fallback:
+        // Update student_registrations with winning allocations
         for (const alloc of finalAllocations) {
           const { data: currentReg } = await this.supabase.admin
             .from('student_registrations')
             .select('allocation_metadata')
-            .eq('id', alloc.registration_id)
-            .single()
+            .eq('student_id', alloc.student_id)
+            .eq('semester', body.semester)
+            .eq('academic_year', body.academicYear)
+            .maybeSingle()
 
           const mergedMeta = {
             ...(currentReg?.allocation_metadata || {}),
@@ -379,7 +762,45 @@ export class AllocationService {
               [`${alloc.slot_key}_course_id`]: alloc.course_id,
               allocation_metadata: mergedMeta,
             })
-            .eq('id', alloc.registration_id)
+            .eq('student_id', alloc.student_id)
+            .eq('semester', body.semester)
+            .eq('academic_year', body.academicYear)
+
+          // Also update registration_preferences allocation_metadata
+          const { data: currentPref } = await this.supabase.admin
+            .from('registration_preferences')
+            .select('allocation_metadata')
+            .eq('id', alloc.preference_id)
+            .single()
+
+          const mergedPrefMeta = {
+            ...(currentPref?.allocation_metadata || {}),
+            [alloc.slot_key]: alloc.metadata,
+          }
+
+          await this.supabase.admin
+            .from('registration_preferences')
+            .update({ allocation_metadata: mergedPrefMeta, updated_at: new Date().toISOString() })
+            .eq('id', alloc.preference_id)
+        }
+
+        // Record unallocated status in registration_preferences
+        for (const unalloc of unallocatedSlots) {
+          const { data: currentPref } = await this.supabase.admin
+            .from('registration_preferences')
+            .select('allocation_metadata')
+            .eq('id', unalloc.preference_id)
+            .single()
+
+          const mergedPrefMeta = {
+            ...(currentPref?.allocation_metadata || {}),
+            [unalloc.slot_key]: unalloc.metadata,
+          }
+
+          await this.supabase.admin
+            .from('registration_preferences')
+            .update({ allocation_metadata: mergedPrefMeta, updated_at: new Date().toISOString() })
+            .eq('id', unalloc.preference_id)
         }
 
         await this.supabase.admin
@@ -401,7 +822,8 @@ export class AllocationService {
         status: 'success',
         metadata: {
           allocated_count: finalAllocations.length,
-          total_students: studentList.length,
+          unallocated_count: unallocatedSlots.length,
+          total_students: studentPrefList.length,
         },
       })
 
@@ -409,10 +831,10 @@ export class AllocationService {
         success: true,
         run_id: run.id,
         allocated_count: finalAllocations.length,
-        total_students: studentList.length,
+        unallocated_count: unallocatedSlots.length,
+        total_students: studentPrefList.length,
       }
     } catch (err: any) {
-      // Step I: On any failure, mark run as failed with error_message
       await this.supabase.admin
         .from('allocation_runs')
         .update({
@@ -421,6 +843,7 @@ export class AllocationService {
         })
         .eq('id', run.id)
 
+      this.logger.error(`Allocation run failed: ${err?.message}`, err?.stack)
       throw new InternalServerErrorException(
         err?.message ?? 'Failed to execute course allocation algorithm',
       )
@@ -478,22 +901,43 @@ export class AllocationService {
       return { success: true, unresolvedStudents: [] }
     }
 
-    // Fetch registrations
-    const { data: registrations, error: regErr } = await this.supabase.admin
-      .from('student_registrations')
-      .select('id, student_id, preferences, allocation_metadata, slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
+    // Fetch preferences from registration_preferences
+    const { data: prefList, error: prefErr } = await this.supabase.admin
+      .from('registration_preferences')
+      .select('id, student_id, preferences, allocation_metadata')
       .in('student_id', studentIds)
       .eq('semester', sem)
 
-    if (regErr) throw new InternalServerErrorException('Failed to fetch registrations')
+    if (prefErr) throw new InternalServerErrorException('Failed to fetch registration preferences')
 
-    // Fetch course titles for preference references
+    // Fetch confirmed registrations from student_registrations
+    const { data: regList } = await this.supabase.admin
+      .from('student_registrations')
+      .select('id, student_id, slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id, allocation_metadata')
+      .in('student_id', studentIds)
+      .eq('semester', sem)
+
+    const regMap = new Map((regList ?? []).map((r) => [r.student_id, r]))
+
+    // Gather course IDs to fetch titles
     const courseIdsToFetch = new Set<string>()
-    for (const reg of registrations ?? []) {
-      const prefs = (reg.preferences as Record<string, PreferenceChoice[]>) || {}
-      Object.values(prefs).forEach((pList) => {
-        pList.forEach((p) => courseIdsToFetch.add(p.course_id))
-      })
+    for (const pRow of prefList ?? []) {
+      const raw = pRow.preferences
+      if (Array.isArray(raw)) {
+        for (const sItem of raw) {
+          for (const c of sItem.choices || []) {
+            if (c.course_id) courseIdsToFetch.add(c.course_id)
+          }
+        }
+      } else if (raw && typeof raw === 'object') {
+        for (const cList of Object.values(raw) as any[]) {
+          if (Array.isArray(cList)) {
+            for (const c of cList) {
+              if (c.course_id) courseIdsToFetch.add(c.course_id)
+            }
+          }
+        }
+      }
     }
 
     let courseNameMap = new Map<string, { code: string; title: string }>()
@@ -511,31 +955,54 @@ export class AllocationService {
     const studentMap = new Map(students!.map((s) => [s.id, s]))
     const unresolvedList: any[] = []
 
-    for (const reg of registrations ?? []) {
-      const student = studentMap.get(reg.student_id)
+    for (const pRow of prefList ?? []) {
+      const student = studentMap.get(pRow.student_id)
       if (!student) continue
 
-      const meta = (reg.allocation_metadata as Record<string, any>) || {}
-      const preferences = (reg.preferences as Record<string, PreferenceChoice[]>) || {}
+      const confirmedReg = regMap.get(pRow.student_id)
+      const meta = (pRow.allocation_metadata as Record<string, any>) || {}
       const unresolvedSlots: any[] = []
 
-      for (let s = 1; s <= 6; s++) {
-        const slotKey = `slot_${s}`
-        const courseId = (reg as any)[`${slotKey}_course_id`]
-        const isFixed = meta[slotKey]?.allocated_by === 'fixed'
+      // Extract slot preferences
+      const rawPrefs = pRow.preferences
+      const slotItems: { slot: number; is_fixed: boolean; choices: PreferenceChoice[] }[] = []
+      if (Array.isArray(rawPrefs)) {
+        for (const item of rawPrefs) {
+          slotItems.push({
+            slot: item.slot,
+            is_fixed: item.is_fixed ?? (item.rule === 'FIXED' || item.rule === 'CAMPUS_FIXED' || item.rule === 'AEC_ELECT'),
+            choices: item.choices || [],
+          })
+        }
+      } else if (rawPrefs && typeof rawPrefs === 'object') {
+        for (const [k, v] of Object.entries(rawPrefs)) {
+          const slotNum = parseInt(k.replace('slot_', ''), 10) || 1
+          slotItems.push({
+            slot: slotNum,
+            is_fixed: false,
+            choices: Array.isArray(v) ? v : [],
+          })
+        }
+      }
 
-        // Unresolved if not fixed, has preferences (or was expected), and courseId is null
-        if (!isFixed && preferences[slotKey] && !courseId) {
-          const submittedPrefs = (preferences[slotKey] || []).map((p) => ({
-            rank: p.rank,
-            course_id: p.course_id,
-            course_code: courseNameMap.get(p.course_id)?.code ?? 'Unknown',
-            course_title: courseNameMap.get(p.course_id)?.title ?? 'Course',
+      for (const slotItem of slotItems) {
+        const slotKey = `slot_${slotItem.slot}`
+        const confirmedCourseId = confirmedReg ? (confirmedReg as any)[`${slotKey}_course_id`] : null
+        const slotMeta = meta[slotKey]
+
+        // Unresolved if not fixed and not confirmed
+        const isFixed = slotItem.is_fixed || slotMeta?.allocated_by === 'fixed'
+        if (!isFixed && !confirmedCourseId && slotItem.choices.length > 0) {
+          const submittedPrefs = slotItem.choices.map((c) => ({
+            rank: c.rank,
+            course_id: c.course_id,
+            course_code: courseNameMap.get(c.course_id)?.code ?? 'Unknown',
+            course_title: courseNameMap.get(c.course_id)?.title ?? 'Course',
           }))
 
           unresolvedSlots.push({
             slot_key: slotKey,
-            slot_number: s,
+            slot_number: slotItem.slot,
             submitted_preferences: submittedPrefs,
           })
         }
@@ -543,7 +1010,8 @@ export class AllocationService {
 
       if (unresolvedSlots.length > 0) {
         unresolvedList.push({
-          registration_id: reg.id,
+          preference_id: pRow.id,
+          registration_id: confirmedReg?.id ?? null,
           student_id: student.id,
           full_name: student.full_name,
           cap_application_number: student.cap_application_number,
@@ -584,8 +1052,8 @@ export class AllocationService {
     for (const course of courseList) {
       const seatLimit = course.seat_limit ? Number(course.seat_limit) : 60
 
-      // Count all students who have this course allocated across slots 1 to 6
-      const { count, error: countErr } = await this.supabase.admin
+      // Count all students who have this course confirmed across slots 1 to 6 in student_registrations
+      const { count } = await this.supabase.admin
         .from('student_registrations')
         .select('*', { count: 'exact', head: true })
         .eq('semester', sem)
@@ -649,7 +1117,7 @@ export class AllocationService {
       throw new ForbiddenException('You may only allocate courses belonging to your department')
     }
 
-    // Validate course capacity
+    // Validate course capacity in student_registrations
     const seatLimit = course.seat_limit ? Number(course.seat_limit) : 60
     const { count: allocatedCount } = await this.supabase.admin
       .from('student_registrations')
@@ -660,47 +1128,90 @@ export class AllocationService {
       )
 
     if ((allocatedCount ?? 0) >= seatLimit) {
-      throw new BadRequestException(`Course ${course.course_code} has no remaining seats (${seatLimit}/${seatLimit})`)
+      throw new BadRequestException(
+        `Course ${course.course_code} has no remaining seats (${seatLimit}/${seatLimit})`,
+      )
     }
 
-    // Validate student registration exists and slot is currently unresolved
-    const { data: reg, error: regErr } = await this.supabase.admin
+    // Ensure student_registrations record exists
+    const { data: reg } = await this.supabase.admin
       .from('student_registrations')
-      .select('id, allocation_metadata, slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
+      .select('id, allocation_metadata, pathway_id, campus_id, academic_year')
       .eq('student_id', student_id)
       .eq('semester', course.semester)
-      .single()
+      .maybeSingle()
 
-    if (regErr || !reg) {
-      throw new NotFoundException('Student registration record not found for this semester')
-    }
-
-    const currentCourseInSlot = (reg as any)[`${slot_key}_course_id`]
-    const meta = (reg.allocation_metadata as Record<string, any>) || {}
-    if (meta[slot_key]?.allocated_by === 'fixed') {
+    const regMeta = (reg?.allocation_metadata as Record<string, any>) || {}
+    if (regMeta[slot_key]?.allocated_by === 'fixed') {
       throw new BadRequestException('Cannot manually override a fixed slot assignment')
     }
 
-    // Update slot and metadata
-    const updatedMeta = {
-      ...meta,
-      [slot_key]: {
-        allocated_by: 'hod',
-        by_user: user.userId,
-        at: new Date().toISOString(),
-      },
+    const hodMeta = {
+      allocated_by: 'hod',
+      by_user: user.userId,
+      at: new Date().toISOString(),
     }
 
-    const { error: updateErr } = await this.supabase.admin
-      .from('student_registrations')
-      .update({
-        [`${slot_key}_course_id`]: course_id,
-        allocation_metadata: updatedMeta,
-      })
-      .eq('id', reg.id)
+    // If student_registrations row doesn't exist yet, get student's campus and academic_year
+    if (!reg) {
+      const { data: student } = await this.supabase.admin
+        .from('students')
+        .select('campus_id, campuses(academic_year)')
+        .eq('id', student_id)
+        .single()
 
-    if (updateErr) {
-      throw new InternalServerErrorException('Failed to apply manual allocation')
+      const { data: settings } = await this.supabase.admin
+        .from('campus_settings')
+        .select('academic_year')
+        .eq('campus_id', student?.campus_id)
+        .maybeSingle()
+
+      const academicYear = settings?.academic_year || '2026-2027'
+
+      await this.supabase.admin.from('student_registrations').insert({
+        student_id,
+        campus_id: student?.campus_id,
+        semester: course.semester,
+        academic_year: academicYear,
+        [`${slot_key}_course_id`]: course_id,
+        allocation_metadata: { [slot_key]: hodMeta },
+      })
+    } else {
+      const updatedMeta = {
+        ...regMeta,
+        [slot_key]: hodMeta,
+      }
+
+      await this.supabase.admin
+        .from('student_registrations')
+        .update({
+          [`${slot_key}_course_id`]: course_id,
+          allocation_metadata: updatedMeta,
+        })
+        .eq('id', reg.id)
+    }
+
+    // Also update registration_preferences allocation_metadata
+    const { data: prefRow } = await this.supabase.admin
+      .from('registration_preferences')
+      .select('id, allocation_metadata')
+      .eq('student_id', student_id)
+      .eq('semester', course.semester)
+      .maybeSingle()
+
+    if (prefRow) {
+      const updatedPrefMeta = {
+        ...(typeof prefRow.allocation_metadata === 'object' && prefRow.allocation_metadata ? prefRow.allocation_metadata : {}),
+        [slot_key]: hodMeta,
+      }
+
+      await this.supabase.admin
+        .from('registration_preferences')
+        .update({
+          allocation_metadata: updatedPrefMeta,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', prefRow.id)
     }
 
     // Audit log
@@ -710,7 +1221,7 @@ export class AllocationService {
       userRole: user.role,
       action: `manually allocated ${course.course_code} to student ${student_id} for ${slot_key}`,
       resourceType: 'registration',
-      resourceId: reg.id,
+      resourceId: reg?.id || student_id,
       status: 'success',
       metadata: {
         student_id,
