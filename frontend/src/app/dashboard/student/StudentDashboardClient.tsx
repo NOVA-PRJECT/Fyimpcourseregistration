@@ -7,8 +7,10 @@ import { useRouter } from 'next/navigation'
 
 import styles from './student-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
+import CampusSignInCard from './CampusSignInCard'
 
 interface StudentInfo {
+  id?: string
   full_name: string
   current_semester: number
   academic_year_joined: string
@@ -160,6 +162,14 @@ export default function StudentDashboardClient({
         ) : (
           <p className={styles.profileError}>Unable to load profile. Please refresh.</p>
         )}
+      </div>
+      
+      {/* Campus GPS Physical Presence Sign-In */}
+      <div style={{ maxWidth: '1200px', width: '100%', margin: '1.25rem auto 0', padding: '0 1rem', boxSizing: 'border-box' }}>
+        <CampusSignInCard
+          studentId={studentInfo?.id}
+          campusName={studentInfo?.campus_name || 'Campus'}
+        />
       </div>
 
       {/* Enrolled Courses & Academic Schedule Section */}

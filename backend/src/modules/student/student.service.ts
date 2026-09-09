@@ -66,6 +66,7 @@ export class StudentService {
     const pref = prefRes.data
 
     const studentInfo = {
+      id: user.userId,
       full_name: student.full_name ?? '',
       current_semester: student.current_semester ?? 1,
       academic_year_joined: student.academic_year_joined ?? '—',

@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import Link from 'next/link'
 import {
   MapPin,
   Calendar,
@@ -476,7 +475,6 @@ export default function CampusAttendanceTab() {
                   <th style={{ padding: '10px 14px' }}>Sem</th>
                   <th style={{ padding: '10px 14px' }}>Morning Checkpoint</th>
                   <th style={{ padding: '10px 14px' }}>Evening Checkpoint</th>
-                  <th style={{ padding: '10px 14px', width: '90px' }}>Ledger</th>
                 </tr>
               </thead>
               <tbody>
@@ -501,26 +499,6 @@ export default function CampusAttendanceTab() {
                     <td style={{ padding: '10px 14px', color: '#64748b' }}>Sem {st.current_semester}</td>
                     <td style={{ padding: '10px 14px' }}>{renderStatusBadge(st.morning, true)}</td>
                     <td style={{ padding: '10px 14px' }}>{renderStatusBadge(st.evening, false)}</td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <Link
-                        href={`/dashboard/credit-ledger/${st.id}`}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '4px 8px',
-                          background: '#eff6ff',
-                          color: '#1d4ed8',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          textDecoration: 'none',
-                        }}
-                        title="View student credit accumulation ledger"
-                      >
-                        📊 Ledger
-                      </Link>
-                    </td>
                   </tr>
                 ))}
               </tbody>

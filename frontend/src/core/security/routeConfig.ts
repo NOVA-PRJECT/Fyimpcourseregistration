@@ -5,6 +5,7 @@ export const ROLE_DASHBOARD_MAP: Record<Role, string> = {
   campus_director: '/dashboard/director',
   hod: '/dashboard/hod',
   teaching_staff: '/dashboard/teacher',
+  teacher: '/dashboard/teacher',
   student: '/dashboard/student',
 }
 

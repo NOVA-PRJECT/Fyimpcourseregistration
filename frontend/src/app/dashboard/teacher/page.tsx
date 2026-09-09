@@ -144,6 +144,8 @@ export default function TeacherDashboard() {
   useBfcacheGuard()
   const router = useRouter()
   const [teacherName, setTeacherName] = useState('')
+  const [userRole, setUserRole] = useState('')
+  const [isIndividualTeacher, setIsIndividualTeacher] = useState(false)
   const [loadingTeacher, setLoadingTeacher] = useState(true)
   const [departments, setDepartments] = useState<Department[]>([])
   const [courses, setCourses] = useState<Course[]>([])
@@ -177,6 +179,8 @@ export default function TeacherDashboard() {
       }
 
       setTeacherName(data.teacherName)
+      setUserRole(data.role || '')
+      setIsIndividualTeacher(Boolean(data.isIndividualTeacher || data.role === 'teacher'))
       setDepartments(data.departments ?? [])
       setCourses(data.courses ?? [])
       setLoadingTeacher(false)
@@ -341,9 +345,16 @@ export default function TeacherDashboard() {
           <div style={{ height: '2.5rem' }} />
         ) : (
           <>
-            <p className={styles.teacherName}>{teacherName || 'Teaching Staff'}</p>
+            <p className={styles.teacherName}>{teacherName || 'Faculty Member'}</p>
             <div className={styles.teacherDetails}>
-              <span className={`${styles.detailBadge} ${styles.roleBadge}`}>Teaching Staff</span>
+              <span className={`${styles.detailBadge} ${styles.roleBadge}`}>
+                {isIndividualTeacher ? 'Course Teacher' : 'Teaching Staff'}
+              </span>
+              {isIndividualTeacher && (
+                <span style={{ fontSize: '0.78rem', color: '#64748b', marginLeft: '0.5rem', fontWeight: 500 }}>
+                  • {courses.length} Assigned {courses.length === 1 ? 'Course' : 'Courses'}
+                </span>
+              )}
             </div>
           </>
         )}
@@ -353,6 +364,29 @@ export default function TeacherDashboard() {
       <div className={styles.mainContent}>
 
         {error && <div className={styles.errorBanner}>{error}</div>}
+
+        {/* Empty state note for individual teachers without assigned courses */}
+        {isIndividualTeacher && courses.length === 0 && !loadingTeacher && (
+          <div
+            style={{
+              background: '#ffffff',
+              border: '1.5px dashed #cbd5e1',
+              borderRadius: '12px',
+              padding: '2.5rem 1.5rem',
+              textAlign: 'center',
+              color: '#475569',
+              marginBottom: '1rem',
+            }}
+          >
+            <div style={{ fontSize: '2.25rem', marginBottom: '0.5rem' }}>📚</div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#002147', margin: '0 0 0.5rem' }}>
+              No Courses Currently Assigned
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '480px', margin: '0 auto', lineHeight: 1.5 }}>
+              Your Head of Department (HOD) has not assigned you to any courses yet. Once assigned in the Course Assignment tab, your courses, enrolled students, and class rosters will appear here automatically.
+            </p>
+          </div>
+        )}
 
         {/* Paper Filter & Custom Select Card */}
         <div className={styles.filterCard}>

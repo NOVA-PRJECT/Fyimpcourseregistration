@@ -3,6 +3,7 @@ export const ROLES = {
   CAMPUS_DIRECTOR: 'campus_director',
   HOD: 'hod',
   TEACHING_STAFF: 'teaching_staff',
+  TEACHER: 'teacher',
   STUDENT: 'student',
 } as const
 

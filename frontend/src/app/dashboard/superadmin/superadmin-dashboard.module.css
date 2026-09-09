@@ -785,3 +785,50 @@
 .input select {
   cursor: pointer;
 }
+
+/* ── SYSTEM LOGS ── */
+.logBadge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: monospace;
+}
+.logBadgeAudit {
+  background: #f1f5f9;
+  color: #475569;
+}
+.logBadgeAlloc {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.logBadgeTimetable {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+.logBadgeSuccess {
+  background: #ecfdf5;
+  color: #047857;
+}
+.logBadgeFailed {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.logBadgeRunning {
+  background: #fffbeb;
+  color: #b45309;
+}
+.metaBox {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 0.75rem;
+  max-height: 280px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+

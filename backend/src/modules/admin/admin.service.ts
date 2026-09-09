@@ -433,4 +433,50 @@ export class AdminService {
       message: `${promotedCount} students promoted to next semester`,
     }
   }
+
+  // ──────────────── System Logs ────────────────
+  async getSystemLogs(query: {
+    page?: number
+    limit?: number
+    logType?: string
+    status?: string
+    search?: string
+  }) {
+    const page = Math.max(1, query.page || 1)
+    const limit = Math.min(100, Math.max(1, query.limit || 50))
+    const offset = (page - 1) * limit
+
+    let dbQuery = this.supabase.admin
+      .from('system_logs')
+      .select('*', { count: 'exact' })
+
+    if (query.logType && query.logType !== 'all') {
+      dbQuery = dbQuery.eq('log_type', query.logType)
+    }
+
+    if (query.status && query.status !== 'all') {
+      dbQuery = dbQuery.eq('status', query.status)
+    }
+
+    if (query.search && query.search.trim()) {
+      const term = query.search.trim()
+      dbQuery = dbQuery.or(`action.ilike.%${term}%,event_type.ilike.%${term}%,error_message.ilike.%${term}%`)
+    }
+
+    const { data, count, error } = await dbQuery
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    if (error) {
+      throw new InternalServerErrorException('Failed to fetch system logs: ' + error.message)
+    }
+
+    return {
+      logs: data ?? [],
+      total: count ?? 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count ?? 0) / limit),
+    }
+  }
 }

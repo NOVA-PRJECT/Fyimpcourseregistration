@@ -243,7 +243,7 @@ export class RegistrationsService {
         .maybeSingle(),
       this.supabase.admin
         .from('student_registrations')
-        .select('id, pathway_id, preferences, allocation_metadata, submitted_at, total_credits, slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
+        .select('id, pathway_id, selections, allocation_metadata, submitted_at, total_credits, slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
         .eq('student_id', user.userId)
         .eq('semester', semester)
         .eq('academic_year', settings.academic_year)
@@ -271,8 +271,8 @@ export class RegistrationsService {
       } else if (typeof raw === 'object') {
         preferences = raw as any
       }
-    } else if (existingReg?.preferences && Object.keys(existingReg.preferences).length > 0) {
-      preferences = existingReg.preferences as any
+    } else if (existingReg?.selections && Object.keys(existingReg.selections).length > 0) {
+      preferences = existingReg.selections as any
     }
 
     // If no explicit preferences stored yet, derive from confirmed slots

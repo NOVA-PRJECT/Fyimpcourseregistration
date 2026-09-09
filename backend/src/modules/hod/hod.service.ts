@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -558,5 +559,162 @@ export class HodService {
     })
 
     return rows
+  }
+
+  // ──────────────── Teachers Management ────────────────
+  async getDepartmentTeachers(user: AuthUser) {
+    const departmentId = user.department_id
+    if (!departmentId) {
+      throw new ForbiddenException('User is not affiliated with any academic department.')
+    }
+
+    const { data, error } = await this.supabase.admin
+      .from('faculty')
+      .select('id, full_name, email, role, created_at')
+      .eq('department_id', departmentId)
+      .in('role', ['teacher', 'teaching_staff'])
+      .order('full_name', { ascending: true })
+
+    if (error) {
+      throw new InternalServerErrorException(`Failed to fetch teachers: ${error.message}`)
+    }
+
+    return data || []
+  }
+
+  async createDepartmentTeacher(
+    body: { full_name: string; email: string; password: string },
+    user: AuthUser,
+  ) {
+    const departmentId = user.department_id
+    const campusId = user.campus_id
+    if (!departmentId || !campusId) {
+      throw new ForbiddenException('User is missing department or campus affiliation.')
+    }
+
+    const { full_name, email, password } = body
+
+    // 1. Create auth user with Supabase admin API
+    const { data: authData, error: authError } = await this.supabase.admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    })
+
+    if (authError || !authData?.user) {
+      const isDuplicate = authError?.message?.toLowerCase().includes('already') || authError?.status === 422
+      throw new BadRequestException(
+        isDuplicate ? 'A user with this email address has already been registered' : 'Failed to create auth account: ' + authError?.message,
+      )
+    }
+
+    const teacherId = authData.user.id
+
+    // 2. Insert into faculty table with role 'teacher'
+    const { error: facultyError } = await this.supabase.admin
+      .from('faculty')
+      .insert({
+        id: teacherId,
+        full_name,
+        email,
+        role: 'teacher',
+        department_id: departmentId,
+        campus_id: campusId,
+      })
+
+    if (facultyError) {
+      await this.supabase.admin.auth.admin.deleteUser(teacherId)
+      throw new BadRequestException('Failed to create faculty record: ' + facultyError.message)
+    }
+
+    // 3. Set app_metadata
+    await this.supabase.admin.auth.admin.updateUserById(teacherId, {
+      app_metadata: {
+        role: 'teacher',
+        department_id: departmentId,
+        campus_id: campusId,
+      },
+    })
+
+    await this.auditLogger.log({
+      eventType: 'teacher_created',
+      userId: user.userId,
+      userRole: user.role,
+      action: `Created department teacher: ${full_name} (${email})`,
+      resourceType: 'faculty',
+      resourceId: teacherId,
+      status: 'success',
+    })
+
+    return {
+      success: true,
+      message: `Teacher ${full_name} added successfully to your department.`,
+      teacher: {
+        id: teacherId,
+        full_name,
+        email,
+        role: 'teacher',
+      },
+    }
+  }
+
+  async deleteDepartmentTeacher(teacherId: string, user: AuthUser) {
+    const departmentId = user.department_id
+    if (!departmentId) {
+      throw new ForbiddenException('User is missing department affiliation.')
+    }
+
+    // Verify teacher belongs to this department and is NOT HOD
+    const { data: teacher, error: findError } = await this.supabase.admin
+      .from('faculty')
+      .select('id, full_name, role, department_id')
+      .eq('id', teacherId)
+      .single()
+
+    if (findError || !teacher) {
+      throw new NotFoundException('Teacher not found.')
+    }
+
+    if (teacher.department_id !== departmentId) {
+      throw new ForbiddenException('Cannot remove a teacher from another department.')
+    }
+
+    if (teacher.role === 'hod') {
+      throw new BadRequestException('Cannot remove department Head of Department.')
+    }
+
+    // Delete any course assignments first
+    await this.supabase.admin
+      .from('teacher_course_assignments')
+      .delete()
+      .eq('teacher_id', teacherId)
+
+    // Delete from faculty table
+    const { error: deleteFacultyError } = await this.supabase.admin
+      .from('faculty')
+      .delete()
+      .eq('id', teacherId)
+
+    if (deleteFacultyError) {
+      throw new InternalServerErrorException(`Failed to delete teacher record: ${deleteFacultyError.message}`)
+    }
+
+    // Delete auth account
+    await this.supabase.admin.auth.admin.deleteUser(teacherId)
+
+    await this.auditLogger.log({
+      eventType: 'teacher_deleted',
+      userId: user.userId,
+      userRole: user.role,
+      action: `Deleted department teacher: ${teacher.full_name} (${teacherId})`,
+      resourceType: 'faculty',
+      resourceId: teacherId,
+      status: 'success',
+    })
+
+    return {
+      success: true,
+      message: `Teacher ${teacher.full_name} removed successfully.`,
+    }
   }
 }

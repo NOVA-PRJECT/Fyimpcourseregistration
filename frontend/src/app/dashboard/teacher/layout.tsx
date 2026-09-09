@@ -8,7 +8,7 @@ import { Role } from '@/core/constants/roles'
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies()
   const role = cookieStore.get('user_role')?.value as Role | undefined
-  if (!role || role !== 'teaching_staff') {
+  if (!role || (role !== 'teaching_staff' && role !== 'teacher')) {
     if (!role) redirect('/login')
     redirect(ROLE_DASHBOARD_MAP[role] ?? '/login')
   }

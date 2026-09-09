@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import styles from '../student-dashboard.module.css'
 import ResourceBanner from '@/component/ResourceBanner'
@@ -425,13 +426,18 @@ export default function RegisterPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
+          <Link
+            href="/dashboard/student"
             className={styles.logoutBtn}
-            onClick={() => router.push('/dashboard/student')}
-            style={{ background: 'rgba(255,255,255,0.05)' }}
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+            }}
           >
             ← Back
-          </button>
+          </Link>
           <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
             {loggingOut ? 'Logging out...' : 'Logout'}
           </button>
@@ -443,9 +449,10 @@ export default function RegisterPage() {
 
         {/* Loading Blueprint */}
         {pageState === 'loading_blueprint' && (
-          <div className={styles.loadingState}>
-            <div className={styles.spinner} />
-            <p className={styles.loadingText}>Loading your courses...</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+            <div style={{ height: '3.5rem', borderRadius: '0.75rem' }} className={styles.skeletonLightPulse} />
+            <div style={{ height: '10rem', borderRadius: '0.75rem' }} className={styles.skeletonLightPulse} />
+            <div style={{ height: '10rem', borderRadius: '0.75rem' }} className={styles.skeletonLightPulse} />
           </div>
         )}
 

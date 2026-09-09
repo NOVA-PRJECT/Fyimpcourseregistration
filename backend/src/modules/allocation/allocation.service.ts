@@ -817,15 +817,19 @@ export class AllocationService {
             .update({ allocation_metadata: mergedPrefMeta, updated_at: new Date().toISOString() })
             .eq('id', unalloc.preference_id)
         }
-
-        await this.supabase.admin
-          .from('allocation_runs')
-          .update({
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-          })
-          .eq('id', run.id)
       }
+
+      // Mark allocation run as completed
+      await this.supabase.admin
+        .from('allocation_runs')
+        .update({
+          status: 'completed',
+          total_students: studentPrefList.length,
+          fully_allocated: studentPrefList.length - unallocatedSlots.length,
+          unallocated: unallocatedSlots.length,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', run.id)
 
       await this.auditLogger.log({
         eventType: AuditEvents.ALLOCATION_RUN_COMPLETED,

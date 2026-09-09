@@ -123,7 +123,17 @@ export default function LoginPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || 'Something went wrong. Please try again.')
+        let msg = 'Something went wrong. Please try again.'
+        if (response.status === 401) {
+          msg = 'Invalid email or password. Please try again.'
+        } else if (data?.message) {
+          msg = Array.isArray(data.message) ? data.message[0] : data.message
+        } else if (data?.error && typeof data.error === 'string' && data.error !== 'Bad Request' && data.error !== 'Unauthorized') {
+          msg = data.error
+        } else if (response.status === 400) {
+          msg = 'Invalid credentials or missing required fields. Please try again.'
+        }
+        setError(msg)
         setLoading(false)
         return
       }

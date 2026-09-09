@@ -13,7 +13,7 @@ import { AuthUser } from '../../core/auth/types'
 
 @Controller('api/faculty')
 @UseGuards(AuthGuard, RolesGuard)
-@Roles('teaching_staff', 'hod')
+@Roles('teacher', 'teaching_staff', 'hod')
 export class FacultyController {
   constructor(private readonly facultyService: FacultyService) {}
 

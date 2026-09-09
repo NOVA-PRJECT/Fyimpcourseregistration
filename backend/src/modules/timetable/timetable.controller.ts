@@ -38,7 +38,7 @@ export class TimetableController {
 
   // ──────────────── Entries ────────────────
   @Get('entries')
-  @Roles('superadmin', 'campus_director', 'hod', 'teaching_staff', 'student')
+  @Roles('superadmin', 'campus_director', 'hod', 'teaching_staff', 'teacher', 'student')
   async getEntries(
     @Query('academicYear') academicYear: string,
     @Query('semester') semester: string,

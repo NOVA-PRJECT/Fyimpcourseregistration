@@ -19,23 +19,66 @@ export class FacultyService {
   async getCourses(user: AuthUser) {
     const { data: faculty } = await this.supabase.admin
       .from('faculty')
-      .select('full_name')
+      .select('full_name, role, department_id')
       .eq('id', user.userId)
       .single()
 
-    const { data: depts } = await this.supabase.admin
-      .from('departments')
-      .select('id, name, code')
-      .eq('campus_id', user.campus_id)
-      .order('name')
+    let courseList: any[] = []
+    let deptIds: string[] = []
 
-    const deptIds = (depts ?? []).map((d) => d.id)
+    if (user.role === 'teacher') {
+      // Individual Teacher: return ONLY assigned courses
+      const { data: assignments, error: assignError } = await this.supabase.admin
+        .from('teacher_course_assignments')
+        .select('course_id')
+        .eq('teacher_id', user.userId)
 
-    const { data: courseList } = await this.supabase.admin
-      .from('courses')
-      .select('id, course_code, title, semester, department_id')
-      .in('department_id', deptIds)
-      .order('title')
+      if (assignError) {
+        throw new InternalServerErrorException('Failed to fetch teacher course assignments')
+      }
+
+      const assignedCourseIds = (assignments || []).map((a) => a.course_id)
+      if (assignedCourseIds.length > 0) {
+        const { data: courses, error: coursesError } = await this.supabase.admin
+          .from('courses')
+          .select('id, course_code, title, semester, department_id, credits, category')
+          .in('id', assignedCourseIds)
+          .order('title')
+
+        if (coursesError) {
+          throw new InternalServerErrorException('Failed to fetch assigned courses')
+        }
+        courseList = courses || []
+        deptIds = Array.from(new Set(courseList.map((c) => c.department_id).filter(Boolean)))
+      }
+    } else {
+      // General teaching staff / department view
+      const { data: depts } = await this.supabase.admin
+        .from('departments')
+        .select('id, name, code')
+        .eq('campus_id', user.campus_id)
+        .order('name')
+
+      deptIds = (depts ?? []).map((d) => d.id)
+
+      if (deptIds.length > 0) {
+        const { data: courses } = await this.supabase.admin
+          .from('courses')
+          .select('id, course_code, title, semester, department_id, credits, category')
+          .in('department_id', deptIds)
+          .order('title')
+
+        courseList = courses || []
+      }
+    }
+
+    const { data: depts } = deptIds.length > 0
+      ? await this.supabase.admin
+          .from('departments')
+          .select('id, name, code')
+          .in('id', deptIds)
+          .order('name')
+      : { data: [] }
 
     const { data: campusSettings } = await this.supabase.admin
       .from('campus_settings')
@@ -46,7 +89,7 @@ export class FacultyService {
     const academicYear = campusSettings?.academic_year ?? ''
     const enrolledCounts: Record<string, number> = {}
 
-    if (academicYear) {
+    if (academicYear && courseList.length > 0) {
       const { data: registrations } = await this.supabase.admin
         .from('student_registrations')
         .select(`
@@ -60,6 +103,7 @@ export class FacultyService {
         .eq('academic_year', academicYear)
 
       if (registrations) {
+        const courseIdSet = new Set(courseList.map((c) => c.id))
         for (const reg of registrations) {
           const slots = [
             reg.slot_1_course_id,
@@ -70,7 +114,7 @@ export class FacultyService {
             reg.slot_6_course_id,
           ]
           for (const cid of slots) {
-            if (cid) {
+            if (cid && courseIdSet.has(cid)) {
               enrolledCounts[cid] = (enrolledCounts[cid] || 0) + 1
             }
           }
@@ -85,14 +129,30 @@ export class FacultyService {
 
     return {
       teacherName: faculty?.full_name ?? '',
+      role: user.role,
       departments: depts ?? [],
       courses: coursesWithCounts,
+      isIndividualTeacher: user.role === 'teacher',
     }
   }
 
   async getClassRoster(courseId: string, user: AuthUser) {
     const campus_id = user.campus_id
     if (!campus_id) throw new BadRequestException('Campus ID missing')
+
+    // For individual teacher, enforce that course is assigned to them
+    if (user.role === 'teacher') {
+      const { data: assignment } = await this.supabase.admin
+        .from('teacher_course_assignments')
+        .select('id')
+        .eq('teacher_id', user.userId)
+        .eq('course_id', courseId)
+        .maybeSingle()
+
+      if (!assignment) {
+        throw new ForbiddenException('You are not assigned as a teacher for this course')
+      }
+    }
 
     const { data: campusSettings } = await this.supabase.admin
       .from('campus_settings')

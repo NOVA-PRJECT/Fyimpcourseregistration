@@ -5,6 +5,7 @@ import {
   Get,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common'
 import { AdminService } from './admin.service'
@@ -124,5 +125,24 @@ export class AdminController {
   @Roles('campus_director')
   async promoteStudents(@CurrentUser() user: AuthUser) {
     return this.adminService.promoteStudents(user)
+  }
+
+  // ──────────────── System & Audit Logs ────────────────
+  @Get('logs')
+  @Roles('superadmin')
+  async getLogs(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('log_type') logType?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.adminService.getSystemLogs({
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 50,
+      logType,
+      status,
+      search,
+    })
   }
 }

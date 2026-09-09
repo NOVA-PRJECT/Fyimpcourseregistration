@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Param,
   Post,
   Put,
   Query,
@@ -16,6 +17,12 @@ import { Roles } from '../../core/auth/decorators/roles.decorator'
 import { CurrentUser } from '../../core/auth/decorators/current-user.decorator'
 import { AuthUser } from '../../core/auth/types'
 import { z } from 'zod'
+
+const CreateTeacherSchema = z.object({
+  full_name: z.string().min(1, 'Full name is required').max(100),
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+})
 
 const CreateCourseSchema = z.object({
   course_code: z.string().min(1, 'Course code is required').max(30),
@@ -184,5 +191,25 @@ export class HodController {
   @Get('export-students-excel')
   async exportStudentsExcel(@Query('semester') semester: string | undefined, @CurrentUser() user: AuthUser) {
     return this.hodService.exportStudentsExcel(semester ? Number(semester) : undefined, user)
+  }
+
+  // ──────────────── Teachers ────────────────
+  @Get('teachers')
+  async getTeachers(@CurrentUser() user: AuthUser) {
+    return this.hodService.getDepartmentTeachers(user)
+  }
+
+  @Post('teachers')
+  async createTeacher(@Body() body: unknown, @CurrentUser() user: AuthUser) {
+    const parsed = CreateTeacherSchema.safeParse(body)
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0]?.message || 'Invalid payload')
+    }
+    return this.hodService.createDepartmentTeacher(parsed.data, user)
+  }
+
+  @Delete('teachers/:id')
+  async deleteTeacher(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.hodService.deleteDepartmentTeacher(id, user)
   }
 }

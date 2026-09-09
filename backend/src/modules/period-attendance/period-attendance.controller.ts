@@ -29,13 +29,13 @@ export class PeriodAttendanceController {
   ) {}
 
   @Get('current')
-  @Roles('teaching_staff', 'hod')
+  @Roles('teacher', 'teaching_staff', 'hod')
   async getCurrentPeriod(@CurrentUser() user: AuthUser) {
     return this.periodService.getCurrentPeriod(user);
   }
 
   @Post('submit')
-  @Roles('teaching_staff', 'hod')
+  @Roles('teacher', 'teaching_staff', 'hod')
   async submitAttendance(
     @CurrentUser() user: AuthUser,
     @Body() body: unknown,

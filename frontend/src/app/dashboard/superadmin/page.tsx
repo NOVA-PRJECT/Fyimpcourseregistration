@@ -7,7 +7,20 @@ import { Eye, EyeOff } from 'lucide-react'
 import styles from './superadmin-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
-type Tab = 'campuses' | 'departments' | 'faculty'
+type Tab = 'campuses' | 'departments' | 'faculty' | 'logs'
+
+interface SystemLog {
+  id: string
+  log_type: string
+  event_type: string
+  user_id?: string
+  campus_id?: string
+  status: string
+  action?: string
+  error_message?: string
+  metadata?: any
+  created_at: string
+}
 
 interface Campus {
   id: string
@@ -90,6 +103,23 @@ export default function SuperAdminDashboard() {
   const [updatingFaculty, setUpdatingFaculty] = useState(false)          // ← NEW
   const [loggingOut, setLoggingOut] = useState(false)
 
+  // ── Logs state ──
+  const [logs, setLogs] = useState<SystemLog[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
+  const [logTypeFilter, setLogTypeFilter] = useState('all')
+  const [logStatusFilter, setLogStatusFilter] = useState('all')
+  const [logSearch, setLogSearch] = useState('')
+  const [selectedLog, setSelectedLog] = useState<SystemLog | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const tabParam = params.get('tab')
+      if (tabParam === 'logs' || tabParam === 'campuses' || tabParam === 'departments' || tabParam === 'faculty') {
+        setActiveTab(tabParam as Tab)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     async function loadAdmin() {
@@ -106,9 +136,28 @@ export default function SuperAdminDashboard() {
     if (activeTab === 'campuses') fetchCampuses()
     else if (activeTab === 'departments') { fetchDepartments(); fetchCampuses() }
     else if (activeTab === 'faculty') { fetchFaculty(); fetchCampuses(); fetchDepartments() }
-  }, [activeTab])
+    else if (activeTab === 'logs') { fetchLogs() }
+  }, [activeTab, logTypeFilter, logStatusFilter])
 
   function clearMessages() { setError(''); setSuccess('') }
+
+  // ── Logs Functions ──
+  async function fetchLogs() {
+    setLoadingLogs(true)
+    const params = new URLSearchParams()
+    if (logTypeFilter !== 'all') params.append('log_type', logTypeFilter)
+    if (logStatusFilter !== 'all') params.append('status', logStatusFilter)
+    if (logSearch.trim()) params.append('search', logSearch.trim())
+    try {
+      const res = await fetch(`/api/admin/logs?${params.toString()}`)
+      const data = await res.json()
+      if (res.ok) setLogs(data.logs || [])
+    } catch {
+      setError('Failed to fetch system logs')
+    } finally {
+      setLoadingLogs(false)
+    }
+  }
 
   // ── Campus Functions ──
   async function fetchCampuses() {
@@ -363,13 +412,19 @@ export default function SuperAdminDashboard() {
 
       {/* Tab Bar */}
       <div className={styles.tabBar}>
-        {(['campuses', 'departments', 'faculty'] as Tab[]).map(tab => (
+        {(['campuses', 'departments', 'faculty', 'logs'] as Tab[]).map(tab => (
           <button
             key={tab}
             className={`${styles.tabBtn} ${activeTab === tab ? styles.tabActive : ''}`}
             onClick={() => { setActiveTab(tab); clearMessages() }}
           >
-            {tab === 'campuses' ? '🏛️ Campuses' : tab === 'departments' ? '🏫 Departments' : '👤 Faculty'}
+            {tab === 'campuses'
+              ? '🏛️ Campuses'
+              : tab === 'departments'
+              ? '🏫 Departments'
+              : tab === 'faculty'
+              ? '👤 Faculty'
+              : '📜 System & Audit Logs'}
           </button>
         ))}
       </div>
@@ -713,6 +768,161 @@ export default function SuperAdminDashboard() {
           </>
         )}
 
+        {/* ════════ LOGS TAB ════════ */}
+        {activeTab === 'logs' && (
+          <div>
+            <div className={styles.tabHeader}>
+              <div>
+                <h2 className={styles.tabTitle}>System &amp; Audit Logs</h2>
+                <p className={styles.tabSubtitle}>
+                  Real-time consolidated operational logs: audit trails, course allocations, and timetable solver jobs.
+                </p>
+              </div>
+              <button
+                className={styles.addBtn}
+                onClick={fetchLogs}
+                disabled={loadingLogs}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                🔄 Refresh Logs
+              </button>
+            </div>
+
+            {/* Filters */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '220px' }}>
+                <input
+                  type="text"
+                  className={styles.searchInput}
+                  placeholder="🔍 Search actions, events, errors..."
+                  value={logSearch}
+                  onChange={e => setLogSearch(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && fetchLogs()}
+                />
+              </div>
+
+              <select
+                className={styles.input}
+                style={{ width: 'auto', minWidth: '160px', padding: '0.45rem 0.75rem', fontSize: '0.8rem' }}
+                value={logTypeFilter}
+                onChange={e => setLogTypeFilter(e.target.value)}
+              >
+                <option value="all">All Log Types</option>
+                <option value="audit_event">Audit Events</option>
+                <option value="allocation_run">Course Allocation</option>
+                <option value="timetable_job">Timetable Solver</option>
+              </select>
+
+              <select
+                className={styles.input}
+                style={{ width: 'auto', minWidth: '150px', padding: '0.45rem 0.75rem', fontSize: '0.8rem' }}
+                value={logStatusFilter}
+                onChange={e => setLogStatusFilter(e.target.value)}
+              >
+                <option value="all">All Statuses</option>
+                <option value="success">Success / Completed</option>
+                <option value="completed">Completed</option>
+                <option value="failure">Failure / Error</option>
+                <option value="failed">Failed</option>
+                <option value="running">Running</option>
+              </select>
+            </div>
+
+            {/* Table */}
+            <div className={styles.tableWrapper}>
+              {loadingLogs ? (
+                <div className={styles.loadingState}>
+                  <div className={styles.spinner} />
+                  <p className={styles.loadingText}>Loading system logs...</p>
+                </div>
+              ) : logs.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>📜</div>
+                  <p className={styles.emptyTitle}>No system logs found</p>
+                  <p className={styles.emptySubtitle}>No records match your selected filters.</p>
+                </div>
+              ) : (
+                <table className={styles.table}>
+                  <thead className={styles.tableHead}>
+                    <tr>
+                      <th style={{ width: '150px' }}>Timestamp</th>
+                      <th style={{ width: '130px' }}>Type</th>
+                      <th>Event / Action</th>
+                      <th style={{ width: '110px' }}>Status</th>
+                      <th style={{ width: '90px' }}>Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((log) => {
+                      const isErr = log.status === 'failure' || log.status === 'failed' || !!log.error_message
+                      const isSuccess = log.status === 'success' || log.status === 'completed'
+                      const isRunning = log.status === 'running' || log.status === 'in_progress'
+
+                      return (
+                        <tr key={log.id} className={styles.tableRow}>
+                          <td style={{ fontSize: '0.75rem', color: '#64748b', whiteSpace: 'nowrap' }}>
+                            {new Date(log.created_at).toLocaleString('en-IN', {
+                              dateStyle: 'short',
+                              timeStyle: 'medium',
+                            })}
+                          </td>
+                          <td>
+                            <span
+                              className={`${styles.logBadge} ${
+                                log.log_type === 'allocation_run'
+                                  ? styles.logBadgeAlloc
+                                  : log.log_type === 'timetable_job'
+                                  ? styles.logBadgeTimetable
+                                  : styles.logBadgeAudit
+                              }`}
+                            >
+                              {log.log_type}
+                            </span>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0f172a' }}>
+                              {log.action || log.event_type || 'System Event'}
+                            </div>
+                            {log.error_message && (
+                              <div style={{ fontSize: '0.72rem', color: '#dc2626', marginTop: '2px' }}>
+                                ⚠️ {log.error_message}
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <span
+                              className={`${styles.logBadge} ${
+                                isErr
+                                  ? styles.logBadgeFailed
+                                  : isSuccess
+                                  ? styles.logBadgeSuccess
+                                  : isRunning
+                                  ? styles.logBadgeRunning
+                                  : styles.logBadgeAudit
+                              }`}
+                            >
+                              {log.status}
+                            </span>
+                          </td>
+                          <td>
+                            <button
+                              className={styles.editBtn}
+                              style={{ padding: '0.25rem 0.55rem', fontSize: '0.72rem' }}
+                              onClick={() => setSelectedLog(log)}
+                            >
+                              🔍 View
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* ══ MODALS ══ */}
@@ -999,6 +1209,50 @@ export default function SuperAdminDashboard() {
               <button className={styles.modalCancelBtn} onClick={() => setDeleteFaculty(null)} disabled={deletingFaculty}>Cancel</button>
               <button className={styles.modalDeleteBtn} onClick={handleDeleteFaculty} disabled={deletingFaculty}>
                 {deletingFaculty ? 'Removing...' : 'Yes, Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Log Detail Modal */}
+      {selectedLog && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal} style={{ maxWidth: '640px', width: '90%' }}>
+            <h3 className={styles.modalTitle}>System Log Detail</h3>
+            <p className={styles.modalSubtitle} style={{ marginBottom: '1rem' }}>
+              Recorded on {new Date(selectedLog.created_at).toLocaleString()}
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem', fontSize: '0.8rem' }}>
+              <div><strong>Log Type:</strong> <span className={styles.codeBadge}>{selectedLog.log_type}</span></div>
+              <div><strong>Status:</strong> <span className={styles.codeBadge}>{selectedLog.status}</span></div>
+              <div><strong>Event:</strong> {selectedLog.event_type || '—'}</div>
+              <div><strong>User ID:</strong> {selectedLog.user_id ? `${selectedLog.user_id.slice(0, 8)}...` : 'System'}</div>
+            </div>
+
+            {selectedLog.action && (
+              <div style={{ marginBottom: '0.75rem', fontSize: '0.8rem' }}>
+                <strong>Action:</strong> {selectedLog.action}
+              </div>
+            )}
+
+            {selectedLog.error_message && (
+              <div style={{ marginBottom: '0.75rem', color: '#dc2626', fontSize: '0.8rem' }}>
+                <strong>Error:</strong> {selectedLog.error_message}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '0.5rem', fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
+              Recorded Metadata:
+            </div>
+            <pre className={styles.metaBox}>
+              {selectedLog.metadata ? JSON.stringify(selectedLog.metadata, null, 2) : 'No metadata recorded'}
+            </pre>
+
+            <div className={styles.modalActions} style={{ marginTop: '1.25rem' }}>
+              <button className={styles.modalCancelBtn} onClick={() => setSelectedLog(null)}>
+                Close
               </button>
             </div>
           </div>

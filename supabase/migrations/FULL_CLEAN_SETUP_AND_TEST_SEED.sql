@@ -147,7 +147,7 @@ CREATE TABLE faculty (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
-    role TEXT NOT NULL CHECK (role IN ('hod', 'teaching_staff', 'campus_director')),
+    role TEXT NOT NULL CHECK (role IN ('hod', 'teaching_staff', 'campus_director', 'teacher')),
     department_id UUID REFERENCES departments(id) ON DELETE SET NULL,
     campus_id UUID NOT NULL REFERENCES campuses(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -203,11 +203,11 @@ CREATE TABLE semester_blueprints (
 -- 10. REGISTRATION PREFERENCES TABLE (Ranked choices & frozen timestamp)
 CREATE TABLE registration_preferences (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    student_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
     campus_id UUID NOT NULL REFERENCES campuses(id) ON DELETE CASCADE,
     semester SMALLINT NOT NULL,
     academic_year TEXT NOT NULL,
-    pathway_id UUID,
+    pathway_id TEXT,
     preferences JSONB NOT NULL DEFAULT '[]'::jsonb,
     allocation_metadata JSONB DEFAULT '{}'::jsonb,
     submitted_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -219,7 +219,7 @@ CREATE TABLE registration_preferences (
 -- 11. STUDENT REGISTRATIONS TABLE (Confirmed slot courses & totals)
 CREATE TABLE student_registrations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    student_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
     campus_id UUID NOT NULL REFERENCES campuses(id) ON DELETE CASCADE,
     semester INTEGER NOT NULL CHECK (semester BETWEEN 1 AND 8),
     academic_year TEXT NOT NULL,
@@ -264,6 +264,7 @@ CREATE TABLE timetable_entries (
     is_lab_block BOOLEAN NOT NULL DEFAULT false,
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'generated', 'published')),
     session_type TEXT DEFAULT 'theory',
+    published_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     UNIQUE(department_id, time_slot_id, academic_year, semester)
 );
@@ -290,10 +291,12 @@ CREATE TABLE teacher_course_assignments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     teacher_id UUID NOT NULL REFERENCES faculty(id) ON DELETE CASCADE,
     course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-    academic_year TEXT NOT NULL,
-    semester SMALLINT NOT NULL,
+    assigned_by UUID REFERENCES faculty(id) ON DELETE SET NULL,
+    assigned_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    academic_year TEXT,
+    semester SMALLINT,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    UNIQUE(teacher_id, course_id, academic_year, semester)
+    CONSTRAINT teacher_course_assignments_unique UNIQUE(teacher_id, course_id)
 );
 
 -- 16. PERIOD ATTENDANCE TABLE
@@ -324,16 +327,19 @@ CREATE TABLE period_unlock_requests (
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 18. CAMPUS SIGN INS TABLE (GPS Geofence attendance)
+-- 18. CAMPUS SIGN INS TABLE (Zero Coordinate Retention GPS attendance)
 CREATE TABLE campus_sign_ins (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    student_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
     campus_id UUID NOT NULL REFERENCES campuses(id) ON DELETE CASCADE,
-    sign_in_time TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
-    latitude NUMERIC NOT NULL,
-    longitude NUMERIC NOT NULL,
-    verified BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+    session_type TEXT NOT NULL CHECK (session_type IN ('morning', 'evening')),
+    signed_in_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    signed_in_date DATE NOT NULL DEFAULT ((timezone('utc'::text, now()) AT TIME ZONE 'Asia/Kolkata')::date),
+    location_accuracy_meters NUMERIC NOT NULL DEFAULT 10,
+    status TEXT NOT NULL CHECK (status IN ('on_time', 'late', 'early_leave')),
+    source TEXT NOT NULL DEFAULT 'gps' CHECK (source IN ('gps', 'manual_staff')),
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    CONSTRAINT campus_sign_ins_unique UNIQUE (student_id, campus_id, signed_in_date, session_type)
 );
 
 -- 19. CONSENT RECORDS TABLE
@@ -383,6 +389,8 @@ CREATE TABLE system_logs (
 CREATE OR REPLACE VIEW allocation_runs AS
 SELECT 
     id, campus_id, academic_year, semester, status,
+    user_id AS triggered_by,
+    started_at AS triggered_at,
     COALESCE((metadata->>'total_students')::int, 0) AS total_students,
     COALESCE((metadata->>'fully_allocated')::int, 0) AS fully_allocated,
     COALESCE((metadata->>'partially_allocated')::int, 0) AS partially_allocated,
@@ -396,6 +404,7 @@ CREATE OR REPLACE VIEW allocation_runs_legacy AS SELECT * FROM allocation_runs;
 CREATE OR REPLACE VIEW timetable_generation_jobs AS
 SELECT 
     id, campus_id, academic_year, semester, status, progress, error_message,
+    user_id AS triggered_by,
     COALESCE(metadata->'config', '{}'::jsonb) AS config,
     started_at, completed_at, created_at, updated_at
 FROM system_logs WHERE log_type = 'timetable_job';
@@ -416,11 +425,12 @@ RETURNS TRIGGER AS $$
 BEGIN
     IF TG_OP = 'INSERT' THEN
         INSERT INTO system_logs (
-            id, log_type, campus_id, academic_year, semester, status,
+            id, log_type, campus_id, academic_year, semester, status, user_id,
             error_message, metadata, started_at, completed_at, created_at, updated_at
         ) VALUES (
             COALESCE(NEW.id, gen_random_uuid()),
             'allocation_run', NEW.campus_id, NEW.academic_year, NEW.semester, NEW.status,
+            COALESCE(NEW.triggered_by, auth.uid()),
             NEW.error_message,
             jsonb_build_object(
                 'total_students', NEW.total_students,
@@ -463,12 +473,14 @@ RETURNS TRIGGER AS $$
 BEGIN
     IF TG_OP = 'INSERT' THEN
         INSERT INTO system_logs (
-            id, log_type, campus_id, academic_year, semester, status, progress,
+            id, log_type, campus_id, academic_year, semester, status, progress, user_id,
             error_message, metadata, started_at, completed_at, created_at, updated_at
         ) VALUES (
             COALESCE(NEW.id, gen_random_uuid()),
             'timetable_job', NEW.campus_id, NEW.academic_year, NEW.semester, NEW.status,
-            COALESCE(NEW.progress, 0), NEW.error_message,
+            COALESCE(NEW.progress, 0),
+            COALESCE(NEW.triggered_by, auth.uid()),
+            NEW.error_message,
             jsonb_build_object('config', COALESCE(NEW.config, '{}'::jsonb)),
             COALESCE(NEW.started_at, clock_timestamp()), NEW.completed_at,
             COALESCE(NEW.created_at, clock_timestamp()), clock_timestamp()
@@ -841,26 +853,41 @@ INSERT INTO courses (id, course_code, title, department_id, semester, credits, c
 ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, course_code = EXCLUDED.course_code;
 
 -- 5. SEMESTER BLUEPRINTS (Pre-configured for IT Department S1 and S3)
-INSERT INTO semester_blueprints (department_id, semester, min_credits, max_credits, slot_1_name, slot_1_rule, slot_1_target, slot_2_name, slot_2_rule, slot_2_target, slot_3_name, slot_3_rule, slot_3_target, pathways) VALUES
+INSERT INTO semester_blueprints (
+    department_id, semester, min_credits, max_credits,
+    slot_1_name, slot_1_rule, slot_1_target,
+    slot_2_name, slot_2_rule, slot_2_target,
+    slot_3_name, slot_3_rule, slot_3_target,
+    slot_4_name, slot_4_rule, slot_4_target,
+    slot_5_name, slot_5_rule, slot_5_target,
+    slot_6_name, slot_6_rule, slot_6_target,
+    pathways
+) VALUES
 ('96a54058-8437-46a3-9815-ae49deab0999', 1, 18, 26, 
- 'Core Computing', 'FIXED', '61098a8f-e12f-4783-a89b-0942df4df30d',
- 'Multidisciplinary Elective', 'MDC', NULL,
- 'English Communication', 'AEC', NULL,
- NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
- '[{"id":"pw-cs-std","name":"Computer Science Standard","description":"Standard IT NEP Track"}]'::jsonb),
+ 'Core Computing', 'FIXED', 'KU01DSCCSE101',
+ 'Multidisciplinary Elective', 'GLOBAL_BASKET', 'MDC-1',
+ 'English Communication', 'GLOBAL_BASKET', 'AEC-1',
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ '[{"id":"pw-cs-std","name":"Computer Science Standard","description":"Standard IT NEP Track","slots":[{"slot":1,"name":"Core Computing","rule":"FIXED","target":"KU01DSCCSE101"},{"slot":2,"name":"Multidisciplinary Elective","rule":"GLOBAL_BASKET","target":"MDC-1"},{"slot":3,"name":"English Communication","rule":"GLOBAL_BASKET","target":"AEC-1"}]}]'::jsonb),
 
 ('96a54058-8437-46a3-9815-ae49deab0999', 3, 18, 26,
- 'Data Structures', 'FIXED', '51002dd3-bf9e-474b-b168-79beb5719c80',
- 'OOP using C++', 'FIXED', 'e0131617-d886-45e2-b3a5-607aba2ad625',
- 'Engineering Physics', 'FIXED', 'a2040ac0-a977-44df-8426-aaf9669b7cae',
- 'Scientific Computing', 'FIXED', 'fa1f04d2-ea57-4493-95ae-80513f6b5770',
- 'Multidisciplinary Elective 3', 'MDC', NULL,
- 'Value Added Course 3', 'VAC', NULL,
- '[{"id":"pw-cs-adv","name":"Advanced Software Systems","description":"S3 Core Track"}]'::jsonb)
+ 'Data Structures', 'FIXED', 'KU03DSCCSE201',
+ 'OOP using C++', 'FIXED', 'KU03DSCCSE202',
+ 'Engineering Physics', 'FIXED', 'KU03DSCCSE203',
+ 'Scientific Computing', 'FIXED', 'KU03DSCCSE204',
+ 'Multidisciplinary Elective 3', 'GLOBAL_BASKET', 'MDC-3',
+ 'Value Added Course 3', 'GLOBAL_BASKET', 'VAC-3',
+ '[{"id":"pw-cs-adv","name":"Advanced Software Systems","description":"S3 Core Track","slots":[{"slot":1,"name":"Data Structures","rule":"FIXED","target":"KU03DSCCSE201"},{"slot":2,"name":"OOP using C++","rule":"FIXED","target":"KU03DSCCSE202"},{"slot":3,"name":"Engineering Physics","rule":"FIXED","target":"KU03DSCCSE203"},{"slot":4,"name":"Scientific Computing","rule":"FIXED","target":"KU03DSCCSE204"},{"slot":5,"name":"Multidisciplinary Elective 3","rule":"GLOBAL_BASKET","target":"MDC-3"},{"slot":6,"name":"Value Added Course 3","rule":"GLOBAL_BASKET","target":"VAC-3"}]}]'::jsonb)
 ON CONFLICT (department_id, semester) DO UPDATE SET 
- slot_1_rule = EXCLUDED.slot_1_rule, slot_1_target = EXCLUDED.slot_1_target,
- slot_2_rule = EXCLUDED.slot_2_rule, slot_2_target = EXCLUDED.slot_2_target,
- slot_3_rule = EXCLUDED.slot_3_rule, slot_3_target = EXCLUDED.slot_3_target;
+ slot_1_name = EXCLUDED.slot_1_name, slot_1_rule = EXCLUDED.slot_1_rule, slot_1_target = EXCLUDED.slot_1_target,
+ slot_2_name = EXCLUDED.slot_2_name, slot_2_rule = EXCLUDED.slot_2_rule, slot_2_target = EXCLUDED.slot_2_target,
+ slot_3_name = EXCLUDED.slot_3_name, slot_3_rule = EXCLUDED.slot_3_rule, slot_3_target = EXCLUDED.slot_3_target,
+ slot_4_name = EXCLUDED.slot_4_name, slot_4_rule = EXCLUDED.slot_4_rule, slot_4_target = EXCLUDED.slot_4_target,
+ slot_5_name = EXCLUDED.slot_5_name, slot_5_rule = EXCLUDED.slot_5_rule, slot_5_target = EXCLUDED.slot_5_target,
+ slot_6_name = EXCLUDED.slot_6_name, slot_6_rule = EXCLUDED.slot_6_rule, slot_6_target = EXCLUDED.slot_6_target,
+ pathways = EXCLUDED.pathways;
 
 -- 6. TIME SLOTS (Standard academic schedule: 5 days x 6 periods = 30 slots)
 DO $$

@@ -17,6 +17,7 @@ export const ROLE_DASHBOARD_MAP: Record<Role, string> = {
   campus_director: '/dashboard/director',
   hod: '/dashboard/hod',
   teaching_staff: '/dashboard/teacher',
+  teacher: '/dashboard/teacher',
   student: '/dashboard/student',
 }
 
@@ -203,7 +204,7 @@ export class AuthService {
       return { role, profile: student }
     }
 
-    if (role === 'hod' || role === 'campus_director' || role === 'teaching_staff') {
+    if (role === 'hod' || role === 'campus_director' || role === 'teaching_staff' || role === 'teacher') {
       const { data: faculty, error } = await this.supabase.admin
         .from('faculty')
         .select('full_name, campus_id, department_id, departments(name), campuses(name)')

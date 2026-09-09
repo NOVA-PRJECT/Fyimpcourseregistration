@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   ForbiddenException,
   NotFoundException,
@@ -36,12 +37,12 @@ export class AssignmentsService {
       throw new InternalServerErrorException(`Failed to fetch courses: ${coursesError.message}`);
     }
 
-    // 2. Fetch all department teaching faculty
+    // 2. Fetch all department teaching faculty (strictly excluding HOD)
     const { data: faculty, error: facultyError } = await this.supabase.admin
       .from('faculty')
       .select('id, full_name, email, role')
       .eq('department_id', departmentId)
-      .in('role', ['teaching_staff', 'hod'])
+      .in('role', ['teacher', 'teaching_staff'])
       .order('full_name', { ascending: true });
 
     if (facultyError) {
@@ -119,6 +120,25 @@ export class AssignmentsService {
       throw new ForbiddenException('Cannot assign teachers to courses outside your department.');
     }
 
+    // Verify target faculty exists, belongs to HOD's department, and is strictly not HOD
+    const { data: targetFaculty, error: facultyError } = await this.supabase.admin
+      .from('faculty')
+      .select('id, department_id, role, full_name')
+      .eq('id', teacherId)
+      .maybeSingle();
+
+    if (facultyError || !targetFaculty) {
+      throw new NotFoundException('Teacher faculty record not found.');
+    }
+
+    if (targetFaculty.department_id !== departmentId) {
+      throw new ForbiddenException('Cannot assign faculty from another department.');
+    }
+
+    if (targetFaculty.role === 'hod') {
+      throw new BadRequestException('HOD cannot be assigned as a course teacher. Please select an individual teacher or teaching staff.');
+    }
+
     const assignedAt = new Date().toISOString();
 
     // Upsert into teacher_course_assignments
@@ -175,6 +195,25 @@ export class AssignmentsService {
     const courseDept = (existing as any).courses?.department_id;
     if (courseDept !== user.department_id) {
       throw new ForbiddenException('Cannot modify assignments outside your department.');
+    }
+
+    // Verify new teacher faculty exists, belongs to HOD's department, and is strictly not HOD
+    const { data: targetFaculty, error: facultyError } = await this.supabase.admin
+      .from('faculty')
+      .select('id, department_id, role, full_name')
+      .eq('id', newTeacherId)
+      .maybeSingle();
+
+    if (facultyError || !targetFaculty) {
+      throw new NotFoundException('New teacher faculty record not found.');
+    }
+
+    if (targetFaculty.department_id !== user.department_id) {
+      throw new ForbiddenException('Cannot assign faculty from another department.');
+    }
+
+    if (targetFaculty.role === 'hod') {
+      throw new BadRequestException('HOD cannot be assigned as a course teacher. Please select an individual teacher or teaching staff.');
     }
 
     const assignedAt = new Date().toISOString();

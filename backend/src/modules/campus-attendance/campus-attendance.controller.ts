@@ -61,7 +61,7 @@ export class CampusAttendanceController {
    * Student / Staff query for today's morning & evening campus check status.
    */
   @Get('status/:studentId')
-  @Roles('student', 'teaching_staff', 'hod', 'campus_director', 'superadmin')
+  @Roles('student', 'teacher', 'teaching_staff', 'hod', 'campus_director', 'superadmin')
   async getStatus(
     @CurrentUser() user: AuthUser,
     @Param('studentId') studentId: string

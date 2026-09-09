@@ -278,6 +278,24 @@ export default function TeacherAssignmentTab() {
   const [assignTeacherId, setAssignTeacherId] = useState('')
   const [assigning, setAssigning] = useState(false)
 
+  // Add Teacher Modal State
+  const [showAddTeacherModal, setShowAddTeacherModal] = useState(false)
+  const [newTeacherName, setNewTeacherName] = useState('')
+  const [newTeacherEmail, setNewTeacherEmail] = useState('')
+  const [newTeacherPassword, setNewTeacherPassword] = useState('Teacher@123')
+  const [addingTeacher, setAddingTeacher] = useState(false)
+
+  // Manage Teachers Modal State
+  const [showManageTeachersModal, setShowManageTeachersModal] = useState(false)
+  const [deletingTeacherId, setDeletingTeacherId] = useState<string | null>(null)
+
+  // Eligible faculty (strictly excluding HOD)
+  const eligibleFaculty = useMemo(() => {
+    return (faculty || []).filter(
+      (f) => f.role === 'teacher' || f.role === 'teaching_staff'
+    )
+  }, [faculty])
+
   // React Flow State
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -341,8 +359,8 @@ export default function TeacherAssignmentTab() {
       }
     }
 
-    // Filter faculty matching search query if relevant
-    const matchingFaculty = faculty.filter(
+    // Filter faculty matching search query if relevant (strictly excluding HOD)
+    const matchingFaculty = eligibleFaculty.filter(
       (f) =>
         searchQuery.trim() === '' ||
         f.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -401,7 +419,7 @@ export default function TeacherAssignmentTab() {
 
     setNodes(newNodes)
     setEdges(newEdges)
-  }, [faculty, courses, filteredCourses, isMobileView, searchQuery])
+  }, [eligibleFaculty, courses, filteredCourses, isMobileView, searchQuery])
 
   // ── Handle Connection Drag on Canvas ──
   const onConnect = useCallback(
@@ -510,6 +528,70 @@ export default function TeacherAssignmentTab() {
       setError(err.message || 'Network error.')
     } finally {
       setAssigning(false)
+    }
+  }
+
+  // ── Handle Add New Teacher to Department ──
+  async function handleCreateTeacher(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newTeacherName.trim() || !newTeacherEmail.trim() || !newTeacherPassword.trim()) {
+      setError('Please fill in all required fields.')
+      return
+    }
+    setAddingTeacher(true)
+    setError('')
+    try {
+      const res = await fetch('/api/hod/teachers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: newTeacherName.trim(),
+          email: newTeacherEmail.trim().toLowerCase(),
+          password: newTeacherPassword,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.message || 'Failed to create teacher.')
+        return
+      }
+      setSuccess(`Teacher "${newTeacherName}" added successfully!`)
+      setTimeout(() => setSuccess(''), 4000)
+      setShowAddTeacherModal(false)
+      setNewTeacherName('')
+      setNewTeacherEmail('')
+      setNewTeacherPassword('Teacher@123')
+      await fetchData()
+    } catch (err: any) {
+      setError(err.message || 'Network error creating teacher.')
+    } finally {
+      setAddingTeacher(false)
+    }
+  }
+
+  // ── Handle Remove Teacher from Department ──
+  async function handleDeleteTeacher(teacherId: string, teacherName: string) {
+    if (!confirm(`Are you sure you want to remove "${teacherName}"? Any active course assignments for this teacher will also be removed.`)) {
+      return
+    }
+    setDeletingTeacherId(teacherId)
+    setError('')
+    try {
+      const res = await fetch(`/api/hod/teachers/${teacherId}`, {
+        method: 'DELETE',
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.message || 'Failed to remove teacher.')
+        return
+      }
+      setSuccess(`Teacher "${teacherName}" removed successfully.`)
+      setTimeout(() => setSuccess(''), 4000)
+      await fetchData()
+    } catch (err: any) {
+      setError(err.message || 'Network error removing teacher.')
+    } finally {
+      setDeletingTeacherId(null)
     }
   }
 
@@ -651,6 +733,45 @@ export default function TeacherAssignmentTab() {
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             Refresh
+          </button>
+
+          <button
+            onClick={() => setShowAddTeacherModal(true)}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '8px',
+              border: 'none',
+              background: '#002147',
+              color: '#ffffff',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '13px',
+              boxShadow: '0 2px 4px rgba(0,33,71,0.2)',
+            }}
+          >
+            <Plus size={15} /> Add Teacher
+          </button>
+
+          <button
+            onClick={() => setShowManageTeachersModal(true)}
+            style={{
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: '1px solid #cbd5e1',
+              background: '#ffffff',
+              color: '#002147',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '13px',
+            }}
+          >
+            <UserCheck size={15} /> Department Teachers ({eligibleFaculty.length})
           </button>
         </div>
 
@@ -915,7 +1036,7 @@ export default function TeacherAssignmentTab() {
                 onChange={(e) => setReassignTeacherId(e.target.value)}
               >
                 <option value="">— Select Replacement Faculty —</option>
-                {faculty
+                {eligibleFaculty
                   .filter((f) => f.id !== reassignTarget.teacher_id)
                   .map((f) => (
                     <option key={f.id} value={f.id}>
@@ -962,7 +1083,7 @@ export default function TeacherAssignmentTab() {
                 onChange={(e) => setAssignTeacherId(e.target.value)}
               >
                 <option value="">— Choose Faculty Member —</option>
-                {faculty.map((f) => (
+                {eligibleFaculty.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.full_name} ({f.email})
                   </option>
@@ -984,6 +1105,211 @@ export default function TeacherAssignmentTab() {
                 disabled={!assignTeacherId || assigning}
               >
                 {assigning ? 'Assigning...' : 'Assign Faculty →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Teacher Modal ── */}
+      {showAddTeacherModal && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h3 className={styles.modalTitle}>Add Course Teacher</h3>
+            <p className={styles.modalSubtitle}>
+              Create an individual course teacher account in your department. They will receive access to the dedicated Teacher Dashboard to manage assigned courses and class attendance.
+            </p>
+
+            <form onSubmit={handleCreateTeacher}>
+              <div className={styles.field}>
+                <label className={styles.label}>Full Name *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  placeholder="e.g. Dr. Jane Smith"
+                  value={newTeacherName}
+                  onChange={(e) => setNewTeacherName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Email Address *</label>
+                <input
+                  type="email"
+                  className={styles.input}
+                  placeholder="e.g. janesmith@university.edu"
+                  value={newTeacherEmail}
+                  onChange={(e) => setNewTeacherEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Password (minimum 8 characters) *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={newTeacherPassword}
+                  onChange={(e) => setNewTeacherPassword(e.target.value)}
+                  required
+                />
+                <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                  Default password provided. The teacher can change this upon logging in.
+                </span>
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Assigned Role</label>
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    background: '#e0f2fe',
+                    border: '1px solid #bae6fd',
+                    fontSize: '12px',
+                    color: '#0369a1',
+                    fontWeight: 600,
+                  }}
+                >
+                  teacher (Course Teacher — Personalized Dashboard)
+                </div>
+              </div>
+
+              <div className={styles.modalActions}>
+                <button
+                  type="button"
+                  className={styles.modalCancelBtn}
+                  onClick={() => setShowAddTeacherModal(false)}
+                  disabled={addingTeacher}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={styles.modalConfirmBtn}
+                  disabled={addingTeacher || !newTeacherName || !newTeacherEmail || !newTeacherPassword}
+                >
+                  {addingTeacher ? 'Creating Account...' : 'Create Teacher →'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Manage Department Teachers Modal ── */}
+      {showManageTeachersModal && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal} style={{ maxWidth: '640px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <h3 className={styles.modalTitle} style={{ margin: 0 }}>Department Faculty Roster</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowManageTeachersModal(false)
+                  setShowAddTeacherModal(true)
+                }}
+                style={{
+                  background: '#002147',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <Plus size={13} /> Add New
+              </button>
+            </div>
+            <p className={styles.modalSubtitle}>
+              Active teachers in your department who can be assigned to courses. HOD is excluded from course assignment.
+            </p>
+
+            <div style={{ maxHeight: '360px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', margin: '1rem 0' }}>
+              {eligibleFaculty.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b', fontSize: '13px' }}>
+                  No teachers found in your department. Click "+ Add Teacher" to add your first faculty member.
+                </div>
+              ) : (
+                eligibleFaculty.map((t) => {
+                  const assignedCount = courses.reduce(
+                    (sum, c) => sum + c.assignments.filter((a) => a.teacher_id === t.id).length,
+                    0
+                  )
+                  return (
+                    <div
+                      key={t.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>{t.full_name}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>{t.email}</div>
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              background: t.role === 'teacher' ? '#e0f2fe' : '#f1f5f9',
+                              color: t.role === 'teacher' ? '#0369a1' : '#475569',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {t.role === 'teacher' ? 'Course Teacher' : 'Teaching Staff'}
+                          </span>
+                          <span style={{ fontSize: '10px', color: assignedCount > 0 ? '#16a34a' : '#94a3b8' }}>
+                            {assignedCount} {assignedCount === 1 ? 'course' : 'courses'} assigned
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleDeleteTeacher(t.id, t.full_name)}
+                        disabled={deletingTeacherId === t.id}
+                        title="Remove teacher from department"
+                        style={{
+                          background: '#fef2f2',
+                          border: '1px solid #fecaca',
+                          color: '#dc2626',
+                          borderRadius: '6px',
+                          padding: '6px 10px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <Trash2 size={13} />
+                        {deletingTeacherId === t.id ? 'Removing...' : 'Remove'}
+                      </button>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => setShowManageTeachersModal(false)}
+              >
+                Close
               </button>
             </div>
           </div>
