@@ -287,19 +287,29 @@ export class AllocationService {
 
       // Step E: Fetch all student preference submissions from registration_preferences
       // Only students who have a row in registration_preferences are processed!
-      const { data: preferencesList, error: prefErr } = await this.supabase.admin
+      const { data: rawPrefList, error: prefErr } = await this.supabase.admin
         .from('registration_preferences')
-        .select(`
-          id,
-          student_id,
-          campus_id,
-          semester,
-          academic_year,
-          pathway_id,
-          preferences,
-          allocation_metadata,
-          submitted_at,
-          students!inner (
+        .select('id, student_id, campus_id, semester, academic_year, pathway_id, preferences, allocation_metadata, submitted_at')
+        .eq('campus_id', campusId)
+        .eq('academic_year', body.academicYear)
+        .eq('semester', body.semester)
+
+      if (prefErr) {
+        this.logger.error(`Failed to fetch registration preferences: ${prefErr.message}`)
+        throw new InternalServerErrorException(
+          `Failed to fetch registration preferences: ${prefErr.message}`,
+        )
+      }
+
+      const rawPrefs = rawPrefList ?? []
+      const studentIds = Array.from(new Set(rawPrefs.map((p) => p.student_id)))
+
+      // Fetch student details for all candidates
+      const studentMap = new Map<string, any>()
+      if (studentIds.length > 0) {
+        const { data: studentsData, error: stuErr } = await this.supabase.admin
+          .from('students')
+          .select(`
             id,
             department_id,
             current_semester,
@@ -307,16 +317,21 @@ export class AllocationService {
               id,
               code
             )
-          )
-        `)
-        .eq('campus_id', campusId)
-        .eq('academic_year', body.academicYear)
-        .eq('semester', body.semester)
+          `)
+          .in('id', studentIds)
 
-      if (prefErr) throw prefErr
+        if (!stuErr && studentsData) {
+          for (const s of studentsData) {
+            studentMap.set(s.id, s)
+          }
+        }
+      }
 
-      const studentPrefList = preferencesList ?? []
-      const studentIds = studentPrefList.map((p) => p.student_id)
+      // Attach student details to preference records
+      const studentPrefList = rawPrefs.map((p) => ({
+        ...p,
+        students: studentMap.get(p.student_id) || null,
+      }))
 
       // Helper to normalize preferences into slot array
       const extractSlots = (rawPrefs: any): UnifiedSlotPreference[] => {

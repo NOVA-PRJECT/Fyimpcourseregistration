@@ -47,6 +47,7 @@ const UpdateCourseSchema = z.object({
 
 const AddStudentSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(100),
+  cap_application_number: z.string().min(1, 'CAP Application Number is required'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(8).optional(),
   current_semester: z.coerce.number().int().min(1).max(8),

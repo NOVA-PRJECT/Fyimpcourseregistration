@@ -24,7 +24,16 @@ export class DirectorController {
   }
 
   @Put('settings')
-  async updateSettings(@Body() body: { deadline: string }, @CurrentUser() user: AuthUser) {
+  async updateSettings(
+    @Body()
+    body: {
+      deadline?: string | null
+      min_credits?: number
+      max_credits?: number
+      academic_year?: string
+    },
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.directorService.updateSettings(body, user)
   }
 }

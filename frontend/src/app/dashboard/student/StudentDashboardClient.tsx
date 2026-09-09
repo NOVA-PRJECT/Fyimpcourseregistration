@@ -113,7 +113,7 @@ export default function StudentDashboardClient({
                 href="/dashboard/student/register"
                 className={styles.registerLink}
               >
-                {hasSubmission ? 'Update Track & Course Selection →' : 'Select Track & Register Courses →'}
+                {hasSubmission ? 'View Course Details & Update Preferences →' : 'View Course Details & Register Electives →'}
               </Link>
               <Link
                 href="/dashboard/student/credits"

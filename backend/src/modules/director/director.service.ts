@@ -36,7 +36,7 @@ export class DirectorService {
 
     const { data: settings } = await this.supabase.admin
       .from('campus_settings')
-      .select('deadline, last_promoted_at')
+      .select('deadline, min_credits, max_credits, academic_year, last_promoted_at')
       .eq('campus_id', faculty.campus_id)
       .single()
 
@@ -48,13 +48,31 @@ export class DirectorService {
     }
   }
 
-  async updateSettings(body: { deadline: string }, user: AuthUser) {
+  async updateSettings(
+    body: {
+      deadline?: string | null
+      min_credits?: number
+      max_credits?: number
+      academic_year?: string
+    },
+    user: AuthUser,
+  ) {
     const campusId = user.campus_id
     if (!campusId) throw new BadRequestException('Campus ID missing')
 
+    const updatePayload: Record<string, any> = {}
+    if (body.deadline !== undefined) updatePayload.deadline = body.deadline
+    if (body.min_credits !== undefined) updatePayload.min_credits = body.min_credits
+    if (body.max_credits !== undefined) updatePayload.max_credits = body.max_credits
+    if (body.academic_year !== undefined) updatePayload.academic_year = body.academic_year
+
+    if (Object.keys(updatePayload).length === 0) {
+      throw new BadRequestException('No settings provided to update')
+    }
+
     const { error } = await this.supabase.admin
       .from('campus_settings')
-      .update({ deadline: body.deadline })
+      .update(updatePayload)
       .eq('campus_id', campusId)
 
     if (error) {
@@ -69,7 +87,7 @@ export class DirectorService {
       resourceType: 'campus_settings',
       resourceId: campusId,
       status: 'success',
-      metadata: { deadline: body.deadline },
+      metadata: updatePayload,
     })
 
     return { success: true, message: 'Settings updated successfully' }

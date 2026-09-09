@@ -56,6 +56,7 @@ function CustomSelect({
           <div className={styles.triggerContent}>
             <span className={styles.triggerTitle}>{selectedCourse.title}</span>
             <span className={styles.triggerMeta}>
+              {selectedCourse.course_code ? `${selectedCourse.course_code} • ` : ''}
               {selectedCourse.department_name || 'General'} • {selectedCourse.credits} cr
             </span>
           </div>
@@ -93,7 +94,10 @@ function CustomSelect({
                 >
                   <div className={styles.optionUpper}>{course.title}</div>
                   <div className={styles.optionLower}>
-                    <span className={styles.optionDept}>{course.department_name || 'General'}</span>
+                    <span className={styles.optionDept}>
+                      {course.course_code ? `${course.course_code} • ` : ''}
+                      {course.department_name || 'General'}
+                    </span>
                     <span className={styles.optionCredits}>{course.credits} cr</span>
                   </div>
                 </div>
@@ -282,13 +286,29 @@ export default function RegisterPage() {
     rank: 'rank1' | 'rank2' | 'rank3',
     courseId: string,
   ) {
-    setRankedPreferences((prev) => ({
-      ...prev,
-      [slotNumber]: {
-        ...(prev[slotNumber] || { rank1: '', rank2: '', rank3: '' }),
-        [rank]: courseId,
-      },
-    }))
+    setRankedPreferences((prev) => {
+      const slotPrefs = { ...(prev[slotNumber] || { rank1: '', rank2: '', rank3: '' }) }
+      slotPrefs[rank] = courseId
+
+      // Auto-clear duplicates in other ranks of this slot
+      if (courseId) {
+        if (rank === 'rank1') {
+          if (slotPrefs.rank2 === courseId) slotPrefs.rank2 = ''
+          if (slotPrefs.rank3 === courseId) slotPrefs.rank3 = ''
+        } else if (rank === 'rank2') {
+          if (slotPrefs.rank1 === courseId) slotPrefs.rank1 = ''
+          if (slotPrefs.rank3 === courseId) slotPrefs.rank3 = ''
+        } else if (rank === 'rank3') {
+          if (slotPrefs.rank1 === courseId) slotPrefs.rank1 = ''
+          if (slotPrefs.rank2 === courseId) slotPrefs.rank2 = ''
+        }
+      }
+
+      return {
+        ...prev,
+        [slotNumber]: slotPrefs,
+      }
+    })
     setError('')
   }
 

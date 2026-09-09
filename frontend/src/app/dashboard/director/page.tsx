@@ -40,6 +40,7 @@ export default function DirectorDashboard() {
   const [allocationRun, setAllocationRun] = useState<any | null>(null)
   const [triggeringRun, setTriggeringRun] = useState(false)
   const [showRerunConfirm, setShowRerunConfirm] = useState(false)
+  const [showWindowOpenWarning, setShowWindowOpenWarning] = useState(false)
   const [allocationError, setAllocationError] = useState('')
   const [allocationSuccess, setAllocationSuccess] = useState('')
 
@@ -149,14 +150,45 @@ export default function DirectorDashboard() {
     }
   }, [activeTab, allocationSemester, allocationAcademicYear, allocationRun?.status])
 
+  function handleSetPreset(days: number) {
+    const target = new Date()
+    target.setDate(target.getDate() + days)
+    target.setHours(23, 59, 0, 0)
+    setDeadline(target.toISOString().slice(0, 16))
+  }
+
   async function handleRunAllocation(forceRerun: boolean = false) {
+    if (windowIsOpen) {
+      setShowWindowOpenWarning(true)
+      return
+    }
+
     if (!forceRerun && allocationRun?.status === 'completed') {
       setShowRerunConfirm(true)
       return
     }
 
+    await executeRunAllocation()
+  }
+
+  async function handleCloseAndRunAllocation() {
+    setShowWindowOpenWarning(false)
+    const nowIso = new Date().toISOString()
+    try {
+      await fetch('/api/director/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deadline: nowIso }),
+      })
+      setCurrentDeadline(nowIso)
+    } catch {}
+    await executeRunAllocation()
+  }
+
+  async function executeRunAllocation() {
     setTriggeringRun(true)
     setShowRerunConfirm(false)
+    setShowWindowOpenWarning(false)
     setAllocationError('')
     setAllocationSuccess('')
 
@@ -393,11 +425,11 @@ export default function DirectorDashboard() {
                 {windowIsOpen ? (
                   <>
                     <span className={styles.statusDot} />
-                    Open — closes {new Date(currentDeadline!).toLocaleString('en-IN')}
+                    🟢 Registration Window OPEN — closes {new Date(currentDeadline!).toLocaleString('en-IN')}
                   </>
                 ) : (
                   <>
-                    ⛔ Closed
+                    ⛔ Registration Window CLOSED
                     {currentDeadline
                       ? ` — deadline was ${new Date(currentDeadline).toLocaleString('en-IN')}`
                       : ' — no deadline set yet'}
@@ -408,7 +440,32 @@ export default function DirectorDashboard() {
               <div className={styles.fieldGroup}>
 
                 <div className={styles.field}>
-                  <label className={styles.label}>Registration Deadline</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className={styles.label}>Registration Deadline</label>
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleSetPreset(7)}
+                        style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer', color: '#334155' }}
+                      >
+                        +7 Days
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetPreset(14)}
+                        style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer', color: '#334155' }}
+                      >
+                        +14 Days
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetPreset(30)}
+                        style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer', color: '#334155' }}
+                      >
+                        +30 Days
+                      </button>
+                    </div>
+                  </div>
                   <input
                     type="datetime-local"
                     className={styles.input}
@@ -416,7 +473,7 @@ export default function DirectorDashboard() {
                     onChange={e => setDeadline(e.target.value)}
                   />
                   <p className={styles.fieldHint}>
-                    Window opens immediately and closes automatically at this date and time.
+                    Students will be able to select and submit their ranked elective choices until this deadline.
                   </p>
                 </div>
 
@@ -435,10 +492,15 @@ export default function DirectorDashboard() {
                   className={styles.primaryBtn}
                   onClick={handleSaveWindow}
                   disabled={savingWindow}
+                  style={{
+                    background: windowIsOpen ? '#0284c7' : '#059669',
+                  }}
                 >
                   {savingWindow
                     ? <><span className={styles.spinner} /> Saving...</>
-                    : 'Save Settings →'
+                    : windowIsOpen
+                    ? 'Update Registration Deadline →'
+                    : 'Open Registration Window →'
                   }
                 </button>
                 {windowIsOpen && (
@@ -805,6 +867,63 @@ export default function DirectorDashboard() {
                       style={{ background: '#dc2626' }}
                     >
                       Yes, Re-Run Allocation →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Registration Window Open Warning Modal */}
+            {showWindowOpenWarning && (
+              <div
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(0, 0, 0, 0.8)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1000,
+                  padding: '1rem',
+                }}
+              >
+                <div
+                  style={{
+                    background: '#0f172a',
+                    border: '1px solid #f59e0b',
+                    borderRadius: '12px',
+                    padding: '1.75rem',
+                    maxWidth: '500px',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1rem',
+                  }}
+                >
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fbbf24', margin: 0 }}>
+                    ⚠️ Registration Window Still Open
+                  </h3>
+                  <p style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5, margin: 0 }}>
+                    The course registration window is currently <strong>OPEN</strong>. According to academic protocol, student preference submissions must be closed and frozen before executing the course allocation engine.
+                  </p>
+                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: 0 }}>
+                    Would you like to close the registration window immediately and proceed with running course allocation?
+                  </p>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      className={styles.primaryBtn}
+                      onClick={() => setShowWindowOpenWarning(false)}
+                      style={{ background: '#334155' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className={styles.primaryBtn}
+                      onClick={handleCloseAndRunAllocation}
+                      style={{ background: '#d97706' }}
+                    >
+                      Close Window & Run Allocation →
                     </button>
                   </div>
                 </div>

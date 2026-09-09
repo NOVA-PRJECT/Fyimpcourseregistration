@@ -298,6 +298,7 @@ export class HodService {
   async addStudent(
     body: {
       full_name: string
+      cap_application_number: string
       email: string
       password?: string
       current_semester: number
@@ -305,7 +306,7 @@ export class HodService {
     },
     user: AuthUser,
   ) {
-    const { full_name, email, current_semester, academic_year_joined } = body
+    const { full_name, cap_application_number, email, current_semester, academic_year_joined } = body
     const password = body.password || 'Welcome@123'
 
     const { data: authData, error: authError } = await this.supabase.admin.auth.admin.createUser({
@@ -325,7 +326,7 @@ export class HodService {
       .insert({
         id: studentId,
         full_name,
-        email,
+        cap_application_number: cap_application_number.trim(),
         current_semester,
         academic_year_joined,
         department_id: user.department_id,
@@ -403,6 +404,13 @@ export class HodService {
       const email = row.email || row['Email']
       const semester = Number(row.current_semester || row['Current Semester'] || row.semester || 1)
       const academicYear = String(row.academic_year_joined || row['Academic Year Joined'] || '2026-27')
+      const capNumber = String(
+        row.cap_application_number ||
+        row['CAP Number'] ||
+        row['cap_application_number'] ||
+        row['cap_number'] ||
+        `CAP${Date.now().toString().slice(-6)}${i + 1}`
+      ).trim()
 
       if (!fullName || !email) {
         results.push({ row: i + 1, email: email || '', status: 'error', issues: ['Missing name or email'] })
@@ -425,7 +433,7 @@ export class HodService {
         const { error: dbErr } = await this.supabase.admin.from('students').insert({
           id: sid,
           full_name: fullName,
-          email: String(email).trim().toLowerCase(),
+          cap_application_number: capNumber,
           current_semester: semester,
           academic_year_joined: academicYear,
           department_id: user.department_id,
