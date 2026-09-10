@@ -152,10 +152,6 @@ export default function ChangePasswordPage() {
           </button>
         </form>
       </div>
-
-      <p className={styles.footer}>
-        © 2026 Kannur University • Internal Systems Division
-      </p>
     </div>
   )
 }

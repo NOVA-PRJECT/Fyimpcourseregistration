@@ -205,7 +205,7 @@ export class HodController {
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.issues[0]?.message || 'Invalid payload')
     }
-    return this.hodService.createDepartmentTeacher(parsed.data, user)
+    return this.hodService.createDepartmentTeacher(parsed.data as any, user)
   }
 
   @Delete('teachers/:id')

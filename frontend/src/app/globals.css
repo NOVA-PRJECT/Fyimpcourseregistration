@@ -1,12 +1,85 @@
-/* Add this to the very top of your CSS */
+@import "tailwindcss";
+
+@theme {
+  --font-headline-lg-mobile: 'Newsreader', serif;
+  --font-headline-md: 'Newsreader', serif;
+  --font-headline-lg: 'Newsreader', serif;
+  --font-display-hero: 'Newsreader', serif;
+  --font-display-hero-mobile: 'Newsreader', serif;
+  --font-serif-title: 'Newsreader', serif;
+  --font-headline: 'Newsreader', serif;
+  --font-body-md: 'Hanken Grotesk', 'Inter', sans-serif;
+  --font-body-sm: 'Hanken Grotesk', 'Inter', sans-serif;
+  --font-body-lg: 'Hanken Grotesk', 'Inter', sans-serif;
+  --font-label-md: 'Hanken Grotesk', 'Inter', sans-serif;
+  --font-label-sm: 'Hanken Grotesk', 'Inter', sans-serif;
+  --font-label-eyebrow: 'Inter', sans-serif;
+
+  --color-primary-container: #082042;
+  --color-midnight-text: #0B192C;
+  --color-gold-tint: #FFF9EB;
+  --color-gold-border: #F3D89A;
+  --color-canvas-slate: #F8F9FF;
+  --color-surface-card: #FFFFFF;
+  --color-surface-bright: #F8F9FF;
+  --color-surface-input: #EEF3FB;
+  --color-surface-container: #e5eeff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-surface: #0b1c30;
+  --color-on-surface-variant: #44474e;
+  --color-on-primary: #ffffff;
+  --color-outline: #75777f;
+  --color-subtle-border: #CBD5E1;
+  --color-hairline-border: #E2E8F0;
+  --color-secondary-fixed: #ffdea4;
+  --color-secondary-fixed-dim: #f7bd40;
+  --color-on-secondary-fixed: #261900;
+  --color-surface-variant: #d3e4fe;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
 
-
-
 html, body {
- margin: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* Seamless browser autofill styling */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #0b1c30 !important;
+  caret-color: #0b1c30 !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 .password-wrapper {

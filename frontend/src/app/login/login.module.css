@@ -21,6 +21,7 @@
 
 /* Card */
 .card {
+  font-family: 'Hanken Grotesk', 'Inter', sans-serif;
   position: relative;
   z-index: 1;
   width: 100%;
@@ -46,7 +47,7 @@
 
 /* Card Header */
 .cardHeader {
-  background-color: #002147;
+  background-color: #0B192C;
   padding: 1.5rem 1.5rem 1.25rem;
   display: flex;
   flex-direction: column;
@@ -79,15 +80,16 @@
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  font-family: system-ui, sans-serif;
+  font-family: 'Hanken Grotesk', 'Inter', sans-serif;
   font-weight: 500;
   margin: 0;
 }
 
 .portalTitle {
+  font-family: 'Newsreader', Georgia, serif;
   color: #ffffff;
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 500;
   margin: 0;
   text-align: center;
   line-height: 1.3;
@@ -108,7 +110,7 @@
 }
 
 .formTitle {
-  font-family: system-ui, sans-serif;
+  font-family: 'Hanken Grotesk', 'Inter', sans-serif;
   font-size: 0.8rem;
   font-weight: 700;
   color: #002147;
@@ -132,7 +134,7 @@
 }
 
 .label {
-  font-family: system-ui, sans-serif;
+  font-family: 'Hanken Grotesk', 'Inter', sans-serif;
   font-size: 0.7rem;
   font-weight: 600;
   color: #44474e;
@@ -144,7 +146,7 @@
 .input {
   width: 100%;
   padding: 0.65rem 0.85rem;
-  font-family: system-ui, sans-serif;
+  font-family: 'Hanken Grotesk', 'Inter', sans-serif;
   font-size: 0.9rem;
   color: #191c1d;
   background: #f8f9fa;
@@ -156,7 +158,7 @@
 }
 
 .input:focus {
-  border-color: #002147;
+  border-color: #0B192C;
   box-shadow: 0 0 0 3px rgba(0, 33, 71, 0.08);
   background: #ffffff;
 }
@@ -172,7 +174,7 @@
 
 /* Error message */
 .errorMsg {
-  font-family: system-ui, sans-serif;
+  font-family: 'Hanken Grotesk', 'Inter', sans-serif;
   font-size: 0.72rem;
   color: #c0392b;
   margin: 0;
@@ -185,7 +187,7 @@
   border-radius: 0.5rem;
   padding: 0.65rem 0.85rem;
   margin-bottom: 1rem;
-  font-family: system-ui, sans-serif;
+  font-family: 'Hanken Grotesk', 'Inter', sans-serif;
   font-size: 0.8rem;
   color: #c0392b;
 }
@@ -194,13 +196,13 @@
 .submitBtn {
   width: 100%;
   padding: 0.8rem;
-  font-family: system-ui, sans-serif;
+  font-family: 'Hanken Grotesk', 'Inter', sans-serif;
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #ffffff;
-  background-color: #002147;
+  background-color: #0B192C;
   border: none;
   border-radius: 0.5rem;
   cursor: pointer;
@@ -253,7 +255,7 @@
 }
 
 .dividerText {
-  font-family: system-ui, sans-serif;
+  font-family: 'Hanken Grotesk', 'Inter', sans-serif;
   font-size: 0.7rem;
   color: #9ba1ab;
   white-space: nowrap;

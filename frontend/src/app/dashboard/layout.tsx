@@ -1,5 +1,4 @@
 import ConsentGate from '@/component/ConsentGate'
-import Footer from '@/component/Footer'
 
 export default function DashboardRootLayout({
   children,
@@ -12,7 +11,6 @@ export default function DashboardRootLayout({
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {children}
         </div>
-        <Footer />
       </div>
     </ConsentGate>
   )
