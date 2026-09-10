@@ -109,7 +109,17 @@ Date: 2026-09-10 (Branch: ui-works)
   - **Student Password Reset Subpage**: Removed the inline copyright paragraph (`<p className={styles.footer}>© 2026 Kannur University • Internal Systems Division</p>`) from `frontend/src/app/dashboard/student/change-password/page.tsx`.
   - **Build Verification**: Executed `npm run build:frontend` (`next build`) which compiled successfully with 0 errors.
 
+### 10. Merge Branch `ui-works` into `sub-main` with Prioritization
+- **Files**:
+  - Entire repository state across 16 files from `ui-works`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  - Committed all portal UI integrations, dashboard footer removals, specification documents (`GOOGLE_STITCH_PROMPTS.md`, `GOOGLE_STITCH_UI_SPECIFICATION.md`), and the backend TS2345 compilation fix onto branch `ui-works` (commit `18d50c8`).
+  - Switched to `sub-main` and merged `ui-works` with priority (`-X theirs`), cleanly fast-forwarding all changes into `sub-main`.
+  - **Build Verification**: Executed both `npm run build --workspace=backend` and `npm run build:frontend` on `sub-main` — both passed with 0 errors (exit code 0).
+
 ---
+
 
 
 
