@@ -28,6 +28,14 @@ import {
   Layers,
   ChevronRight,
   Sparkles,
+  UserPlus,
+  User,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  X,
+  AlertCircle,
 } from 'lucide-react'
 import styles from './hod-dashboard.module.css'
 
@@ -283,6 +291,8 @@ export default function TeacherAssignmentTab() {
   const [newTeacherName, setNewTeacherName] = useState('')
   const [newTeacherEmail, setNewTeacherEmail] = useState('')
   const [newTeacherPassword, setNewTeacherPassword] = useState('Teacher@123')
+  const [showPassword, setShowPassword] = useState(false)
+  const [teacherModalError, setTeacherModalError] = useState('')
   const [addingTeacher, setAddingTeacher] = useState(false)
 
   // Manage Teachers Modal State
@@ -535,11 +545,15 @@ export default function TeacherAssignmentTab() {
   async function handleCreateTeacher(e: React.FormEvent) {
     e.preventDefault()
     if (!newTeacherName.trim() || !newTeacherEmail.trim() || !newTeacherPassword.trim()) {
-      setError('Please fill in all required fields.')
+      setTeacherModalError('Please fill in all required fields.')
+      return
+    }
+    if (newTeacherPassword.length < 8) {
+      setTeacherModalError('Password must be at least 8 characters long.')
       return
     }
     setAddingTeacher(true)
-    setError('')
+    setTeacherModalError('')
     try {
       const res = await fetch('/api/hod/teachers', {
         method: 'POST',
@@ -552,7 +566,7 @@ export default function TeacherAssignmentTab() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.message || 'Failed to create teacher.')
+        setTeacherModalError(data.message || 'Failed to create teacher.')
         return
       }
       setSuccess(`Teacher "${newTeacherName}" added successfully!`)
@@ -561,9 +575,11 @@ export default function TeacherAssignmentTab() {
       setNewTeacherName('')
       setNewTeacherEmail('')
       setNewTeacherPassword('Teacher@123')
+      setShowPassword(false)
+      setTeacherModalError('')
       await fetchData()
     } catch (err: any) {
-      setError(err.message || 'Network error creating teacher.')
+      setTeacherModalError(err.message || 'Network error creating teacher.')
     } finally {
       setAddingTeacher(false)
     }
@@ -736,7 +752,10 @@ export default function TeacherAssignmentTab() {
           </button>
 
           <button
-            onClick={() => setShowAddTeacherModal(true)}
+            onClick={() => {
+              setTeacherModalError('')
+              setShowAddTeacherModal(true)
+            }}
             style={{
               padding: '8px 14px',
               borderRadius: '8px',
@@ -1113,74 +1132,149 @@ export default function TeacherAssignmentTab() {
 
       {/* ── Add Teacher Modal ── */}
       {showAddTeacherModal && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modal}>
-            <h3 className={styles.modalTitle}>Add Course Teacher</h3>
-            <p className={styles.modalSubtitle}>
-              Create an individual course teacher account in your department. They will receive access to the dedicated Teacher Dashboard to manage assigned courses and class attendance.
-            </p>
-
-            <form onSubmit={handleCreateTeacher}>
-              <div className={styles.field}>
-                <label className={styles.label}>Full Name *</label>
-                <input
-                  type="text"
-                  className={styles.input}
-                  placeholder="e.g. Dr. Jane Smith"
-                  value={newTeacherName}
-                  onChange={(e) => setNewTeacherName(e.target.value)}
-                  required
-                />
+        <div
+          className={styles.teacherModalOverlay}
+          onClick={() => {
+            if (!addingTeacher) {
+              setShowAddTeacherModal(false)
+              setTeacherModalError('')
+            }
+          }}
+        >
+          <div
+            className={styles.teacherModalCard}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className={styles.teacherModalHeader}>
+              <div className={styles.teacherModalHeaderLeft}>
+                <div className={styles.teacherModalIconPill}>
+                  <UserPlus size={20} />
+                </div>
+                <div className={styles.teacherModalTitleGroup}>
+                  <h3 className={styles.teacherModalTitle}>Add Course Teacher</h3>
+                  <p className={styles.teacherModalSubtitle}>
+                    Create an individual faculty account to assign department courses and manage attendance.
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                className={styles.teacherModalCloseBtn}
+                title="Close"
+                onClick={() => {
+                  setShowAddTeacherModal(false)
+                  setTeacherModalError('')
+                }}
+                disabled={addingTeacher}
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-              <div className={styles.field}>
-                <label className={styles.label}>Email Address *</label>
-                <input
-                  type="email"
-                  className={styles.input}
-                  placeholder="e.g. janesmith@university.edu"
-                  value={newTeacherEmail}
-                  onChange={(e) => setNewTeacherEmail(e.target.value)}
-                  required
-                />
-              </div>
+            {/* Modal Body & Form */}
+            <form onSubmit={handleCreateTeacher} style={{ display: 'contents' }}>
+              <div className={styles.teacherModalBody}>
+                {teacherModalError && (
+                  <div className={styles.inModalError}>
+                    <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                    <span>{teacherModalError}</span>
+                  </div>
+                )}
 
-              <div className={styles.field}>
-                <label className={styles.label}>Password (minimum 8 characters) *</label>
-                <input
-                  type="text"
-                  className={styles.input}
-                  value={newTeacherPassword}
-                  onChange={(e) => setNewTeacherPassword(e.target.value)}
-                  required
-                />
-                <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>
-                  Default password provided. The teacher can change this upon logging in.
-                </span>
-              </div>
+                <div className={styles.field}>
+                  <label className={styles.label}>Full Name *</label>
+                  <div className={styles.inputWithIconWrapper}>
+                    <span className={styles.inputLeadingIcon}>
+                      <User size={16} />
+                    </span>
+                    <input
+                      type="text"
+                      className={styles.inputWithIcon}
+                      placeholder="e.g. Dr. Jane Smith"
+                      value={newTeacherName}
+                      onChange={(e) => setNewTeacherName(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
 
-              <div className={styles.field}>
-                <label className={styles.label}>Assigned Role</label>
-                <div
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    background: '#e0f2fe',
-                    border: '1px solid #bae6fd',
-                    fontSize: '12px',
-                    color: '#0369a1',
-                    fontWeight: 600,
-                  }}
-                >
-                  teacher (Course Teacher — Personalized Dashboard)
+                <div className={styles.field}>
+                  <label className={styles.label}>Email Address *</label>
+                  <div className={styles.inputWithIconWrapper}>
+                    <span className={styles.inputLeadingIcon}>
+                      <Mail size={16} />
+                    </span>
+                    <input
+                      type="email"
+                      className={styles.inputWithIcon}
+                      placeholder="e.g. janesmith@university.edu"
+                      value={newTeacherEmail}
+                      onChange={(e) => setNewTeacherEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <span className={styles.fieldHint}>
+                    The teacher will use this email address to log in to the portal.
+                  </span>
+                </div>
+
+                <div className={styles.field}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className={styles.label}>Initial Password *</label>
+                    <button
+                      type="button"
+                      onClick={() => setNewTeacherPassword('Teacher@123')}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#0284c7',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    >
+                      Reset default
+                    </button>
+                  </div>
+                  <div className={styles.inputWithIconWrapper}>
+                    <span className={styles.inputLeadingIcon}>
+                      <Lock size={16} />
+                    </span>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      className={styles.inputWithIcon}
+                      value={newTeacherPassword}
+                      onChange={(e) => setNewTeacherPassword(e.target.value)}
+                      placeholder="Enter minimum 8 characters"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className={styles.passwordToggleBtn}
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <span className={styles.fieldHint}>
+                    Minimum 8 characters. The teacher can update their password upon first sign-in.
+                  </span>
                 </div>
               </div>
 
-              <div className={styles.modalActions}>
+              {/* Modal Footer */}
+              <div className={styles.teacherModalFooter}>
                 <button
                   type="button"
                   className={styles.modalCancelBtn}
-                  onClick={() => setShowAddTeacherModal(false)}
+                  onClick={() => {
+                    setShowAddTeacherModal(false)
+                    setTeacherModalError('')
+                  }}
                   disabled={addingTeacher}
                 >
                   Cancel
@@ -1188,7 +1282,7 @@ export default function TeacherAssignmentTab() {
                 <button
                   type="submit"
                   className={styles.modalConfirmBtn}
-                  disabled={addingTeacher || !newTeacherName || !newTeacherEmail || !newTeacherPassword}
+                  disabled={addingTeacher || !newTeacherName.trim() || !newTeacherEmail.trim() || !newTeacherPassword.trim()}
                 >
                   {addingTeacher ? 'Creating Account...' : 'Create Teacher →'}
                 </button>

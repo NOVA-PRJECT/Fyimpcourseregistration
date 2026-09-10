@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation'
 import Papa from 'papaparse'
 import styles from './hod-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, LogOut, Menu, ChevronDown } from 'lucide-react'
 import { downloadStudentsExcel } from '@/core/utils/exportExcel'
 
 // ── Types ──
@@ -170,11 +170,57 @@ export default function HodDashboard() {
   // Load active tab from sessionStorage on mount (hydration-safe)
   useEffect(() => {
     const storedTab = sessionStorage.getItem('hod_active_tab') as Tab | null
-    const validTabs: Tab[] = ['defaulters', 'upload', 'students', 'blueprint', 'courses', 'assignments', 'period-marking', 'campus-attendance']
+    const validTabs: Tab[] = ['defaulters', 'upload', 'students', 'blueprint', 'courses', 'assignments', 'period-marking', 'campus-attendance', 'manual-allocation']
     if (storedTab && validTabs.includes(storedTab)) {
       setActiveTab(storedTab)
     }
   }, [])
+
+  // Mobile / Lower-Screen Hamburger More Menu State
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const mobileMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setMobileMenuOpen(false)
+      }
+    }
+    if (mobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [mobileMenuOpen])
+
+  // Navigation tab groups
+  const primaryTabs: { id: Tab; label: string; icon: string }[] = [
+    { id: 'defaulters', label: 'Defaulters', icon: '📋' },
+    { id: 'students', label: 'Students', icon: '👥' },
+    { id: 'courses', label: 'Courses', icon: '📚' },
+  ]
+
+  const moreTabs: { id: Tab; label: string; icon: string }[] = [
+    { id: 'upload', label: 'Bulk Upload', icon: '📂' },
+    { id: 'blueprint', label: 'Blueprint', icon: '📐' },
+    { id: 'assignments', label: 'Faculty Assignment', icon: '👨‍🏫' },
+    { id: 'period-marking', label: 'Period Attendance', icon: '⏱️' },
+    { id: 'campus-attendance', label: 'Campus Attendance', icon: '🏛️' },
+    { id: 'manual-allocation', label: 'Manual Allocation', icon: '🎯' },
+  ]
+
+  const allTabs: { id: Tab; label: string; icon: string }[] = [
+    { id: 'defaulters', label: 'Defaulters', icon: '📋' },
+    { id: 'upload', label: 'Bulk Upload', icon: '📂' },
+    { id: 'students', label: 'Students', icon: '👥' },
+    { id: 'blueprint', label: 'Blueprint', icon: '📐' },
+    { id: 'courses', label: 'Courses', icon: '📚' },
+    { id: 'assignments', label: 'Faculty Assignment', icon: '👨‍🏫' },
+    { id: 'period-marking', label: 'Period Attendance', icon: '⏱️' },
+    { id: 'campus-attendance', label: 'Campus Attendance', icon: '🏛️' },
+    { id: 'manual-allocation', label: 'Manual Allocation', icon: '🎯' },
+  ]
+
+  const isMoreTabActive = moreTabs.some(t => t.id === activeTab)
 
   function changeTab(tab: Tab) {
     setActiveTab(tab)
@@ -441,65 +487,129 @@ export default function HodDashboard() {
   return (
     <div className={styles.pageWrapper}>
 
-      {/* Top Bar */}
-      <div className={styles.topBar}>
+      {/* Unified Executive Header Bar with Preserved Hierarchy */}
+      <header className={styles.topBar}>
         <div className={styles.topBarLeft}>
-          <div className={styles.logoSmall}>
-            <Image src="/logo.png" alt="KU" width={28} height={28} />
-          </div>
-          <div>
-            <p className={styles.topBarTitle}>FYIMP Portal</p>
-            <p className={styles.topBarSubtitle}>HOD Dashboard</p>
-          </div>
-        </div>
-        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
-          {loggingOut ? 'Logging out...' : 'Logout'}
-        </button>
-      </div>
-
-      {/* HOD Info Card */}
-      <div className={styles.infoCard}>
-        {loadingHod ? <div style={{ height: '2.5rem' }} /> : (
-          <>
-            <p className={styles.hodName}>{hodInfo?.full_name ?? 'HOD'}</p>
-            <div className={styles.hodDetails}>
-              <span className={`${styles.detailBadge} ${styles.roleBadge}`}>HOD</span>
-              <span className={styles.detailBadge}>{hodInfo?.department_name}</span>
+          {/* 1. Portal Branding Block */}
+          <div className={styles.topBarBranding}>
+            <div className={styles.logoSmall}>
+              <Image src="/logo.png" alt="KU" width={30} height={30} priority />
             </div>
-          </>
-        )}
-      </div>
+            <div className={styles.topBarTitles}>
+              <p className={styles.topBarTitle}>FYIMP Portal</p>
+              <p className={styles.topBarSubtitle}>HOD Dashboard</p>
+            </div>
+          </div>
 
-      {/* Tab Bar */}
-      <div className={styles.tabBar}>
-        <button className={`${styles.tabBtn} ${activeTab === 'defaulters' ? styles.tabActive : ''}`} onClick={() => changeTab('defaulters')}>
-          📋 Defaulters
-        </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'upload' ? styles.tabActive : ''}`} onClick={() => changeTab('upload')}>
-          📂 Bulk Upload
-        </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'students' ? styles.tabActive : ''}`} onClick={() => changeTab('students')}>
-          👥 Students
-        </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'blueprint' ? styles.tabActive : ''}`} onClick={() => changeTab('blueprint')}>
-          📐 Blueprint
-        </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'courses' ? styles.tabActive : ''}`} onClick={() => changeTab('courses')}>
-          📚 Courses
-        </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'assignments' ? styles.tabActive : ''}`} onClick={() => changeTab('assignments')}>
-          👨‍🏫 Faculty Assignment
-        </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'period-marking' ? styles.tabActive : ''}`} onClick={() => changeTab('period-marking')}>
-          ⏱️ Period Attendance
-        </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'campus-attendance' ? styles.tabActive : ''}`} onClick={() => changeTab('campus-attendance')}>
-          🏛️ Campus Attendance
-        </button>
-        <button className={`${styles.tabBtn} ${activeTab === 'manual-allocation' ? styles.tabActive : ''}`} onClick={() => changeTab('manual-allocation')}>
-          🎯 Manual Allocation
-        </button>
-      </div>
+          {/* Vertical Divider */}
+          <div className={styles.topBarDivider} />
+
+          {/* 2. HOD Details Block (Exact original hierarchy: Name on top, Badges below) */}
+          {loadingHod ? (
+            <div className={styles.topBarSkeleton} />
+          ) : (
+            <div className={styles.hodIdentity}>
+              <p className={styles.hodName}>{hodInfo?.full_name ?? 'HOD'}</p>
+              <div className={styles.hodDetails}>
+                <span className={styles.roleBadge}>HOD</span>
+                {hodInfo?.department_name && (
+                  <span className={styles.deptBadge} title={hodInfo.department_name}>
+                    {hodInfo.department_name}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. Action Controls */}
+        <div className={styles.topBarRight}>
+          <button
+            type="button"
+            className={styles.logoutBtn}
+            onClick={handleLogout}
+            disabled={loggingOut}
+            title="Log out of portal"
+          >
+            <LogOut size={14} />
+            <span className={styles.logoutText}>{loggingOut ? 'Logging out...' : 'Logout'}</span>
+          </button>
+        </div>
+      </header>
+
+      {/* ── DESKTOP TAB BAR (>= 960px): Shows all 9 tabs ── */}
+      <nav className={styles.desktopTabBar} aria-label="Desktop Navigation">
+        {allTabs.map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`${styles.tabBtn} ${activeTab === tab.id ? styles.tabActive : ''}`}
+            onClick={() => changeTab(tab.id)}
+          >
+            <span className={styles.tabIcon}>{tab.icon}</span>
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* ── MOBILE/TABLET TAB BAR (< 960px): Shows Defaulters, Students, Courses + Hamburger More Menu ── */}
+      <nav className={styles.mobileTabBar} aria-label="Mobile Navigation" ref={mobileMenuRef}>
+        {primaryTabs.map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`${styles.mobileTabBtn} ${activeTab === tab.id ? styles.tabActive : ''}`}
+            onClick={() => {
+              changeTab(tab.id)
+              setMobileMenuOpen(false)
+            }}
+          >
+            <span className={styles.tabIcon}>{tab.icon}</span>
+            <span className={styles.tabLabelText}>{tab.label}</span>
+          </button>
+        ))}
+
+        {/* Hamburger / More Menu Toggle */}
+        <div className={styles.moreMenuWrapper}>
+          <button
+            type="button"
+            className={`${styles.moreMenuBtn} ${isMoreTabActive ? styles.tabActive : ''} ${mobileMenuOpen ? styles.moreMenuBtnOpen : ''}`}
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-expanded={mobileMenuOpen}
+            aria-label="More sections menu"
+          >
+            <Menu size={15} />
+            <span className={styles.moreBtnLabel}>
+              {isMoreTabActive
+                ? moreTabs.find(t => t.id === activeTab)?.label ?? 'More'
+                : 'More'}
+            </span>
+            <ChevronDown size={13} className={`${styles.chevron} ${mobileMenuOpen ? styles.chevronOpen : ''}`} />
+          </button>
+
+          {/* Dropdown Menu for Additional Tabs */}
+          {mobileMenuOpen && (
+            <div className={styles.moreDropdown}>
+              <div className={styles.moreDropdownHeader}>Other Sections</div>
+              {moreTabs.map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`${styles.dropdownItem} ${activeTab === tab.id ? styles.dropdownItemActive : ''}`}
+                  onClick={() => {
+                    changeTab(tab.id)
+                    setMobileMenuOpen(false)
+                  }}
+                >
+                  <span className={styles.dropdownItemIcon}>{tab.icon}</span>
+                  <span className={styles.dropdownItemLabel}>{tab.label}</span>
+                  {activeTab === tab.id && <span className={styles.activeCheck}>✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </nav>
 
       {/* Main Content */}
       <div className={styles.mainContent}>

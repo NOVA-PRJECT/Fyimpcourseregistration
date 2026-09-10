@@ -59,7 +59,21 @@ export class HodService {
     const pathwaysWithIds = (pathways || []).map((p: any) => ({
       ...p,
       id: p.id && p.id.trim() !== '' ? p.id : generatePathwayId(p.name),
+      slots: (p.slots || []).map((s: any, idx: number) => ({
+        ...s,
+        slot: s.slot ?? idx + 1,
+      })),
     }))
+
+    // Synchronize flat legacy slot columns with the first/default pathway's reordered slots
+    const defaultPathway = pathwaysWithIds[0]
+    const flatSlots: Record<string, any> = {}
+    for (let i = 1; i <= 6; i++) {
+      const s = defaultPathway?.slots?.[i - 1]
+      flatSlots[`slot_${i}_rule`] = s?.rule || null
+      flatSlots[`slot_${i}_target`] = s?.target || null
+      flatSlots[`slot_${i}_name`] = s?.name || null
+    }
 
     const payload = {
       department_id: user.department_id,
@@ -67,6 +81,7 @@ export class HodService {
       min_credits,
       max_credits,
       pathways: pathwaysWithIds,
+      ...flatSlots,
     }
 
     const { error } = await this.supabase.admin

@@ -118,7 +118,29 @@ Date: 2026-09-10 (Branch: ui-works)
   - Switched to `sub-main` and merged `ui-works` with priority (`-X theirs`), cleanly fast-forwarding all changes into `sub-main`.
   - **Build Verification**: Executed both `npm run build --workspace=backend` and `npm run build:frontend` on `sub-main` — both passed with 0 errors (exit code 0).
 
+### 11. Fix Horizontal Scroll on HOD Courses Table
+- **Files**:
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  - **Expanded `.mainContent` Max Width**: Updated `.mainContent` from legacy `max-width: 48rem` (768px) to `max-width: 88rem` (1408px), with responsive padding scaling (`padding: 1.5rem 2rem` above 640px and `padding: 2rem 2.5rem` above 1280px).
+  - **Eliminated Artificial Table Scrolling**: Allowed the 10-column courses table to expand naturally into the wide display area on desktop (such as 1920px viewports), eliminating horizontal scrollbar and utilizing the previously wasted ~1152px of empty margin whitespace.
+  - **Table Cell & Header Polish**: Set `.tableHead th` to `white-space: nowrap` for clean column headings, added subtle drop shadow on `.tableWrapper`, and added `.codeBadge` style for category pills.
+  - **Build Verification**: Executed `npm run build:frontend` (`next build`) which compiled with 0 errors (exit code 0).
+
+### 12. Add Hover & Visual Styling to HOD Course List Action Buttons
+- **Files**:
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `frontend/src/app/dashboard/hod/BlueprintTab.tsx`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  - **Button Styling & Hover States**: Defined `.editBtn` and `.deleteBtn` in `hod-dashboard.module.css` with fixed 2rem dimensions, smooth transitions, `:hover` backgrounds (`#e2e8f0` for edit, `#fee2e2` with red border for delete), subtle elevation shadow, and active press states (`transform: translateY(0)`).
+  - **Accessibility Attributes**: Added `title="Edit Course"` / `aria-label="Edit Course"` and `title="Delete Course"` / `aria-label="Delete Course"` to action buttons in `BlueprintTab.tsx`.
+  - **Build Verification**: Executed `npm run build:frontend` (`next build`) which compiled cleanly with 0 errors (exit code 0).
+
 ---
+
+
 
 
 
@@ -502,4 +524,183 @@ Date: 2026-09-09
 ### H.14. UI Works Feature Branch Setup
 - Created and checked out new dedicated Git branch `ui-works` branching off from `sub-main`.
 - Prepared the workspace for upcoming UI enhancement and design work.
+
+---
+
+### 20. HOD Blueprint Paper Slots Drag-and-Drop Reordering & Storage Synchronization
+- **Files Updated**:
+  - `frontend/src/app/dashboard/hod/BlueprintTab.tsx`
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `backend/src/modules/hod/hod.service.ts`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Interactive Drag-and-Drop Reordering**:
+     - Embedded a dedicated `GripVertical` drag handle icon next to Paper titles (`Paper 1`, `Paper 2`, etc.) in `BlueprintTab.tsx`.
+     - Implemented native HTML5 drag-and-drop handlers: `draggable`, `onDragStart`, `onDragOver`, `onDragEnter`, `onDrop`, `onDragEnd`.
+     - Dragging is activated exclusively through the grip handle (`canDragSlotIdx`), completely preventing conflicts with text inputs, rule dropdowns, and checkboxes inside the paper card.
+     - Added rich visual cues in `hod-dashboard.module.css`:
+       - `.slotDragHandle`: `grab`/`grabbing` cursor with hover highlight (`#edf2f7`).
+       - `.slotCardDragging`: Opacity 0.45, dashed border (`#002147`), muted background.
+       - `.slotCardDragOver`: Active blue border (`#2563eb`), soft blue tint (`#eff6ff`), subtle lift and elevation.
+  2. **Real-Time State Reordering**:
+     - Created `reorderSlots(pathwayIdx, sourceIdx, targetIdx)` splicing and shifting slots cleanly in React state.
+     - Closed active dropdowns (`setFixedOpen({})`) on drop to ensure combobox popups stay cleanly bound.
+     - Renumbers paper titles automatically while preserving all filled fields, rules, department restrictions, and course selections.
+  3. **Storage & Data Processing Synchronization**:
+     - Updated `handleSaveBlueprint` in `BlueprintTab.tsx` so `pathwaysPayload` explicitly attaches `slot: idx + 1` to each slot object in the reordered array.
+     - Updated `updateBlueprint` in `backend/src/modules/hod/hod.service.ts` to:
+       - Save `slots` in `semester_blueprints.pathways` with explicit `slot: idx + 1` attributes.
+       - Synchronize the flat legacy database columns (`slot_1_rule`, `slot_1_target`, `slot_1_name` through `slot_6_...`) from the default pathway's reordered slots.
+     - Guarantees that when students query `getBlueprint` or `getPathwaySlots`, and when allocation services process preferences (`slot_1`, `slot_2`, etc.), the ordering is 100% faithful to the HOD's custom order.
+- **Verification**:
+  - Validated live in browser subagent on `http://localhost:3000/dashboard/hod` -> Blueprint Tab -> Pathway Editor.
+  - Successfully grabbed Paper 1's grip handle, dragged it over Paper 2, and dropped it.
+  - Confirmed Paper 1 and Paper 2 cleanly swapped positions and renumbered without field corruption.
+
+---
+
+### 21. HOD Add Course Teacher Modal UI Overhaul & Responsive Redesign
+- **Files Updated**:
+  - `frontend/src/app/dashboard/hod/TeacherAssignmentTab.tsx`
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Aesthetics & Layout Redesign**:
+     - Redesigned the "Add Course Teacher" modal from the cramped 352px box into a modern 512px (`32rem`) responsive card with backdrop blur (`backdrop-filter: blur(4px)`).
+     - Added an executive header featuring a `UserPlus` icon badge in a soft blue pill (`#e0f2fe`), title, subtitle, and an accessible top-right `✕` dismiss button (`X` from `lucide-react`).
+     - Added backdrop overlay click dismissal with stop propagation on the modal card.
+  2. **Assigned Role Removal**:
+     - Completely removed the redundant "Assigned Role" description/card from the form per user request, streamlining the interface directly to the essential credentials.
+  3. **Form Controls & Polishing**:
+     - **Full Name**: Input with leading `User` icon, clean placeholder, autofocus, and navy focus ring (`#002147`).
+     - **Email Address**: Input with leading `Mail` icon and helper note explaining portal sign-in.
+     - **Initial Password**: Input with leading `Lock` icon, a interactive show/hide toggle (`Eye` / `EyeOff`), a quick "Reset default" button (`Teacher@123`), and length requirement hint.
+  4. **In-Modal Error Feedback**:
+     - Added in-modal `teacherModalError` state and alert banner (`.inModalError` with `AlertCircle`), displaying validation or API errors directly inside the modal rather than hidden on the main dashboard background.
+  5. **Complete Responsiveness**:
+     - Implemented `max-height: 90vh` and smooth internal scrolling (`.teacherModalBody` with `overflow-y: auto`), ensuring form controls and buttons are never cut off on mobile devices, landscape orientations, or tablet viewports (~997px).
+     - Added mobile breakpoint (`@media (max-width: 480px)`): action buttons stack vertically (`flex-direction: column-reverse`) with full-width hit targets.
+- **Verification**:
+  - Validated live using browser subagent on `http://localhost:3000/dashboard/hod` -> Faculty Assignment tab.
+  - Verified header badge, icons, absence of assigned role section, and dismiss button.
+  - Verified password toggle revealing plaintext `Teacher@123` and switching between `Eye` and `EyeOff`.
+  - Tested responsive scaling at mobile width (500px) with clean padding and layout adaptability.
+
+---
+
+### 22. HOD Dashboard Header Bar Consolidation (Merged Top Bar & Role Details Bar)
+- **Files Updated**:
+  - `frontend/src/app/dashboard/hod/page.tsx`
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Consolidated Executive Header**:
+     - Merged the previously separate blue top bar (`.topBar`) and white role details card (`.infoCard`) into a single, cohesive, space-efficient executive header (`.topBar`).
+     - Replaced the stacked ~100px layout with a single, sleek dark navy bar (`linear-gradient(135deg, #001633 0%, #002147 100%)`).
+  2. **Left Cluster (Identity & Badges)**:
+     - Prominently displays the circular University logo (`/logo.png`) with translucent gold-accented border.
+     - Includes a subtle vertical separator divider (`.topBarDivider`).
+     - Groups the portal title (`FYIMP Portal • HOD Dashboard`) in crisp uppercase typography.
+     - Displays the HOD's full name alongside the high-contrast gold `[HOD]` role badge and the translucent department badge (`[Department of Computer Science]`).
+  3. **Right Cluster (Actions)**:
+     - Places the Logout button cleanly on the far right with a `<LogOut size={14} />` icon, smooth hover transitions, and loading feedback.
+  4. **Responsiveness Across All Viewports**:
+     - **Desktop (1920px)**: Streamlined single-row layout saving ~60px of vertical space, pushing dashboard tabs and content higher on screen.
+     - **Tablet (997px / 768px)**: Fluid row with responsive badge wrapping and proper padding.
+     - **Mobile (< 640px / 480px)**: Compact padding, hid unnecessary dividers, adjusted badge max-widths to eliminate horizontal overflow.
+- **Verification**:
+  - Validated live using browser subagent on `http://localhost:3000/dashboard/hod`.
+  - Confirmed the separate white info card is completely removed.
+  - Verified visual aesthetics across Desktop (1920px), Tablet (997px), and Mobile (480px) viewports with captured screenshots and session recordings.
+
+---
+
+### 23. HOD Dashboard Header Visual Hierarchy Restoration
+- **Files Updated**:
+  - `frontend/src/app/dashboard/hod/page.tsx`
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Restored Multi-Level Visual Hierarchy**:
+     - Separated the left side of the unified `.topBar` into two distinct, well-structured blocks separated by a vertical accent divider (`.topBarDivider`).
+     - **Block 1 (Portal Branding)**: Circular University logo (`/logo.png`), primary title `"FYIMP Portal"`, and uppercase subtitle `"HOD DASHBOARD"`.
+     - **Block 2 (HOD Identity & Credentials)**:
+       - **Top Line (Heading)**: HOD Full Name / Title ("HOD Information Technology") rendered as a prominent primary bold heading (`.hodName`).
+       - **Bottom Line (Badges)**: Gold `[ HOD ]` role badge and translucent department pill (`[ Information Technology ]`) placed directly underneath on line 2 (`.hodDetails`), restoring the exact visual hierarchy of the original infoCard.
+  2. **Styling & Layout Refinements**:
+     - Added `.topBarBranding`, `.topBarTitles`, and `.hodIdentity` flex containers in `hod-dashboard.module.css`.
+     - Fine-tuned font sizing, line heights, and element gap (`gap: 1.25rem`) between branding, divider, and identity blocks.
+  3. **Multi-Device Responsiveness**:
+     - Desktop (1920px): Balanced horizontal arrangement with prominent heading hierarchy.
+     - Tablet (768px - 997px): Seamless scaling with all elements aligned without collisions.
+     - Mobile (375px - 480px): Dynamic wrapping where role and department badges stack cleanly underneath the heading title without clipping or horizontal scroll.
+- **Verification**:
+  - Validated live via browser subagent on `http://localhost:3000/dashboard/hod`.
+  - Verified presence of portal branding block, divider, prominent HOD name heading, and badges on line 2 across Desktop, Tablet, and Mobile viewports with screenshots.
+
+---
+
+### 24. HOD Dashboard Header Badge Size Reduction & Color Unification
+- **Files Updated**:
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Strict Minimal Change Scope**:
+     - Retained the entire markup structure, layout, typography, portal branding, and identity grouping without alteration, strictly following user direction ("dont touch anything else just reduce the size of two labels and make colour same of both labels").
+  2. **Reduced Badge Dimensions**:
+     - Reduced `.roleBadge` font-size to `0.6rem` (from `0.65rem`), reduced padding to `0.08rem 0.45rem`, and unified line-height to `1.3`.
+     - Reduced `.deptBadge` font-size to `0.6rem` (from `0.7rem`), reduced padding to `0.08rem 0.45rem`, and unified line-height to `1.3`.
+  3. **Unified Badge Styling & Color Palette**:
+     - Standardized both `.roleBadge` and `.deptBadge` to the same sleek translucent pill aesthetic:
+       - Background: `rgba(255, 255, 255, 0.12)`
+       - Text Color: `rgba(255, 255, 255, 0.92)`
+       - Border: `1px solid rgba(255, 255, 255, 0.18)`
+       - Border Radius: `2rem`
+     - Eliminated the contrasting solid yellow block on `.roleBadge`, creating a harmonious, compact metadata pair underneath the primary heading title.
+- **Verification**:
+  - Validated live on `http://localhost:3000/dashboard/hod` using browser subagent.
+  - Inspected desktop screenshot (`hod_header_screenshot_1789034402792.png`), confirming both labels are identically styled, subtle, and properly proportioned.
+
+---
+
+### 25. Full Dashboard Responsiveness & Lower-Screen Hamburger Tab Navigation
+- **Files Updated**:
+  - `frontend/src/app/dashboard/hod/page.tsx`
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **User-Approved White Top Bar Preservation**:
+     - Maintained user's white executive top bar (`#ffffff`), navy typography (`#002147`), navy badge borders/tints, and solid navy logout button.
+     - Unified `.deptBadge` background to `rgba(0, 33, 71, 0.1)` matching `.roleBadge`.
+  2. **Top Bar Responsiveness on Lower Screens**:
+     - Tablet (`<= 900px`): Scaled padding to `0.35rem 0.85rem`, reduced gap to `0.75rem`, hid `.topBarSubtitle` ("HOD DASHBOARD").
+     - Mobile (`<= 640px`): Hid `.topBarTitles` and `.topBarDivider`, dedicating header space to circular KU logo + HOD identity.
+     - Ultra-mobile (`<= 480px`): Collapsed logout button text to compact icon-only button (`<LogOut size={14} />`), eliminating cramping.
+  3. **Lower-Screen Tab Bar with Hamburger Menu**:
+     - On Desktop (`>= 960px`): Displays all 9 tabs (`📋 Defaulters`, `📂 Bulk Upload`, `👥 Students`, `📐 Blueprint`, `📚 Courses`, `👨‍🏫 Faculty Assignment`, `⏱️ Period Attendance`, `🏛️ Campus Attendance`, `🎯 Manual Allocation`) across the full row.
+     - On Lower Screens (`< 960px`): Displays the 3 primary daily tabs:
+       - `📋 Defaulters`
+       - `👥 Students`
+       - `📚 Courses`
+       - Plus an interactive **More Menu** toggle (`☰ More ▾` / `☰ [Active Section] ▾`).
+     - Tapping the hamburger button opens a sleek executive dropdown card containing the remaining sections:
+       - `📂 Bulk Upload`
+       - `📐 Blueprint`
+       - `👨‍🏫 Faculty Assignment`
+       - `⏱️ Period Attendance`
+       - `🏛️ Campus Attendance`
+       - `🎯 Manual Allocation`
+     - Dynamically reflects the selected section name on the trigger button, checks active item with `✓`, and automatically closes on click outside.
+  4. **Content & Layout Responsiveness**:
+     - Added `box-sizing: border-box` to `.mainContent` to eliminate 2.5rem layout width blowout.
+     - Added responsive scaling for `.statsRow` (`repeat(3, 1fr)` on mobile), `.semesterRow` (column wrapping on `< 480px`), and ensured all tables maintain touch scroll inside `.tableWrapper`.
+- **Verification**:
+  - Live browser testing verified across Desktop (1920x945), Tablet (768x900), and Mobile (390x844).
+  - Verified hamburger menu opening, section activation (Blueprint), dynamic trigger label update, and zero layout overflow.
+
+
+
+
+
+
 

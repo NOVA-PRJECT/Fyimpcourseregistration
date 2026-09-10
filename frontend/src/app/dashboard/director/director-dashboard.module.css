@@ -15,7 +15,7 @@
 /* ── TOP BAR ── */
 .topBar {
   background-color: #002147;
-  padding: 0.85rem 1.25rem;
+  padding: 1.1rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -399,7 +399,7 @@
 }
 
 @media (min-width: 640px) {
-  .topBar { padding: 1rem 1.5rem; }
+  .topBar { padding: 1.1rem 1.5rem; }
   .infoCard { padding: 1.25rem 1.5rem; }
   .mainContent { padding: 1.5rem; }
 }

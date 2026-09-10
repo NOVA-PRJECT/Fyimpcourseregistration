@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { GripVertical } from 'lucide-react'
 import styles from './hod-dashboard.module.css'
 
 const RULES = [
@@ -39,6 +40,11 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     { name: 'Default', slots: [{ rule: '', target: '', name: '' }] }
   ])
   const [editingPathwayIndex, setEditingPathwayIndex] = useState<number | null>(null)
+
+  // Drag-and-drop reordering state for slots
+  const [draggedSlotIdx, setDraggedSlotIdx] = useState<number | null>(null)
+  const [dragOverSlotIdx, setDragOverSlotIdx] = useState<number | null>(null)
+  const [canDragSlotIdx, setCanDragSlotIdx] = useState<number | null>(null)
 
   // New state variables for pickers
   const [departments, setDepartments] = useState<{ id: string; name: string; code: string }[]>([])
@@ -270,6 +276,18 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     ))
   }
 
+  function reorderSlots(pathwayIdx: number, sourceIdx: number, targetIdx: number) {
+    if (sourceIdx === targetIdx) return
+    setPathways(prev => prev.map((pw, pi) => {
+      if (pi !== pathwayIdx) return pw
+      const updatedSlots = [...pw.slots]
+      const [movedItem] = updatedSlots.splice(sourceIdx, 1)
+      updatedSlots.splice(targetIdx, 0, movedItem)
+      return { ...pw, slots: updatedSlots }
+    }))
+    setFixedOpen({})
+  }
+
   function addPathway() {
     setPathways(prev => [...prev, { name: '', slots: [{ rule: '', target: '', name: '' }] }])
     setEditingPathwayIndex(pathways.length)
@@ -318,11 +336,16 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     setError('')
     setSuccess('')
 
-    // Build pathways payload: only send non-empty slots, preserve ids
+    // Build pathways payload: only send non-empty slots, preserve ids and explicit slot ordering
     const pathwaysPayload = pathways.map(pw => ({
       ...(pw.id ? { id: pw.id } : {}),
       name: pw.name,
-      slots: pw.slots.filter(s => s.rule && s.target.trim() && s.name.trim()),
+      slots: pw.slots
+        .filter(s => s.rule && s.target.trim() && s.name.trim())
+        .map((s, idx) => ({
+          ...s,
+          slot: idx + 1,
+        })),
     }))
 
     const res = await fetch('/api/hod/blueprint', {
@@ -511,18 +534,62 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   // Render a slot editor for a pathway
   function renderSlotEditor(pathwayIdx: number, slotIdx: number, slot: SlotData) {
     const fixedKey = `${pathwayIdx}-${slotIdx}`
+    const isDragging = draggedSlotIdx === slotIdx
+    const isDragOver = dragOverSlotIdx === slotIdx && draggedSlotIdx !== slotIdx
+
     return (
-      <div key={slotIdx} className={styles.slotEditorCard}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <p className={styles.slotEditorTitle}>Paper {slotIdx + 1}</p>
+      <div
+        key={slotIdx}
+        className={`${styles.slotEditorCard} ${isDragging ? styles.slotCardDragging : ''} ${isDragOver ? styles.slotCardDragOver : ''}`}
+        draggable={canDragSlotIdx === slotIdx}
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', String(slotIdx))
+          e.dataTransfer.effectAllowed = 'move'
+          setDraggedSlotIdx(slotIdx)
+        }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+        }}
+        onDragEnter={() => {
+          if (draggedSlotIdx !== null && draggedSlotIdx !== slotIdx) {
+            setDragOverSlotIdx(slotIdx)
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          if (draggedSlotIdx !== null && draggedSlotIdx !== slotIdx) {
+            reorderSlots(pathwayIdx, draggedSlotIdx, slotIdx)
+          }
+          setDraggedSlotIdx(null)
+          setDragOverSlotIdx(null)
+          setCanDragSlotIdx(null)
+        }}
+        onDragEnd={() => {
+          setDraggedSlotIdx(null)
+          setDragOverSlotIdx(null)
+          setCanDragSlotIdx(null)
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            {pathways[pathwayIdx].slots.length > 1 && (
+              <div
+                className={styles.slotDragHandle}
+                title="Drag to reorder paper slot"
+                onMouseEnter={() => setCanDragSlotIdx(slotIdx)}
+                onMouseLeave={() => setCanDragSlotIdx(null)}
+              >
+                <GripVertical size={16} />
+              </div>
+            )}
+            <p className={styles.slotEditorTitle}>Paper {slotIdx + 1}</p>
+          </div>
           {pathways[pathwayIdx].slots.length > 1 && (
             <button
               type="button"
               onClick={() => removeSlotFromPathway(pathwayIdx, slotIdx)}
-              style={{
-                background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer',
-                fontSize: '0.75rem', fontWeight: 600, padding: '0.25rem 0.5rem',
-              }}
+              className={styles.slotRemoveBtn}
             >
               ✕ Remove
             </button>
@@ -1108,24 +1175,38 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                           </td>
                           <td>
                             <div className={styles.actionBtns}>
-                              <button className={styles.editBtn} onClick={() => {
-                                setEditCourse(course)
-                                setCourseCode(course.course_code)
-                                setCourseTitle(course.title)
-                                setCourseCredits(course.credits)
-                                setCourseTheoryHours(course.theory_hours_per_week ?? course.credits)
-                                setCoursePracticalHours(course.practical_hours_per_week ?? 0)
-                                setCourseCategory(course.category)
-                                setCourseTag(course.tag ?? '')
-                                setCourseSeatLimit(course.seat_limit ?? 60)
-                                setCourseAllowedDepts(course.allowed_department_ids ?? [])
-                                setCoursePrereqs(course.prerequisite_course_ids ?? [])
-                                loadCourseRules(course.id)
-                                setError(''); setSuccess('')
-                              }}>✏️</button>
-                              <button className={styles.deleteBtn} onClick={() => {
-                                setDeleteCourse(course); setError(''); setSuccess('')
-                              }}>🗑️</button>
+                              <button
+                                className={styles.editBtn}
+                                title="Edit Course"
+                                aria-label="Edit Course"
+                                onClick={() => {
+                                  setEditCourse(course)
+                                  setCourseCode(course.course_code)
+                                  setCourseTitle(course.title)
+                                  setCourseCredits(course.credits)
+                                  setCourseTheoryHours(course.theory_hours_per_week ?? course.credits)
+                                  setCoursePracticalHours(course.practical_hours_per_week ?? 0)
+                                  setCourseCategory(course.category)
+                                  setCourseTag(course.tag ?? '')
+                                  setCourseSeatLimit(course.seat_limit ?? 60)
+                                  setCourseAllowedDepts(course.allowed_department_ids ?? [])
+                                  setCoursePrereqs(course.prerequisite_course_ids ?? [])
+                                  loadCourseRules(course.id)
+                                  setError(''); setSuccess('')
+                                }}
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                className={styles.deleteBtn}
+                                title="Delete Course"
+                                aria-label="Delete Course"
+                                onClick={() => {
+                                  setDeleteCourse(course); setError(''); setSuccess('')
+                                }}
+                              >
+                                🗑️
+                              </button>
                             </div>
                           </td>
                         </tr>
