@@ -752,7 +752,7 @@ export default function CampusDirectorTimetablePage() {
       {/* Top Navigation */}
       <div className={styles.topBar}>
         <div className={styles.topBarLeft}>
-          <Image src="/logo.png" alt="KU" width={28} height={28} />
+          <Image src="/knrunilogo.png" alt="KU" width={28} height={28} />
           <div>
             <p className={styles.topBarTitle}>Timetable Management</p>
             <p className={styles.topBarSubtitle}>Campus Director Dashboard (AI-Powered Engine)</p>

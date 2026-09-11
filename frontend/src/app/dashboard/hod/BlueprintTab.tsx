@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { GripVertical } from 'lucide-react'
+import { GripVertical, ChevronDown } from 'lucide-react'
 import styles from './hod-dashboard.module.css'
 
 const RULES = [
@@ -43,7 +43,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
 
   // Drag-and-drop reordering state for slots
   const [draggedSlotIdx, setDraggedSlotIdx] = useState<number | null>(null)
-  const [dragOverSlotIdx, setDragOverSlotIdx] = useState<number | null>(null)
+  const [dragOverSlot, setDragOverSlot] = useState<{ index: number; position: 'above' | 'below' } | null>(null)
   const [canDragSlotIdx, setCanDragSlotIdx] = useState<number | null>(null)
 
   // New state variables for pickers
@@ -65,25 +65,81 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   const [courseCategory, setCourseCategory] = useState<string | null>(null)
   const [courseTag, setCourseTag] = useState('')
   const [courseSeatLimit, setCourseSeatLimit] = useState<number | ''>(60)
-  const [courseAllowedDepts, setCourseAllowedDepts] = useState<string[]>([])
   const [coursePrereqs, setCoursePrereqs] = useState<string[]>([])
 
-  // Prerequisite Rule Engine state
+  // Prerequisite Rule Engine state (Only DEPARTMENT and COMPLETED_COURSE)
   interface PrerequisiteRuleItem {
     id?: string
     course_id?: string
-    rule: 'COMPLETED_COURSE' | 'COMPLETED_SEMESTER' | 'DEPARTMENT'
+    rule: 'COMPLETED_COURSE' | 'DEPARTMENT'
     target: string
   }
   const [courseRules, setCourseRules] = useState<PrerequisiteRuleItem[]>([])
   const [loadingRules, setLoadingRules] = useState(false)
-  const [newRuleType, setNewRuleType] = useState<'COMPLETED_COURSE' | 'COMPLETED_SEMESTER' | 'DEPARTMENT'>('COMPLETED_COURSE')
+  const [newRuleType, setNewRuleType] = useState<'COMPLETED_COURSE' | 'DEPARTMENT'>('DEPARTMENT')
   const [newRuleTarget, setNewRuleTarget] = useState('')
+
+  // Prior courses selector for COMPLETED_COURSE
+  const [priorCourses, setPriorCourses] = useState<any[]>([])
+  const [loadingPriorCourses, setLoadingPriorCourses] = useState(false)
+  const [priorCourseSemesterFilter, setPriorCourseSemesterFilter] = useState<number | null>(null)
+  const [priorCourseSearch, setPriorCourseSearch] = useState('')
+  const [priorCourseOpen, setPriorCourseOpen] = useState(false)
 
   const [savingCourse, setSavingCourse] = useState(false)
   const [deletingCourse, setDeletingCourse] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
+
+  // Baseline snapshot for tracking dirty/unsaved changes
+  interface BlueprintSnapshot {
+    minCredits: number | ''
+    maxCredits: number | ''
+    pathways: PathwayData[]
+  }
+  const [initialSnapshot, setInitialSnapshot] = useState<BlueprintSnapshot | null>(null)
+
+  // Auto-scroll window while dragging slot near viewport edges
+  useEffect(() => {
+    if (draggedSlotIdx === null) return
+
+    function handleDragOver(e: DragEvent) {
+      const scrollMargin = 140
+      const scrollSpeed = 18
+
+      if (e.clientY < scrollMargin) {
+        const intensity = Math.max(0.2, (scrollMargin - e.clientY) / scrollMargin)
+        window.scrollBy({ top: -scrollSpeed * intensity, behavior: 'auto' })
+      } else if (window.innerHeight - e.clientY < scrollMargin) {
+        const intensity = Math.max(0.2, (scrollMargin - (window.innerHeight - e.clientY)) / scrollMargin)
+        window.scrollBy({ top: scrollSpeed * intensity, behavior: 'auto' })
+      }
+    }
+
+    window.addEventListener('dragover', handleDragOver)
+    return () => {
+      window.removeEventListener('dragover', handleDragOver)
+    }
+  }, [draggedSlotIdx])
+
+  const hasChanges = (() => {
+    if (!initialSnapshot) return false
+    if (minCredits !== initialSnapshot.minCredits) return true
+    if (maxCredits !== initialSnapshot.maxCredits) return true
+
+    const cleanPws = (pws: PathwayData[]) =>
+      pws.map(p => ({
+        name: (p.name || '').trim(),
+        slots: p.slots.map(s => ({
+          rule: s.rule || '',
+          target: (s.target || '').trim(),
+          name: (s.name || '').trim(),
+        })),
+      }))
+
+    return JSON.stringify(cleanPws(pathways)) !== JSON.stringify(cleanPws(initialSnapshot.pathways))
+  })()
+
   // Helper to determine credit ranges for each slot
   function getSlotCreditRange(slot: SlotData): { min: number; max: number } {
     if (!slot.rule) return { min: 0, max: 0 }
@@ -169,8 +225,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   async function fetchDepartmentsList() {
     try {
       const res = await fetch('/api/hod/departments')
-      const data = await res.json()
-      if (res.ok) {
+      const data = await res.json().catch(() => [])
+      if (res.ok && Array.isArray(data)) {
         setDepartments(data)
       }
     } catch (err) {
@@ -178,73 +234,138 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     }
   }
 
+  async function loadPriorCourses(maxSem: number) {
+    if (maxSem <= 1) {
+      setPriorCourses([])
+      return
+    }
+    setLoadingPriorCourses(true)
+    try {
+      const res = await fetch(`/api/hod/courses?max_semester=${maxSem}`)
+      const data = await res.json().catch(() => [])
+      if (res.ok && Array.isArray(data)) {
+        setPriorCourses(data)
+      } else {
+        setPriorCourses([])
+      }
+    } catch (err) {
+      console.error('Failed to fetch prior courses:', err)
+      setPriorCourses([])
+    } finally {
+      setLoadingPriorCourses(false)
+    }
+  }
+
+  // Load prior courses when Add/Edit Course modal opens
+  useEffect(() => {
+    if (showAddCourse || editCourse) {
+      const targetSem = editCourse?.semester ?? semester
+      loadPriorCourses(targetSem)
+      setPriorCourseSemesterFilter(null)
+      setPriorCourseSearch('')
+      setPriorCourseOpen(false)
+    }
+  }, [showAddCourse, editCourse, semester])
+
   async function fetchBlueprint(sem: number = semester) {
     setLoading(true)
     setError('')
     setSuccess('')
 
-    const res = await fetch(`/api/hod/blueprint?semester=${sem}`)
-    const data = await res.json()
-
-    if (!res.ok) {
-      setError(data.error ?? 'Failed to fetch blueprint')
-      setLoading(false)
-      return
-    }
-
-    if (data) {
-      setMinCredits(data.min_credits ?? 0)
-      setMaxCredits(data.max_credits ?? 0)
-
-      // Read from pathways JSONB if available, else create default pathway from flat columns
-      if (data.pathways && Array.isArray(data.pathways) && data.pathways.length > 0) {
-        setPathways(data.pathways.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          slots: (p.slots || []).map((s: any) => ({
-            rule: s.rule ?? '',
-            target: s.target ?? '',
-            name: s.name ?? '',
-          }))
-        })))
-      } else {
-        // Legacy: build single pathway from flat columns
-        const flatSlots: SlotData[] = []
-        for (let i = 1; i <= 6; i++) {
-          const rule = data[`slot_${i}_rule`] ?? ''
-          const target = data[`slot_${i}_target`] ?? ''
-          const name = data[`slot_${i}_name`] ?? ''
-          if (rule) {
-            flatSlots.push({ rule, target, name })
-          }
-        }
-        if (flatSlots.length === 0) {
-          flatSlots.push({ rule: '', target: '', name: '' })
-        }
-        setPathways([{ name: 'Default', slots: flatSlots }])
+    try {
+      const res = await fetch(`/api/hod/blueprint?semester=${sem}`)
+      let data: any = null
+      try {
+        const text = await res.text()
+        data = text ? JSON.parse(text) : null
+      } catch {
+        data = null
       }
-      setEditingPathwayIndex(null)
-    } else {
-      // No blueprint yet — reset to empty
-      setMinCredits(0)
-      setMaxCredits(0)
-      setPathways([{ name: 'Default', slots: [{ rule: '', target: '', name: '' }] }])
-      setEditingPathwayIndex(null)
-    }
 
-    await fetchCourses(sem)
-    setLoading(false)
+      if (!res.ok) {
+        setError(data?.error ?? data?.message ?? `Failed to fetch blueprint (${res.status})`)
+        setLoading(false)
+        return
+      }
+
+      if (data && (data.id || (data.pathways && data.pathways.length > 0) || data.min_credits !== undefined)) {
+        const nextMin = data.min_credits ?? 0
+        const nextMax = data.max_credits ?? 0
+        setMinCredits(nextMin)
+        setMaxCredits(nextMax)
+
+        let loadedPathways: PathwayData[] = []
+        // Read from pathways JSONB if available, else create default pathway from flat columns
+        if (data.pathways && Array.isArray(data.pathways) && data.pathways.length > 0) {
+          loadedPathways = data.pathways.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            slots: (p.slots || []).map((s: any) => ({
+              rule: s.rule ?? '',
+              target: s.target ?? '',
+              name: s.name ?? '',
+            }))
+          }))
+        } else {
+          // Legacy: build single pathway from flat columns
+          const flatSlots: SlotData[] = []
+          for (let i = 1; i <= 6; i++) {
+            const rule = data[`slot_${i}_rule`] ?? ''
+            const target = data[`slot_${i}_target`] ?? ''
+            const name = data[`slot_${i}_name`] ?? ''
+            if (rule) {
+              flatSlots.push({ rule, target, name })
+            }
+          }
+          if (flatSlots.length === 0) {
+            flatSlots.push({ rule: '', target: '', name: '' })
+          }
+          loadedPathways = [{ name: 'Default', slots: flatSlots }]
+        }
+        setPathways(loadedPathways)
+        setInitialSnapshot({
+          minCredits: nextMin,
+          maxCredits: nextMax,
+          pathways: JSON.parse(JSON.stringify(loadedPathways)),
+        })
+        setEditingPathwayIndex(null)
+      } else {
+        // No blueprint yet — reset to empty default
+        setMinCredits(0)
+        setMaxCredits(0)
+        const emptyPathways = [{ name: 'Default', slots: [{ rule: '', target: '', name: '' }] }]
+        setPathways(emptyPathways)
+        setInitialSnapshot({
+          minCredits: 0,
+          maxCredits: 0,
+          pathways: JSON.parse(JSON.stringify(emptyPathways)),
+        })
+        setEditingPathwayIndex(null)
+      }
+
+      await fetchCourses(sem)
+    } catch (err: any) {
+      console.error('Failed to fetch blueprint:', err)
+      setError(err.message || 'Network error fetching blueprint')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function fetchCourses(sem: number = semester) {
     setLoadingCourses(true)
-    const url = view === 'courses'
-      ? `/api/hod/courses?semester=${sem}&own=true`
-      : `/api/hod/courses?semester=${sem}`
-    const res = await fetch(url)
-    const data = await res.json()
-    if (res.ok) setCourses(data)
-    setLoadingCourses(false)
+    try {
+      const url = view === 'courses'
+        ? `/api/hod/courses?semester=${sem}&own=true`
+        : `/api/hod/courses?semester=${sem}`
+      const res = await fetch(url)
+      const data = await res.json().catch(() => [])
+      if (res.ok && Array.isArray(data)) setCourses(data)
+    } catch (err) {
+      console.error('Failed to fetch courses:', err)
+    } finally {
+      setLoadingCourses(false)
+    }
   }
 
   function updateSlot(pathwayIdx: number, slotIdx: number, field: keyof SlotData, value: string) {
@@ -276,13 +397,17 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     ))
   }
 
-  function reorderSlots(pathwayIdx: number, sourceIdx: number, targetIdx: number) {
-    if (sourceIdx === targetIdx) return
+  function reorderSlots(pathwayIdx: number, sourceIdx: number, targetIdx: number, position: 'above' | 'below' = 'above') {
+    if (sourceIdx === targetIdx && position === 'above') return
     setPathways(prev => prev.map((pw, pi) => {
       if (pi !== pathwayIdx) return pw
       const updatedSlots = [...pw.slots]
       const [movedItem] = updatedSlots.splice(sourceIdx, 1)
-      updatedSlots.splice(targetIdx, 0, movedItem)
+      let insertIdx = position === 'above' ? targetIdx : targetIdx + 1
+      if (sourceIdx < targetIdx) {
+        insertIdx = position === 'above' ? targetIdx - 1 : targetIdx
+      }
+      updatedSlots.splice(insertIdx, 0, movedItem)
       return { ...pw, slots: updatedSlots }
     }))
     setFixedOpen({})
@@ -353,7 +478,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ semester, min_credits: minCredits, max_credits: maxCredits, pathways: pathwaysPayload }),
     })
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
 
     if (!res.ok) { setError(data.error ?? 'Failed to save blueprint') }
     else {
@@ -369,9 +494,13 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
     setLoadingRules(true)
     try {
       const res = await fetch(`/api/allocation/config/prerequisites/${courseId}`)
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (res.ok && data.rules) {
         setCourseRules(data.rules)
+        const deptRule = data.rules.find((r: any) => r.rule === 'DEPARTMENT')
+        if (deptRule) {
+          setNewRuleTarget(deptRule.target)
+        }
       } else {
         setCourseRules([])
       }
@@ -385,7 +514,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   async function handleAddRule() {
     const trimmed = newRuleTarget.trim()
     if (!trimmed) {
-      setError('Please specify a target for the prerequisite rule')
+      setError(newRuleType === 'DEPARTMENT' ? 'Please select at least one department' : 'Please specify or select a prerequisite course')
       return
     }
     setError('')
@@ -397,10 +526,19 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rule: newRuleType, target: trimmed }),
         })
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         if (res.ok && data.rule) {
-          setCourseRules([...courseRules, data.rule])
-          setNewRuleTarget('')
+          const existsIdx = courseRules.findIndex(r => r.id === data.rule.id || (r.rule === 'DEPARTMENT' && data.rule.rule === 'DEPARTMENT'))
+          if (existsIdx >= 0) {
+            const updated = [...courseRules]
+            updated[existsIdx] = data.rule
+            setCourseRules(updated)
+          } else {
+            setCourseRules([...courseRules, data.rule])
+          }
+          if (newRuleType !== 'DEPARTMENT') {
+            setNewRuleTarget('')
+          }
         } else {
           setError(data.error || data.message || 'Failed to add prerequisite rule')
         }
@@ -408,15 +546,26 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
         setError(err.message || 'Failed to add prerequisite rule')
       }
     } else {
-      const exists = courseRules.some(
-        (r) => r.rule === newRuleType && r.target.toUpperCase() === trimmed.toUpperCase(),
-      )
-      if (exists) {
-        setError('This prerequisite rule is already added')
-        return
+      if (newRuleType === 'DEPARTMENT') {
+        const existsIdx = courseRules.findIndex(r => r.rule === 'DEPARTMENT')
+        if (existsIdx >= 0) {
+          const updated = [...courseRules]
+          updated[existsIdx] = { rule: 'DEPARTMENT', target: trimmed }
+          setCourseRules(updated)
+        } else {
+          setCourseRules([...courseRules, { rule: 'DEPARTMENT', target: trimmed }])
+        }
+      } else {
+        const exists = courseRules.some(
+          (r) => r.rule === newRuleType && r.target.toUpperCase() === trimmed.toUpperCase(),
+        )
+        if (exists) {
+          setError('This prerequisite course is already added')
+          return
+        }
+        setCourseRules([...courseRules, { rule: newRuleType, target: trimmed }])
+        setNewRuleTarget('')
       }
-      setCourseRules([...courseRules, { rule: newRuleType, target: trimmed }])
-      setNewRuleTarget('')
     }
   }
 
@@ -429,8 +578,11 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
         })
         if (res.ok) {
           setCourseRules(courseRules.filter((r) => r.id !== rule.id))
+          if (rule.rule === 'DEPARTMENT') {
+            setNewRuleTarget('')
+          }
         } else {
-          const data = await res.json()
+          const data = await res.json().catch(() => ({}))
           setError(data.error || data.message || 'Failed to delete prerequisite rule')
         }
       } catch (err: any) {
@@ -438,7 +590,66 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       }
     } else {
       setCourseRules(courseRules.filter((_, i) => i !== idx))
+      if (rule.rule === 'DEPARTMENT') {
+        setNewRuleTarget('')
+      }
     }
+  }
+
+  async function updateDepartmentCodes(newCodes: string[]) {
+    setError('')
+    const deptRule = courseRules.find(r => r.rule === 'DEPARTMENT')
+    const newTarget = newCodes.filter(Boolean).join(',')
+
+    if (!newTarget) {
+      if (deptRule) {
+        handleDeleteRule(deptRule, courseRules.indexOf(deptRule))
+      }
+      return
+    }
+
+    if (editCourse?.id) {
+      try {
+        const res = await fetch(`/api/allocation/config/prerequisites/${editCourse.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rule: 'DEPARTMENT', target: newTarget }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && data.rule) {
+          const existsIdx = courseRules.findIndex(r => r.rule === 'DEPARTMENT')
+          if (existsIdx >= 0) {
+            const updated = [...courseRules]
+            updated[existsIdx] = data.rule
+            setCourseRules(updated)
+          } else {
+            setCourseRules([...courseRules, data.rule])
+          }
+        } else {
+          setError(data.error || data.message || 'Failed to update department constraint')
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to update department constraint')
+      }
+    } else {
+      const existsIdx = courseRules.findIndex(r => r.rule === 'DEPARTMENT')
+      if (existsIdx >= 0) {
+        const updated = [...courseRules]
+        updated[existsIdx] = { rule: 'DEPARTMENT', target: newTarget }
+        setCourseRules(updated)
+      } else {
+        setCourseRules([...courseRules, { rule: 'DEPARTMENT', target: newTarget }])
+      }
+    }
+  }
+
+  function handleDepartmentToggle(deptCode: string, isChecked: boolean) {
+    const deptRule = courseRules.find(r => r.rule === 'DEPARTMENT')
+    const currentCodes = deptRule?.target ? deptRule.target.split(',').map(c => c.trim()).filter(Boolean) : []
+    const newCodes = isChecked
+      ? (currentCodes.includes(deptCode) ? currentCodes : [...currentCodes, deptCode])
+      : currentCodes.filter(c => c !== deptCode)
+    updateDepartmentCodes(newCodes)
   }
 
   async function handleSaveCourse() {
@@ -469,7 +680,6 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       category: courseCategory,
       tag: courseTag.trim(),
       seat_limit: courseSeatLimit !== '' ? Number(courseSeatLimit) : 60,
-      allowed_department_ids: courseAllowedDepts,
       prerequisite_course_ids: coursePrereqs,
     }
     if (isEdit) {
@@ -483,9 +693,9 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bodyPayload),
     })
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
 
-    if (!res.ok) { setError(data.error ?? 'Failed to save course') }
+    if (!res.ok) { setError(data.message || data.error || 'Failed to save course') }
     else {
       // If newly created course had staged rules, persist them
       if (!isEdit && data.id && courseRules.length > 0) {
@@ -506,7 +716,8 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       setShowAddCourse(false)
       setEditCourse(null)
       setCourseCode(''); setCourseTitle(''); setCourseCredits(null); setCourseTheoryHours(null); setCoursePracticalHours(null); setCourseCategory(null); setCourseTag('')
-      setCourseSeatLimit(60); setCourseAllowedDepts([]); setCoursePrereqs([]); setCourseRules([]); setNewRuleTarget('')
+      setCourseSeatLimit(60); setCoursePrereqs([]); setCourseRules([]); setNewRuleTarget('')
+      setNewRuleType('DEPARTMENT'); setPriorCourseOpen(false); setPriorCourseSearch(''); setPriorCourseSemesterFilter(null)
       fetchCourses()
     }
     setSavingCourse(false)
@@ -520,7 +731,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ course_id: deleteCourse.id }),
     })
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
     if (!res.ok) { setError(data.error ?? 'Failed to delete course') }
     else {
       setSuccess(data.message)
@@ -535,12 +746,13 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   function renderSlotEditor(pathwayIdx: number, slotIdx: number, slot: SlotData) {
     const fixedKey = `${pathwayIdx}-${slotIdx}`
     const isDragging = draggedSlotIdx === slotIdx
-    const isDragOver = dragOverSlotIdx === slotIdx && draggedSlotIdx !== slotIdx
+    const isDropAbove = dragOverSlot?.index === slotIdx && dragOverSlot.position === 'above' && draggedSlotIdx !== slotIdx
+    const isDropBelow = dragOverSlot?.index === slotIdx && dragOverSlot.position === 'below' && draggedSlotIdx !== slotIdx
 
     return (
       <div
         key={slotIdx}
-        className={`${styles.slotEditorCard} ${isDragging ? styles.slotCardDragging : ''} ${isDragOver ? styles.slotCardDragOver : ''}`}
+        className={`${styles.slotEditorCard} ${isDragging ? styles.slotCardDragging : ''} ${isDropAbove ? styles.slotDropIndicatorAbove : ''} ${isDropBelow ? styles.slotDropIndicatorBelow : ''}`}
         draggable={canDragSlotIdx === slotIdx}
         onDragStart={(e) => {
           e.dataTransfer.setData('text/plain', String(slotIdx))
@@ -550,24 +762,35 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
         onDragOver={(e) => {
           e.preventDefault()
           e.dataTransfer.dropEffect = 'move'
-        }}
-        onDragEnter={() => {
           if (draggedSlotIdx !== null && draggedSlotIdx !== slotIdx) {
-            setDragOverSlotIdx(slotIdx)
+            const rect = e.currentTarget.getBoundingClientRect()
+            const isAbove = (e.clientY - rect.top) < (rect.height / 2)
+            const pos = isAbove ? 'above' : 'below'
+            if (!dragOverSlot || dragOverSlot.index !== slotIdx || dragOverSlot.position !== pos) {
+              setDragOverSlot({ index: slotIdx, position: pos })
+            }
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            if (dragOverSlot?.index === slotIdx) {
+              setDragOverSlot(null)
+            }
           }
         }}
         onDrop={(e) => {
           e.preventDefault()
           if (draggedSlotIdx !== null && draggedSlotIdx !== slotIdx) {
-            reorderSlots(pathwayIdx, draggedSlotIdx, slotIdx)
+            const pos = dragOverSlot?.index === slotIdx ? dragOverSlot.position : 'above'
+            reorderSlots(pathwayIdx, draggedSlotIdx, slotIdx, pos)
           }
           setDraggedSlotIdx(null)
-          setDragOverSlotIdx(null)
+          setDragOverSlot(null)
           setCanDragSlotIdx(null)
         }}
         onDragEnd={() => {
           setDraggedSlotIdx(null)
-          setDragOverSlotIdx(null)
+          setDragOverSlot(null)
           setCanDragSlotIdx(null)
         }}
       >
@@ -797,7 +1020,7 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
   }
 
   return (
-    <>
+    <div className={styles.blueprintContainer}>
       {success && (
         <div className={styles.successModalOverlay} onClick={() => setSuccess('')}>
           <div className={styles.successModalContent} onClick={e => e.stopPropagation()}>
@@ -1063,42 +1286,44 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
 
               {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{error}</div>}
 
-              <div style={{
-                position: 'sticky',
-                bottom: 0,
-                background: '#f0f2f5',
-                padding: '1rem 0',
-                borderTop: '1.5px solid #dde1e7',
-                zIndex: 10,
-                display: 'flex',
-                gap: '0.75rem',
-                marginTop: '1.5rem',
-              }}>
-                <button
-                  type="button"
-                  className={styles.saveBtn}
-                  style={{ flex: 1, background: '#ffffff', color: '#44474e', border: '1.5px solid #dde1e7' }}
-                  onClick={() => setShowCancelConfirm(true)}
-                  disabled={saving}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className={styles.saveBtn}
-                  style={{ flex: 1 }}
-                  onClick={() => {
-                    if (minCredits === '' || maxCredits === '') {
-                      setError('Min and Max credits are required')
-                      return
-                    }
-                    setShowSaveConfirm(true)
-                  }}
-                  disabled={saving}
-                >
-                  {saving ? 'Saving...' : 'Save Blueprint →'}
-                </button>
-              </div>
+              {hasChanges && (
+                <div style={{
+                  position: 'sticky',
+                  bottom: 0,
+                  background: '#f0f2f5',
+                  padding: '1rem 0',
+                  borderTop: '1.5px solid #dde1e7',
+                  zIndex: 10,
+                  display: 'flex',
+                  gap: '0.75rem',
+                  marginTop: '1.5rem',
+                }}>
+                  <button
+                    type="button"
+                    className={styles.saveBtn}
+                    style={{ flex: 1, background: '#ffffff', color: '#44474e', border: '1.5px solid #dde1e7' }}
+                    onClick={() => setShowCancelConfirm(true)}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.saveBtn}
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      if (minCredits === '' || maxCredits === '') {
+                        setError('Min and Max credits are required')
+                        return
+                      }
+                      setShowSaveConfirm(true)
+                    }}
+                    disabled={saving}
+                  >
+                    {saving ? 'Saving...' : 'Save Blueprint →'}
+                  </button>
+                </div>
+              )}
             </>
           )}
 
@@ -1116,7 +1341,6 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                   setCourseCategory(null)
                   setCourseTag('')
                   setCourseSeatLimit(60)
-                  setCourseAllowedDepts([])
                   setCoursePrereqs([])
                   setCourseRules([])
                   setNewRuleTarget('')
@@ -1151,7 +1375,6 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                         <th>Practical Hrs</th>
                         <th>Cat</th>
                         <th>Tag</th>
-                        <th>Allowed Depts</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -1166,13 +1389,6 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                           <td>{course.practical_hours_per_week ?? 0}</td>
                           <td><span className={styles.codeBadge}>{course.category}</span></td>
                           <td style={{ fontSize: '0.68rem', color: '#9ba1ab' }}>{course.tag ?? '—'}</td>
-                          <td style={{ fontSize: '0.72rem' }}>
-                            {course.allowed_department_ids && course.allowed_department_ids.length > 0 ? (
-                              <span style={{ color: '#38bdf8' }}>{course.allowed_department_ids.length} dept(s)</span>
-                            ) : (
-                              <span style={{ color: '#94a3b8' }}>All</span>
-                            )}
-                          </td>
                           <td>
                             <div className={styles.actionBtns}>
                               <button
@@ -1189,7 +1405,6 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                                   setCourseCategory(course.category)
                                   setCourseTag(course.tag ?? '')
                                   setCourseSeatLimit(course.seat_limit ?? 60)
-                                  setCourseAllowedDepts(course.allowed_department_ids ?? [])
                                   setCoursePrereqs(course.prerequisite_course_ids ?? [])
                                   loadCourseRules(course.id)
                                   setError(''); setSuccess('')
@@ -1225,314 +1440,13 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
           {/* Add/Edit Course Modal */}
           {(showAddCourse || editCourse) && (
             <div className={styles.modalOverlay}>
-              <div className={styles.modal} style={{ maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
-                <h3 className={styles.modalTitle}>{editCourse ? 'Edit Course' : 'Add Course'}</h3>
-                <div className={styles.fieldGroup}>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Course Code</label>
-                    <input type="text" className={styles.input} placeholder="e.g. KU01DSCMAT101"
-                      value={courseCode} onChange={e => setCourseCode(e.target.value.toUpperCase())} />
-                  </div>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Title</label>
-                    <input type="text" className={styles.input} placeholder="e.g. Differential Calculus"
-                      value={courseTitle} onChange={e => setCourseTitle(e.target.value)} />
-                  </div>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Credits</label>
-                    <input type="number" className={styles.input} min={1} max={10}
-                      value={courseCredits ?? ''}
-                      onChange={e => {
-                        const val = e.target.value
-                        setCourseCredits(val === '' ? null : Number(val))
-                      }} />
-                  </div>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Seat Limit (Capacity across Fixed + Elective)</label>
-                    <input type="number" className={styles.input} min={1} max={500}
-                      placeholder="e.g. 60"
-                      value={courseSeatLimit ?? ''}
-                      onChange={e => {
-                        const val = e.target.value
-                        setCourseSeatLimit(val === '' ? '' : Number(val))
-                      }} />
-                  </div>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Category</label>
-                    <select className={styles.input} value={courseCategory ?? ''} onChange={e => setCourseCategory(e.target.value || null)}>
-                      <option value="">— Select Category —</option>
-                      {['DSS', 'DSC', 'DSE', 'VAC', 'SEC', 'MDC', 'MOOC', 'AEC', 'INT', 'FWD', 'RPH', 'CIP'].map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Tag (optional)</label>
-                    <input type="text" className={styles.input} placeholder="e.g. POOL-A or MDC-1"
-                      value={courseTag} onChange={e => setCourseTag(e.target.value.toUpperCase())} />
-                  </div>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Theory Hours / Week</label>
-                    <input type="number" className={styles.input} min={0} max={20}
-                      placeholder={courseCredits ? `${courseCredits} (Default)` : 'e.g. 3'}
-                      value={courseTheoryHours ?? ''}
-                      onChange={e => {
-                        const val = e.target.value
-                        setCourseTheoryHours(val === '' ? null : Number(val))
-                      }} />
-                  </div>
-                  <div className={styles.field}>
-                    <label className={styles.label}>Practical Hours / Week (Lab Blocks)</label>
-                    <input type="number" className={styles.input} min={0} max={20}
-                      placeholder="e.g. 2 (1 lab block = 2 hrs)"
-                      value={coursePracticalHours ?? ''}
-                      onChange={e => {
-                        const val = e.target.value
-                        setCoursePracticalHours(val === '' ? null : Number(val))
-                      }} />
-                  </div>
-
-                  {/* Allowed Departments Multi-Select */}
-                  <div className={styles.field} style={{ gridColumn: '1 / -1' }}>
-                    <label className={styles.label}>Allowed Departments (empty = all allowed)</label>
-                    <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #334155', borderRadius: '6px', padding: '0.5rem', background: '#0f172a' }}>
-                      {departments.length === 0 ? (
-                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>No departments loaded</span>
-                      ) : (
-                        departments.map((d) => {
-                          const isChecked = courseAllowedDepts.includes(d.id)
-                          return (
-                            <label key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem', marginBottom: '0.25rem', cursor: 'pointer', color: '#cbd5e1' }}>
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setCourseAllowedDepts([...courseAllowedDepts, d.id])
-                                  } else {
-                                    setCourseAllowedDepts(courseAllowedDepts.filter((id) => id !== d.id))
-                                  }
-                                }}
-                              />
-                              <span><strong>{d.code}</strong> — {d.name}</span>
-                            </label>
-                          )
-                        })
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Prerequisite Rules Engine */}
-                  <div className={styles.field} style={{ gridColumn: '1 / -1' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <label className={styles.label} style={{ margin: 0 }}>
-                        Prerequisite Rules (+1 scoring point per matched rule)
-                      </label>
-                      <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                        Courses without rules score 0 pts (not disqualified)
-                      </span>
-                    </div>
-
-                    {/* Rules List */}
-                    <div style={{
-                      background: '#0f172a',
-                      border: '1px solid #334155',
-                      borderRadius: '6px',
-                      padding: '0.6rem',
-                      marginBottom: '0.6rem',
-                      maxHeight: '140px',
-                      overflowY: 'auto'
-                    }}>
-                      {loadingRules ? (
-                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Loading rules...</span>
-                      ) : courseRules.length === 0 ? (
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', padding: '0.25rem 0' }}>
-                          No prerequisite rules configured yet. Add rules below.
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                          {courseRules.map((rule, idx) => {
-                            let badgeBg = 'rgba(56, 189, 248, 0.15)'
-                            let badgeColor = '#38bdf8'
-                            let label = ''
-
-                            if (rule.rule === 'COMPLETED_COURSE') {
-                              badgeBg = 'rgba(168, 85, 247, 0.15)'
-                              badgeColor = '#c084fc'
-                              const courseMatch = courses.find(c => c.course_code === rule.target)
-                              label = `Completed Course: ${rule.target}${courseMatch ? ` (${courseMatch.title})` : ''}`
-                            } else if (rule.rule === 'COMPLETED_SEMESTER') {
-                              badgeBg = 'rgba(34, 197, 94, 0.15)'
-                              badgeColor = '#4ade80'
-                              label = `Completed Semester: Greater than Sem ${rule.target}`
-                            } else if (rule.rule === 'DEPARTMENT') {
-                              badgeBg = 'rgba(251, 146, 60, 0.15)'
-                              badgeColor = '#fb923c'
-                              const deptMatch = departments.find(d => d.code === rule.target)
-                              label = `Department Match: ${rule.target}${deptMatch ? ` (${deptMatch.name})` : ''}`
-                            }
-
-                            return (
-                              <div
-                                key={rule.id ?? `rule-${idx}`}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  background: '#1e293b',
-                                  border: '1px solid #334155',
-                                  borderRadius: '4px',
-                                  padding: '0.35rem 0.6rem',
-                                }}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                  <span style={{
-                                    fontSize: '0.65rem',
-                                    fontWeight: 700,
-                                    textTransform: 'uppercase',
-                                    padding: '0.15rem 0.4rem',
-                                    borderRadius: '3px',
-                                    background: badgeBg,
-                                    color: badgeColor,
-                                    letterSpacing: '0.04em'
-                                  }}>
-                                    {rule.rule === 'COMPLETED_COURSE' ? 'Course' : rule.rule === 'COMPLETED_SEMESTER' ? 'Semester' : 'Dept'}
-                                  </span>
-                                  <span style={{ fontSize: '0.75rem', color: '#e2e8f0' }}>{label}</span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteRule(rule, idx)}
-                                  style={{
-                                    background: 'transparent',
-                                    border: 'none',
-                                    color: '#f87171',
-                                    cursor: 'pointer',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 700,
-                                    padding: '0.1rem 0.35rem',
-                                  }}
-                                  title="Delete rule"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Add Rule Controls */}
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: '160px 1fr auto',
-                      gap: '0.5rem',
-                      alignItems: 'center',
-                      background: '#1e293b',
-                      padding: '0.5rem',
-                      borderRadius: '6px',
-                      border: '1px dashed #475569'
-                    }}>
-                      <select
-                        className={styles.input}
-                        style={{ margin: 0, fontSize: '0.75rem', padding: '0.35rem' }}
-                        value={newRuleType}
-                        onChange={(e) => {
-                          const val = e.target.value as any
-                          setNewRuleType(val)
-                          setNewRuleTarget('')
-                        }}
-                      >
-                        <option value="COMPLETED_COURSE">Completed Course</option>
-                        <option value="COMPLETED_SEMESTER">Completed Semester</option>
-                        <option value="DEPARTMENT">Department Match</option>
-                      </select>
-
-                      {newRuleType === 'COMPLETED_COURSE' && (
-                        <div style={{ display: 'flex', gap: '0.35rem' }}>
-                          <select
-                            className={styles.input}
-                            style={{ margin: 0, fontSize: '0.75rem', padding: '0.35rem', flex: 1 }}
-                            value={newRuleTarget}
-                            onChange={(e) => setNewRuleTarget(e.target.value)}
-                          >
-                            <option value="">-- Select Prior Course --</option>
-                            {courses
-                              .filter(c => c.id !== editCourse?.id)
-                              .map(c => (
-                                <option key={c.id} value={c.course_code}>
-                                  {c.course_code} — {c.title} (Sem {c.semester})
-                                </option>
-                              ))}
-                          </select>
-                          <input
-                            type="text"
-                            placeholder="or code (e.g. IT101)"
-                            className={styles.input}
-                            style={{ margin: 0, fontSize: '0.75rem', width: '130px', textTransform: 'uppercase' }}
-                            value={newRuleTarget}
-                            onChange={(e) => setNewRuleTarget(e.target.value.toUpperCase())}
-                          />
-                        </div>
-                      )}
-
-                      {newRuleType === 'COMPLETED_SEMESTER' && (
-                        <select
-                          className={styles.input}
-                          style={{ margin: 0, fontSize: '0.75rem', padding: '0.35rem' }}
-                          value={newRuleTarget}
-                          onChange={(e) => setNewRuleTarget(e.target.value)}
-                        >
-                          <option value="">-- Select Completed Semester Threshold --</option>
-                          {[1, 2, 3, 4, 5, 6, 7].map(num => (
-                            <option key={num} value={num}>
-                              Semester {num} completed (Student current sem &gt; {num})
-                            </option>
-                          ))}
-                        </select>
-                      )}
-
-                      {newRuleType === 'DEPARTMENT' && (
-                        <select
-                          className={styles.input}
-                          style={{ margin: 0, fontSize: '0.75rem', padding: '0.35rem' }}
-                          value={newRuleTarget}
-                          onChange={(e) => setNewRuleTarget(e.target.value)}
-                        >
-                          <option value="">-- Select Department --</option>
-                          {departments.map(d => (
-                            <option key={d.id} value={d.code}>
-                              {d.code} — {d.name}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={handleAddRule}
-                        style={{
-                          background: '#0284c7',
-                          color: '#ffffff',
-                          border: 'none',
-                          borderRadius: '4px',
-                          padding: '0.4rem 0.75rem',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        + Add Rule
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {error && <div className={styles.errorBanner} style={{ marginBottom: '1rem', marginTop: '0.5rem' }}>{error}</div>}
-                <div className={styles.modalActions}>
-                  <button className={styles.modalCancelBtn}
+              <div className={styles.courseModalDialog}>
+                {/* Sticky Header */}
+                <div className={styles.courseModalHeader}>
+                  <h3 className={styles.modalTitle}>{editCourse ? 'Edit Course' : 'Add Course'}</h3>
+                  <button
+                    type="button"
+                    className={styles.courseModalCloseBtn}
                     onClick={() => {
                       setShowAddCourse(false)
                       setEditCourse(null)
@@ -1544,12 +1458,666 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
                       setCourseCategory(null)
                       setCourseTag('')
                       setCourseSeatLimit(60)
-                      setCourseAllowedDepts([])
                       setCoursePrereqs([])
+                      setCourseRules([])
+                      setNewRuleTarget('')
                       setError('')
                     }}
-                    disabled={savingCourse}>Cancel</button>
-                  <button className={styles.modalConfirmBtn} onClick={handleSaveCourse} disabled={savingCourse}>
+                    title="Close"
+                    aria-label="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Scrollable Body with 2-Column Responsive Layout */}
+                <div className={styles.courseModalBody}>
+                  <div className={styles.courseModalGrid}>
+                    {/* Left Column: Course Details */}
+                    <div className={styles.courseModalCol}>
+                      <div className={styles.courseModalSectionTitle}>
+                        <span>Course Details</span>
+                      </div>
+
+                      <div className={styles.field}>
+                        <label className={styles.label}>Course Code</label>
+                        <input
+                          type="text"
+                          className={styles.input}
+                          placeholder="e.g. KU01DSCMAT101"
+                          value={courseCode}
+                          onChange={e => setCourseCode(e.target.value.toUpperCase())}
+                        />
+                      </div>
+
+                      <div className={styles.field}>
+                        <label className={styles.label}>Title</label>
+                        <input
+                          type="text"
+                          className={styles.input}
+                          placeholder="e.g. Differential Calculus"
+                          value={courseTitle}
+                          onChange={e => setCourseTitle(e.target.value)}
+                        />
+                      </div>
+
+                      <div className={styles.courseModalTwoCol}>
+                        <div className={styles.field}>
+                          <label className={styles.label}>Credits</label>
+                          <input
+                            type="number"
+                            className={styles.input}
+                            min={1}
+                            max={10}
+                            value={courseCredits ?? ''}
+                            onKeyDown={e => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
+                            onChange={e => {
+                              const val = e.target.value.replace(/[^0-9]/g, '')
+                              setCourseCredits(val === '' ? null : Number(val))
+                            }}
+                          />
+                        </div>
+                        <div className={styles.field}>
+                          <label className={styles.label}>Seat Limit</label>
+                          <input
+                            type="number"
+                            className={styles.input}
+                            min={1}
+                            max={500}
+                            placeholder="e.g. 60"
+                            value={courseSeatLimit ?? ''}
+                            onKeyDown={e => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
+                            onChange={e => {
+                              const val = e.target.value.replace(/[^0-9]/g, '')
+                              setCourseSeatLimit(val === '' ? '' : Number(val))
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className={styles.courseModalTwoCol}>
+                        <div className={styles.field}>
+                          <label className={styles.label}>Category</label>
+                          <select
+                            className={styles.input}
+                            value={courseCategory ?? ''}
+                            onChange={e => setCourseCategory(e.target.value || null)}
+                          >
+                            <option value="">— Select Category —</option>
+                            {['DSS', 'DSC', 'DSE', 'VAC', 'SEC', 'MDC', 'MOOC', 'AEC', 'INT', 'FWD', 'RPH', 'CIP'].map(c => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className={styles.field}>
+                          <label className={styles.label}>Tag (optional)</label>
+                          <input
+                            type="text"
+                            className={styles.input}
+                            placeholder="e.g. POOL-A or MDC-1"
+                            value={courseTag}
+                            onChange={e => setCourseTag(e.target.value.toUpperCase())}
+                          />
+                        </div>
+                      </div>
+
+                      <div className={styles.courseModalTwoCol}>
+                        <div className={styles.field}>
+                          <label className={styles.label}>Theory Hours / Wk</label>
+                          <input
+                            type="number"
+                            className={styles.input}
+                            min={0}
+                            max={20}
+                            placeholder={courseCredits ? `${courseCredits} (Default)` : 'e.g. 3'}
+                            value={courseTheoryHours ?? ''}
+                            onKeyDown={e => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
+                            onChange={e => {
+                              const val = e.target.value.replace(/[^0-9]/g, '')
+                              setCourseTheoryHours(val === '' ? null : Number(val))
+                            }}
+                          />
+                        </div>
+                        <div className={styles.field}>
+                          <label className={styles.label}>Practical Hours / Wk</label>
+                          <input
+                            type="number"
+                            className={styles.input}
+                            min={0}
+                            max={20}
+                            placeholder="e.g. 2"
+                            value={coursePracticalHours ?? ''}
+                            onKeyDown={e => { if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault() }}
+                            onChange={e => {
+                              const val = e.target.value.replace(/[^0-9]/g, '')
+                              setCoursePracticalHours(val === '' ? null : Number(val))
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Column: Constraints & Eligibility (Hard Constraints) */}
+                    <div className={styles.courseModalRightCol}>
+                      <div className={styles.courseModalSectionTitle}>
+                        <span>Constraints &amp; Eligibility</span>
+                        <span style={{ fontSize: '0.7rem', color: '#002147', fontWeight: 600, background: '#e0f2fe', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+                          Hard Eligibility
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: '0.74rem', color: '#64748b', lineHeight: 1.45 }}>
+                        Define hard eligibility constraints for this course. Students who do not meet these constraints cannot register for this paper.
+                      </div>
+
+                      {/* Active Constraints List (Light University Theme) */}
+                      <div style={{
+                        background: '#f8fafc',
+                        border: '1.5px solid #e2e8f0',
+                        borderRadius: '8px',
+                        padding: '0.65rem',
+                        minHeight: '110px',
+                        maxHeight: '190px',
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.45rem'
+                      }}>
+                        {loadingRules ? (
+                          <div style={{ padding: '0.8rem', textAlign: 'center', fontSize: '0.75rem', color: '#64748b' }}>
+                            Loading constraints...
+                          </div>
+                        ) : courseRules.length === 0 ? (
+                          <div style={{
+                            fontSize: '0.75rem',
+                            color: '#64748b',
+                            fontStyle: 'italic',
+                            padding: '1rem',
+                            textAlign: 'center',
+                            lineHeight: 1.5
+                          }}>
+                            No constraints configured.<br />
+                            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                              All eligible students matching the blueprint can register.
+                            </span>
+                          </div>
+                        ) : (
+                          courseRules.map((rule, idx) => {
+                            if (rule.rule === 'DEPARTMENT') {
+                              const codes = rule.target.split(',').map(c => c.trim()).filter(Boolean)
+                              return (
+                                <div key={rule.id ?? `rule-${idx}`} className={styles.constraintCardLight}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1, paddingRight: '0.5rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                      <span style={{
+                                        fontSize: '0.65rem',
+                                        fontWeight: 700,
+                                        textTransform: 'uppercase',
+                                        padding: '0.15rem 0.45rem',
+                                        borderRadius: '3px',
+                                        background: '#e0f2fe',
+                                        color: '#0369a1',
+                                        letterSpacing: '0.04em'
+                                      }}>
+                                        Department Match
+                                      </span>
+                                      <span style={{ fontSize: '0.74rem', color: '#475569', fontWeight: 500 }}>
+                                        ({codes.length} department{codes.length === 1 ? '' : 's'} allowed)
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                                      {codes.map(c => {
+                                        const dept = departments.find(d => d.code === c)
+                                        return (
+                                          <span
+                                            key={c}
+                                            style={{
+                                              fontSize: '0.7rem',
+                                              fontWeight: 600,
+                                              background: '#f1f5f9',
+                                              color: '#0f172a',
+                                              padding: '0.1rem 0.4rem',
+                                              borderRadius: '3px',
+                                              border: '1px solid #cbd5e1'
+                                            }}
+                                            title={dept ? dept.name : c}
+                                          >
+                                            {c}
+                                          </span>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteRule(rule, idx)}
+                                    style={{
+                                      background: '#fee2e2',
+                                      border: 'none',
+                                      color: '#dc2626',
+                                      cursor: 'pointer',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 600,
+                                      borderRadius: '4px',
+                                      padding: '0.25rem 0.5rem',
+                                      flexShrink: 0
+                                    }}
+                                    title="Remove department constraint"
+                                  >
+                                    ✕ Remove
+                                  </button>
+                                </div>
+                              )
+                            } else {
+                              const match = courses.find(c => c.course_code === rule.target) || priorCourses.find(c => c.course_code === rule.target)
+                              return (
+                                <div key={rule.id ?? `rule-${idx}`} className={styles.constraintCardLight}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1, paddingRight: '0.5rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                      <span style={{
+                                        fontSize: '0.65rem',
+                                        fontWeight: 700,
+                                        textTransform: 'uppercase',
+                                        padding: '0.15rem 0.45rem',
+                                        borderRadius: '3px',
+                                        background: '#f3e8ff',
+                                        color: '#7e22ce',
+                                        letterSpacing: '0.04em'
+                                      }}>
+                                        Completed Course
+                                      </span>
+                                    </div>
+                                    <div style={{ fontSize: '0.76rem', color: '#1e293b', fontWeight: 600 }}>
+                                      {rule.target} {match ? `— ${match.title} (Sem ${match.semester})` : ''}
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteRule(rule, idx)}
+                                    style={{
+                                      background: '#fee2e2',
+                                      border: 'none',
+                                      color: '#dc2626',
+                                      cursor: 'pointer',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 600,
+                                      borderRadius: '4px',
+                                      padding: '0.25rem 0.5rem',
+                                      flexShrink: 0
+                                    }}
+                                    title="Remove course prerequisite"
+                                  >
+                                    ✕ Remove
+                                  </button>
+                                </div>
+                              )
+                            }
+                          })
+                        )}
+                      </div>
+
+                      {/* Constraint Configuration Panel (Light University Theme) */}
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.75rem',
+                        background: '#ffffff',
+                        padding: '0.85rem',
+                        borderRadius: '8px',
+                        border: '1.5px solid #dde1e7'
+                      }}>
+                        {/* Rule Type Tabs */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          borderBottom: '1.5px solid #f1f5f9',
+                          paddingBottom: '0.6rem'
+                        }}>
+                          <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewRuleType('DEPARTMENT')
+                                setPriorCourseOpen(false)
+                              }}
+                              style={{
+                                background: newRuleType === 'DEPARTMENT' ? '#002147' : '#f1f5f9',
+                                color: newRuleType === 'DEPARTMENT' ? '#ffffff' : '#475569',
+                                border: 'none',
+                                borderRadius: '5px',
+                                padding: '0.35rem 0.75rem',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              Department Match
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewRuleType('COMPLETED_COURSE')
+                                setPriorCourseOpen(false)
+                              }}
+                              style={{
+                                background: newRuleType === 'COMPLETED_COURSE' ? '#002147' : '#f1f5f9',
+                                color: newRuleType === 'COMPLETED_COURSE' ? '#ffffff' : '#475569',
+                                border: 'none',
+                                borderRadius: '5px',
+                                padding: '0.35rem 0.75rem',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              Completed Course Prerequisite
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* DEPARTMENT Constraint View */}
+                        {newRuleType === 'DEPARTMENT' && (() => {
+                          const deptRule = courseRules.find(r => r.rule === 'DEPARTMENT')
+                          const selectedDeptCodes = deptRule?.target ? deptRule.target.split(',').map(c => c.trim()).filter(Boolean) : []
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label style={{ fontSize: '0.74rem', fontWeight: 600, color: '#334155' }}>
+                                  Select Allowed Departments ({selectedDeptCodes.length} selected):
+                                </label>
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateDepartmentCodes(departments.map(d => d.code))}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: '#0284c7',
+                                      cursor: 'pointer',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 600,
+                                      padding: 0
+                                    }}
+                                  >
+                                    Select All
+                                  </button>
+                                  <span style={{ color: '#cbd5e1', fontSize: '0.7rem' }}>•</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateDepartmentCodes([])}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: '#dc2626',
+                                      cursor: 'pointer',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 600,
+                                      padding: 0
+                                    }}
+                                  >
+                                    Clear All
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className={styles.constraintDeptGrid}>
+                                {departments.map(d => {
+                                  const isChecked = selectedDeptCodes.includes(d.code)
+                                  return (
+                                    <label
+                                      key={d.id}
+                                      className={`${styles.constraintDeptLabel} ${isChecked ? styles.constraintDeptLabelActive : ''}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={(e) => handleDepartmentToggle(d.code, e.target.checked)}
+                                      />
+                                      <span>{d.code}</span>
+                                      <span style={{ color: '#64748b', fontSize: '0.7rem' }}>({d.name})</span>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+
+                              <div style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.4 }}>
+                                Tip: Matches Blueprint slot rules (`DEPT_RESTRICTED`). Only students in selected departments can register. If none selected, the rule is removed and all departments can register.
+                              </div>
+                            </div>
+                          )
+                        })()}
+
+                        {/* COMPLETED_COURSE Constraint View */}
+                        {newRuleType === 'COMPLETED_COURSE' && (() => {
+                          const activeCourseSem = editCourse?.semester ?? semester
+                          if (activeCourseSem <= 1) {
+                            return (
+                              <div style={{
+                                padding: '0.85rem',
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                color: '#64748b',
+                                fontSize: '0.76rem',
+                                lineHeight: 1.45,
+                                textAlign: 'center'
+                              }}>
+                                Semester 1 courses cannot have completed course prerequisites because there are no prior semesters.
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                              <label style={{ fontSize: '0.74rem', fontWeight: 600, color: '#334155' }}>
+                                Select Prerequisite Course (Prior Semesters Only):
+                              </label>
+
+                              {/* Custom Dropdown Trigger */}
+                              <div className={styles.priorCourseDropdownWrapper}>
+                                <button
+                                  type="button"
+                                  className={styles.priorCourseTrigger}
+                                  onClick={() => setPriorCourseOpen(prev => !prev)}
+                                >
+                                  <span>
+                                    {newRuleTarget ? (
+                                      (() => {
+                                        const match = priorCourses.find(c => c.course_code === newRuleTarget)
+                                        return match
+                                          ? `${match.course_code} — ${match.title} (Sem ${match.semester})`
+                                          : newRuleTarget
+                                      })()
+                                    ) : (
+                                      <span style={{ color: '#94a3b8' }}>-- Select Prior Course --</span>
+                                    )}
+                                  </span>
+                                  <ChevronDown size={16} style={{ color: '#64748b', transform: priorCourseOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                                </button>
+
+                                {priorCourseOpen && (
+                                  <div className={styles.priorCourseMenu}>
+                                    {/* Semester Filter Pills */}
+                                    <div className={styles.priorCourseSemFilterRow}>
+                                      <button
+                                        type="button"
+                                        className={`${styles.priorCourseSemPill} ${priorCourseSemesterFilter === null ? styles.priorCourseSemPillActive : ''}`}
+                                        onClick={() => setPriorCourseSemesterFilter(null)}
+                                      >
+                                        All Prior
+                                      </button>
+                                      {Array.from({ length: Math.max(0, activeCourseSem - 1) }, (_, i) => i + 1).map(semNum => (
+                                        <button
+                                          key={semNum}
+                                          type="button"
+                                          className={`${styles.priorCourseSemPill} ${priorCourseSemesterFilter === semNum ? styles.priorCourseSemPillActive : ''}`}
+                                          onClick={() => setPriorCourseSemesterFilter(semNum)}
+                                        >
+                                          Sem {semNum}
+                                        </button>
+                                      ))}
+                                    </div>
+
+                                    {/* Search Input inside Dropdown */}
+                                    <input
+                                      type="text"
+                                      className={styles.priorCourseSearchInput}
+                                      placeholder="Filter by course code or title..."
+                                      value={priorCourseSearch}
+                                      onChange={(e) => setPriorCourseSearch(e.target.value)}
+                                      autoFocus
+                                    />
+
+                                    {/* Courses List */}
+                                    <div className={styles.priorCourseList}>
+                                      {loadingPriorCourses ? (
+                                        <div style={{ padding: '0.6rem', textAlign: 'center', fontSize: '0.75rem', color: '#64748b' }}>
+                                          Loading prior courses...
+                                        </div>
+                                      ) : (
+                                        (() => {
+                                          const filtered = priorCourses.filter(c => {
+                                            if (editCourse?.id && c.id === editCourse.id) return false
+                                            if (c.semester >= activeCourseSem) return false
+                                            if (priorCourseSemesterFilter !== null && c.semester !== priorCourseSemesterFilter) return false
+                                            if (priorCourseSearch.trim()) {
+                                              const q = priorCourseSearch.trim().toLowerCase()
+                                              const matchCode = c.course_code?.toLowerCase().includes(q)
+                                              const matchTitle = c.title?.toLowerCase().includes(q)
+                                              if (!matchCode && !matchTitle) return false
+                                            }
+                                            return true
+                                          })
+
+                                          if (filtered.length === 0) {
+                                            return (
+                                              <div style={{ padding: '0.6rem', textAlign: 'center', fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                                                No prior courses found
+                                              </div>
+                                            )
+                                          }
+
+                                          return filtered.map(c => {
+                                            const isAlreadyAdded = courseRules.some(r => r.rule === 'COMPLETED_COURSE' && r.target === c.course_code)
+                                            const isSelected = newRuleTarget === c.course_code
+
+                                            return (
+                                              <div
+                                                key={c.id}
+                                                className={styles.priorCourseOption}
+                                                style={{
+                                                  opacity: isAlreadyAdded ? 0.6 : 1,
+                                                  background: isSelected ? '#e0f2fe' : undefined,
+                                                }}
+                                                onClick={() => {
+                                                  setNewRuleTarget(c.course_code)
+                                                  setPriorCourseOpen(false)
+                                                }}
+                                              >
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                  <span style={{ fontWeight: 600, color: '#002147' }}>
+                                                    {c.course_code} — {c.title}
+                                                  </span>
+                                                  {isAlreadyAdded && (
+                                                    <span style={{ fontSize: '0.68rem', color: '#0284c7', fontWeight: 600 }}>
+                                                      (Already Added)
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                                                  Semester {c.semester} • {c.credits} Credits • {c.category || 'General'}
+                                                </div>
+                                              </div>
+                                            )
+                                          })
+                                        })()
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <input
+                                  type="text"
+                                  placeholder="Or enter course code manually"
+                                  className={styles.input}
+                                  style={{ margin: 0, fontSize: '0.75rem', padding: '0.45rem 0.6rem', flex: 1, textTransform: 'uppercase' }}
+                                  value={newRuleTarget}
+                                  onChange={(e) => setNewRuleTarget(e.target.value.toUpperCase())}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={handleAddRule}
+                                  disabled={!newRuleTarget.trim()}
+                                  style={{
+                                    background: !newRuleTarget.trim() ? '#94a3b8' : '#002147',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    padding: '0.45rem 0.85rem',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    cursor: !newRuleTarget.trim() ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.35rem',
+                                    whiteSpace: 'nowrap',
+                                    transition: 'background 0.15s ease'
+                                  }}
+                                >
+                                  + Add Prerequisite
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sticky Footer */}
+                <div className={styles.courseModalFooter}>
+                  {error && (
+                    <div className={styles.errorBanner} style={{ margin: 0, flex: 1, padding: '0.4rem 0.75rem', fontSize: '0.78rem' }}>
+                      {error}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className={styles.modalCancelBtn}
+                    style={{ maxWidth: '140px' }}
+                    onClick={() => {
+                      setShowAddCourse(false)
+                      setEditCourse(null)
+                      setCourseCode('')
+                      setCourseTitle('')
+                      setCourseCredits(null)
+                      setCourseTheoryHours(null)
+                      setCoursePracticalHours(null)
+                      setCourseCategory(null)
+                      setCourseTag('')
+                      setCourseSeatLimit(60)
+                      setCoursePrereqs([])
+                      setCourseRules([])
+                      setNewRuleTarget('')
+                      setError('')
+                    }}
+                    disabled={savingCourse}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.modalConfirmBtn}
+                    style={{ maxWidth: '180px' }}
+                    onClick={handleSaveCourse}
+                    disabled={savingCourse}
+                  >
                     {savingCourse ? 'Saving...' : editCourse ? 'Save Changes →' : 'Add Course →'}
                   </button>
                 </div>
@@ -1592,7 +2160,12 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
               </button>
               <button className={styles.modalConfirmBtn} onClick={() => {
                 setShowCancelConfirm(false)
-                fetchBlueprint(semester)
+                if (initialSnapshot) {
+                  setMinCredits(initialSnapshot.minCredits)
+                  setMaxCredits(initialSnapshot.maxCredits)
+                  setPathways(JSON.parse(JSON.stringify(initialSnapshot.pathways)))
+                }
+                setError('')
               }}>
                 Yes, Discard
               </button>
@@ -1623,6 +2196,6 @@ export default function BlueprintTab({ view = 'blueprint' }: { view?: 'blueprint
           </div>
         </div>
       )}
-    </>
+    </div>
   )
 }

@@ -24,18 +24,24 @@ const CreateTeacherSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
 })
 
+const COURSE_CATEGORIES = [
+  'DSS', 'DSC', 'DSE', 'VAC', 'SEC', 'MDC', 'MOOC', 'AEC', 'INT', 'FWD', 'RPH', 'CIP'
+] as const
+
 const CreateCourseSchema = z.object({
   course_code: z.string().min(1, 'Course code is required').max(30),
   title: z.string().min(1, 'Course title is required').max(200),
-  semester: z.coerce.number().int().min(1).max(8),
+  semester: z.coerce.number().int().min(1).max(10),
   credits: z.coerce.number().int().min(1).max(10),
   theory_hours_per_week: z.coerce.number().int().min(0).max(40).optional().default(0),
   practical_hours_per_week: z.coerce.number().int().min(0).max(40).optional().default(0),
-  category: z.string().min(1, 'Category is required'),
+  category: z.enum(COURSE_CATEGORIES, {
+    errorMap: () => ({ message: 'Category must be one of: DSS, DSC, DSE, VAC, SEC, MDC, MOOC, AEC, INT, FWD, RPH, CIP' })
+  }),
   tag: z.string().nullable().optional(),
   seat_limit: z.coerce.number().int().min(1).max(500).optional().default(60),
   prerequisite_course_ids: z.array(z.string()).optional().default([]),
-  allowed_department_ids: z.array(z.string()).optional().default([]),
+  department_id: z.string().uuid().optional(),
 })
 
 const UpdateCourseSchema = z.object({
@@ -45,11 +51,13 @@ const UpdateCourseSchema = z.object({
   credits: z.coerce.number().int().min(1).max(10),
   theory_hours_per_week: z.coerce.number().int().min(0).max(40).optional().default(0),
   practical_hours_per_week: z.coerce.number().int().min(0).max(40).optional().default(0),
-  category: z.string().min(1, 'Category is required'),
+  category: z.enum(COURSE_CATEGORIES, {
+    errorMap: () => ({ message: 'Category must be one of: DSS, DSC, DSE, VAC, SEC, MDC, MOOC, AEC, INT, FWD, RPH, CIP' })
+  }),
   tag: z.string().nullable().optional(),
   seat_limit: z.coerce.number().int().min(1).max(500).optional(),
   prerequisite_course_ids: z.array(z.string()).optional(),
-  allowed_department_ids: z.array(z.string()).optional(),
+  department_id: z.string().uuid().optional(),
 })
 
 const AddStudentSchema = z.object({
@@ -57,15 +65,24 @@ const AddStudentSchema = z.object({
   cap_application_number: z.string().min(1, 'CAP Application Number is required'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(8).optional(),
-  current_semester: z.coerce.number().int().min(1).max(8),
+  current_semester: z.coerce.number().int().min(1).max(10),
   academic_year_joined: z.string().min(1, 'Academic year is required'),
 })
 
 const UpdateStudentSchema = z.object({
-  id: z.string().min(1, 'Student ID is required'),
+  id: z.string().optional(),
+  student_id: z.string().optional(),
   full_name: z.string().min(1, 'Full name is required').max(100),
-  current_semester: z.coerce.number().int().min(1).max(8),
-})
+  cap_application_number: z.string().min(1, 'CAP Application Number cannot be empty').optional(),
+  current_semester: z.coerce.number().int().min(1).max(10),
+}).refine(data => data.id || data.student_id, {
+  message: 'Student ID is required',
+}).transform(data => ({
+  id: (data.id || data.student_id) as string,
+  full_name: data.full_name,
+  cap_application_number: data.cap_application_number?.trim(),
+  current_semester: data.current_semester,
+}))
 
 const BlueprintSchema = z.object({
   semester: z.coerce.number().int().min(1).max(8),
@@ -84,7 +101,8 @@ export class HodController {
   @Get('blueprint')
   async getBlueprint(@Query('semester') semester: string | undefined, @CurrentUser() user: AuthUser) {
     const sem = semester ? Number(semester) : 1
-    return this.hodService.getBlueprint(isNaN(sem) ? 1 : sem, user)
+    const blueprint = await this.hodService.getBlueprint(isNaN(sem) ? 1 : sem, user)
+    return blueprint || {}
   }
 
   @Put('blueprint')
@@ -110,10 +128,12 @@ export class HodController {
   async getCourses(
     @Query('semester') semester: string | undefined,
     @Query('own') own: string | undefined,
+    @Query('max_semester') maxSemester: string | undefined,
     @CurrentUser() user: AuthUser,
   ) {
     const sem = semester ? Number(semester) : 1
-    return this.hodService.getCourses(isNaN(sem) ? 1 : sem, user, own === 'true')
+    const maxSem = maxSemester ? Number(maxSemester) : undefined
+    return this.hodService.getCourses(isNaN(sem) ? 1 : sem, user, own === 'true', maxSem)
   }
 
   @Post('courses')

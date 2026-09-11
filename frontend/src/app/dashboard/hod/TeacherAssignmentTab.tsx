@@ -135,7 +135,7 @@ function CourseNode({
   data: {
     course: Course
     onReassign: (assignment: CourseAssignment) => void
-    onRemove: (assignmentId: string) => void
+    onRemove: (assignment: CourseAssignment, course: Course) => void
   }
 }) {
   const isAssigned = data.course.is_assigned
@@ -238,7 +238,7 @@ function CourseNode({
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      data.onRemove(a.assignment_id)
+                      data.onRemove(a, data.course)
                     }}
                     title="Remove assignment"
                     style={{
@@ -280,6 +280,16 @@ export default function TeacherAssignmentTab() {
   const [reassignTarget, setReassignTarget] = useState<CourseAssignment | null>(null)
   const [reassignTeacherId, setReassignTeacherId] = useState('')
   const [reassigning, setReassigning] = useState(false)
+
+  // Remove Assignment Modal State
+  const [removeTarget, setRemoveTarget] = useState<{
+    assignment_id: string
+    course_code: string
+    course_title: string
+    teacher_name: string
+  } | null>(null)
+  const [removing, setRemoving] = useState(false)
+  const [removeModalError, setRemoveModalError] = useState('')
 
   // Manual Add Modal State (for list view)
   const [assignCourseTarget, setAssignCourseTarget] = useState<Course | null>(null)
@@ -405,7 +415,15 @@ export default function TeacherAssignmentTab() {
             setReassignTarget(a)
             setReassignTeacherId('')
           },
-          onRemove: (assignmentId: string) => handleRemoveAssignment(assignmentId),
+          onRemove: (a: CourseAssignment, c: Course) => {
+            setRemoveTarget({
+              assignment_id: a.assignment_id,
+              course_code: c.course_code,
+              course_title: c.title,
+              teacher_name: a.teacher_name,
+            })
+            setRemoveModalError('')
+          },
         },
       })
 
@@ -475,7 +493,7 @@ export default function TeacherAssignmentTab() {
       const res = await fetch(`/api/assignments/${reassignTarget.assignment_id}/reassign`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ new_teacher_id: reassignTeacherId }),
+        body: JSON.stringify({ teacher_id: reassignTeacherId }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -493,23 +511,29 @@ export default function TeacherAssignmentTab() {
     }
   }
 
-  // ── Handle Removing an Assignment ──
-  async function handleRemoveAssignment(assignmentId: string) {
-    if (!confirm('Are you sure you want to remove this teacher from the course?')) return
+  // ── Handle Confirm Removing an Assignment ──
+  async function handleConfirmRemove() {
+    if (!removeTarget) return
+    setRemoving(true)
+    setRemoveModalError('')
+    setError('')
     try {
-      const res = await fetch(`/api/assignments/${assignmentId}`, {
+      const res = await fetch(`/api/assignments/${removeTarget.assignment_id}`, {
         method: 'DELETE',
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.message || 'Failed to remove assignment.')
+        setRemoveModalError(data.message || 'Failed to remove assignment.')
         return
       }
-      setSuccess('Assignment removed successfully.')
-      setTimeout(() => setSuccess(''), 3000)
+      setSuccess(`Successfully removed ${removeTarget.teacher_name} from ${removeTarget.course_code}.`)
+      setTimeout(() => setSuccess(''), 4000)
+      setRemoveTarget(null)
       await fetchData()
     } catch (err: any) {
-      setError(err.message || 'Network error.')
+      setRemoveModalError(err.message || 'Network error removing assignment.')
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -979,7 +1003,15 @@ export default function TeacherAssignmentTab() {
                             <Edit2 size={12} /> Reassign
                           </button>
                           <button
-                            onClick={() => handleRemoveAssignment(a.assignment_id)}
+                            onClick={() => {
+                              setRemoveTarget({
+                                assignment_id: a.assignment_id,
+                                course_code: course.course_code,
+                                course_title: course.title,
+                                teacher_name: a.teacher_name,
+                              })
+                              setRemoveModalError('')
+                            }}
                             title="Remove"
                             style={{
                               background: '#fee2e2',
@@ -1035,7 +1067,7 @@ export default function TeacherAssignmentTab() {
       {/* ── Mid-Semester Reassignment Modal ── */}
       {reassignTarget && (
         <div className={styles.modalOverlay}>
-          <div className={styles.modal}>
+          <div className={styles.modal} style={{ maxWidth: '28rem' }}>
             <h3 className={styles.modalTitle}>Mid-Semester Faculty Reassignment</h3>
             <p className={styles.modalSubtitle}>
               Reassigning an existing assignment row updates the teacher for subsequent period attendance marking.
@@ -1079,6 +1111,51 @@ export default function TeacherAssignmentTab() {
                 disabled={!reassignTeacherId || reassigning}
               >
                 {reassigning ? 'Reassigning...' : 'Confirm Reassignment →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Remove Assignment Confirmation Modal ── */}
+      {removeTarget && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal} style={{ maxWidth: '26rem' }}>
+            <h3 className={styles.modalTitle} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#c0392b' }}>
+              <Trash2 size={20} /> Remove Faculty from Course
+            </h3>
+            <p className={styles.modalSubtitle} style={{ margin: '0.5rem 0 1rem' }}>
+              Are you sure you want to remove <strong>{removeTarget.teacher_name}</strong> from teaching{' '}
+              <strong>{removeTarget.course_code} ({removeTarget.course_title})</strong>?
+            </p>
+
+            <div style={{ background: '#fef2f2', padding: '10px 14px', borderRadius: '8px', marginBottom: '1rem', border: '1px solid #fecaca', fontSize: '12px', color: '#991b1b' }}>
+              ⚠️ The course will become unassigned until another faculty member is assigned.
+            </div>
+
+            {removeModalError && (
+              <div style={{ padding: '8px 12px', background: '#fee2e2', border: '1px solid #f87171', borderRadius: '6px', color: '#b91c1c', fontSize: '12px', marginBottom: '1rem' }}>
+                {removeModalError}
+              </div>
+            )}
+
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancelBtn}
+                onClick={() => {
+                  setRemoveTarget(null)
+                  setRemoveModalError('')
+                }}
+                disabled={removing}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.modalDeleteBtn}
+                onClick={handleConfirmRemove}
+                disabled={removing}
+              >
+                {removing ? 'Removing...' : 'Yes, Remove'}
               </button>
             </div>
           </div>
@@ -1324,6 +1401,17 @@ export default function TeacherAssignmentTab() {
             <p className={styles.modalSubtitle}>
               Active teachers in your department who can be assigned to courses. HOD is excluded from course assignment.
             </p>
+
+            {error && (
+              <div style={{ padding: '8px 12px', background: '#fee2e2', border: '1px solid #f87171', borderRadius: '6px', color: '#b91c1c', fontSize: '12px', margin: '0.5rem 0' }}>
+                {error}
+              </div>
+            )}
+            {success && (
+              <div style={{ padding: '8px 12px', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '6px', color: '#166534', fontSize: '12px', margin: '0.5rem 0' }}>
+                {success}
+              </div>
+            )}
 
             <div style={{ maxHeight: '360px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', margin: '1rem 0' }}>
               {eligibleFaculty.length === 0 ? (

@@ -42,4 +42,16 @@ export class ServerLoggerService {
       // Fire-and-forget: do not let logging failure crash the request
     }
   }
+
+  error(message: string, context?: string): void {
+    this.logger.error(message, context)
+  }
+
+  warn(message: string, context?: string): void {
+    this.logger.warn(message, context)
+  }
+
+  log(message: string, context?: string): void {
+    this.logger.log(message, context)
+  }
 }

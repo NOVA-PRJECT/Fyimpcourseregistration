@@ -148,6 +148,7 @@
   transition: border-color 0.15s ease;
   box-sizing: border-box;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .searchInput:focus {
@@ -233,6 +234,7 @@
   cursor: pointer;
   transition: border-color 0.15s ease;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .courseSelect:focus {

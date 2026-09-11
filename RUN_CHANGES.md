@@ -699,6 +699,235 @@ Date: 2026-09-09
   - Verified hamburger menu opening, section activation (Blueprint), dynamic trigger label update, and zero layout overflow.
 
 
+---
+
+### 26. University Emblem Logo Migration (`/knrunilogo.png`) & Legacy Logo Cleanup
+- **Files Updated**:
+  - `frontend/src/components/portal/PortalFooter.tsx`
+  - `frontend/src/component/Footer.tsx`
+  - `frontend/src/app/login/page.tsx`
+  - `frontend/src/app/dashboard/hod/page.tsx`
+  - `frontend/src/app/dashboard/director/page.tsx`
+  - `frontend/src/app/dashboard/director/timetable/page.tsx`
+  - `frontend/src/app/dashboard/superadmin/page.tsx`
+  - `frontend/src/app/dashboard/teacher/page.tsx`
+  - `frontend/src/app/dashboard/student/page.tsx`
+  - `frontend/src/app/dashboard/student/StudentDashboardClient.tsx`
+  - `frontend/src/app/dashboard/student/register/page.tsx`
+  - `frontend/src/app/dashboard/student/change-password/page.tsx`
+  - `frontend/src/app/reset-password/confirm/page.tsx`
+  - `RUN_CHANGES.md`
+- **Files Deleted**:
+  - `frontend/public/logo.png`
+- **Changes**:
+  1. **Comprehensive Logo Replacement**:
+     - Migrated all portal pages and components to use the crisp official transparent university emblem `/knrunilogo.png` (`frontend/public/knrunilogo.png`).
+     - Replaced `/logo.png` references in headers across all role dashboards: HOD (`/dashboard/hod`), Director (`/dashboard/director`), Director Timetable (`/dashboard/director/timetable`), Superadmin (`/dashboard/superadmin`), Teacher (`/dashboard/teacher`), Student Dashboard (`/dashboard/student`), Student Registration (`/dashboard/student/register`), and Password Change (`/dashboard/student/change-password`).
+     - Replaced `/logo.png` references in the Login screen (`/login`) and Password Reset Confirmation (`/reset-password/confirm`).
+  2. **Footer Logo Integration**:
+     - Added the official Kannur University emblem (`/knrunilogo.png`) to both persistent footers: `PortalFooter.tsx` and `Footer.tsx`.
+     - Styled with high-definition scaling (`width={22} height={22}` and `object-contain`), placed elegantly alongside the university copyright notice.
+  3. **Legacy Asset Deletion**:
+     - Permanently deleted `frontend/public/logo.png` from the filesystem.
+     - Verified via ripgrep that zero occurrences of the legacy `/logo.png` path remain in the codebase.
+- **Verification**:
+  - Verified filesystem absence of `frontend/public/logo.png` (`Test-Path` returned `False`).
+  - Verified presence of `frontend/public/knrunilogo.png` (`Test-Path` returned `True`).
+  - Confirmed all 13 components compile with clean syntax and reference `/knrunilogo.png`.
+
+---
+
+### 27. Common Top Bar Synthetic Logo Replacement with Official Emblem
+- **Files Updated**:
+  - `frontend/src/components/portal/PortalHeader.tsx`
+  - `frontend/src/app/consent/page.tsx`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Common Institutional Navigation Bar (`PortalHeader.tsx`)**:
+     - Removed the synthetic inline `<svg>` star/graduation-cap icon and dark navy circle container (`.rounded-full.bg-[#082042]`).
+     - Replaced it with Next.js `<Image src="/knrunilogo.png" alt="Kannur University" width={34} height={34} className="object-contain flex-shrink-0" priority />`.
+     - Preserved the existing typography hierarchy (`Kannur University` and `FIVE-YEAR INTEGRATED MASTERS PROGRAMME`).
+     - This instantly updates all pages utilizing the common institutional top bar:
+       - Home landing page (`/`)
+       - Login page (`/login`)
+       - Terms of Use page (`/terms-of-use`)
+       - Privacy Policy page (`/privacy-policy`)
+       - Password Reset page (`/reset-password`)
+  2. **Consent Page Header (`consent/page.tsx`)**:
+     - Imported `Image` from `next/image` and added `<Image src="/knrunilogo.png" alt="Kannur University" width={28} height={28} style={{ objectFit: 'contain' }} />` to the header brand cluster, harmonizing it with the rest of the portal.
+- **Verification**:
+  - Ran ripgrep across `frontend/src` confirming zero synthetic `<svg>` logos or made-up icons remain in the portal navigation bars.
+  - Confirmed clean TypeScript syntax and Next.js asset linking for `/knrunilogo.png`.
+
+---
+
+### 28. HOD Dashboard Smaller-Screen Active Tab Indicator Fix
+- **Files Updated**:
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `RUN_CHANGES.md`
+- **Root Cause**:
+  - In `hod-dashboard.module.css`, `.mobileTabBtn` (line 1020) and `.moreMenuBtn` (line 1063) were declared *after* `.tabActive` (line 995) with identical class specificity (`0-1-0`).
+  - Due to CSS cascade rules, the base rules (`border-bottom: 2.5px solid transparent; background: transparent; color: #64748b;`) overrode `.tabActive`'s styling on all viewports under 960px.
+- **Changes**:
+  1. **Compound Class Specificity for Mobile Tabs**:
+     - Added `.mobileTabBtn.tabActive` (specificity `0-2-0`) with:
+       - `color: #002147;`
+       - `border-bottom: 2.5px solid #c9a227;`
+       - `background: #f8f9fa;`
+       - `font-weight: 700;`
+  2. **Compound Class Specificity for Hamburger More Menu Button**:
+     - Added `.moreMenuBtn.tabActive` and `.moreMenuBtn.tabActive .chevron` (specificity `0-2-0`) with:
+       - `color: #002147;`
+       - `border-bottom: 2.5px solid #c9a227;`
+       - `background: #f8f9fa;`
+       - `font-weight: 700;`
+  3. **Desktop Tab Resilience**:
+     - Updated selector to `.tabActive, .tabBtn.tabActive` to ensure desktop tabs remain rock-solid.
+- **Verification**:
+  - Live tested in browser via subagent on `http://localhost:3000/dashboard/hod` at 768x900 (Tablet) and 390x844 (Mobile).
+  - Verified active gold bottom indicator and background across **Defaulters**, **Students**, **Courses**, and the **More** button when **Blueprint** is selected.
+  - Session recording saved: `verify_mobile_tab_active_1789102612005.webp`.
+
+---
+
+### 29. Fix Bad Request on Student Edit & Enable CAP Number Editing
+- **Files Updated**:
+  - `backend/src/modules/hod/hod.controller.ts`
+  - `backend/src/modules/hod/hod.service.ts`
+  - `frontend/src/app/dashboard/hod/page.tsx`
+  - `RUN_CHANGES.md`
+- **Root Causes**:
+  1. **Payload Key Mismatch**: `page.tsx` was sending `student_id`, whereas `UpdateStudentSchema` strictly required `id`, triggering `400 Bad Request: Student ID is required`.
+  2. **Disabled CAP Field**: The Edit Student modal rendered the CAP Number as disabled/read-only with no state or backend update support.
+  3. **Semester Upper Bound**: Both schemas limited semesters to `.max(8)` whereas FYIMP supports 10 semesters.
+- **Changes**:
+  1. **Backend Validation Schema (`hod.controller.ts`)**:
+     - Updated `UpdateStudentSchema` to accept either `id` or `student_id` using `.refine()` and normalized to `id`.
+     - Added optional `cap_application_number: z.string().min(1, 'CAP Application Number cannot be empty').optional()`.
+     - Extended `current_semester` range to `.max(10)` across both `AddStudentSchema` and `UpdateStudentSchema`.
+  2. **Backend Service (`hod.service.ts`)**:
+     - Updated `updateStudent()` to support `cap_application_number`.
+     - Added duplicate detection (`.neq('id', id)`) against existing students, returning a clear `400 Bad Request` if the CAP number is already taken.
+     - Handled database unique constraint violations (`23505`) gracefully.
+  3. **Frontend UI & State (`page.tsx`)**:
+     - Added `editCap` state variable.
+     - Passed `student.cap_application_number` to `editCap` when opening the edit modal.
+     - Replaced disabled input in Edit Student modal with an active input supporting auto-uppercase formatting.
+     - Enhanced student table rows to display the student's CAP Number cleanly below their name.
+     - Updated `handleUpdateStudent` to pass both `id` and `student_id`, `full_name`, `cap_application_number`, and `current_semester`.
+- **Verification**:
+  - Live tested via browser subagent on `http://localhost:3000/dashboard/hod`.
+  - Opened Edit Student modal, verified editable CAP Number (`CAP26IT901`), clicked "Save Changes →", and confirmed:
+    - Zero "Bad request" (400) errors occurred.
+    - Modal closed cleanly and table updated.
+  - Screenshots saved: `edit_student_modal_1789103270605.png` and `updated_student_table_1789103400283.png`.
+  - Session recording saved: `verify_edit_student_1789103211699.webp`.
+
+---
+
+### 31. Paper Slot Above/Below Insertion, Blueprint Width Reduction, Strict Numeric Inputs & Course Creation Fix
+- **Files Updated / Created**:
+  - `supabase/migrations/20260911_update_course_category_and_semester_checks.sql`
+  - `backend/src/modules/hod/hod.controller.ts`
+  - `backend/src/modules/hod/hod.service.ts`
+  - `frontend/src/app/dashboard/hod/BlueprintTab.tsx`
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Paper Slot Drag & Drop Insertion (Above / Below / Between Slots)**:
+     - **`BlueprintTab.tsx`**: Replaced rigid 1-to-1 swapping with directional drop insertion. Added `dragOverSlot: { index: number; position: 'above' | 'below' } | null` state. In `onDragOver`, calculated vertical mouse position relative to the slot card's bounding box (`(e.clientY - rect.top) < (rect.height / 2)`). Updated `reorderSlots` to splice and re-insert the dragged paper cleanly above or below the target card index.
+     - **`hod-dashboard.module.css`**: Added `.slotDropIndicatorAbove` and `.slotDropIndicatorBelow` classes with an animated, pulsating gold indicator bar (`#c9a227`) displaying exactly where the slot will land.
+  2. **Blueprint Tab Width Reduction**:
+     - **`hod-dashboard.module.css`**: Updated `.blueprintContainer` from `max-width: 60rem` to `max-width: 52rem` (832px) centered with `margin: 0 auto;`, creating a compact, focused view on wide desktop monitors.
+  3. **Strict Numeric Inputs in Add/Edit Course Modal**:
+     - **`BlueprintTab.tsx`**: Prevented non-numeric keystrokes (`e`, `E`, `+`, `-`, `.`) using `onKeyDown` listeners across `Credits`, `Seat Limit`, `Theory Hours / Week`, and `Practical Hours / Week`. Sanitized input values with regex `val.replace(/[^0-9]/g, '')` to ensure only clean positive integer digits are entered.
+  4. **Course Creation 500 Error Fix & 12 Categories Database Migration**:
+     - **Database Migration (`20260911_update_course_category_and_semester_checks.sql`)**: Created migration to expand `courses_category_check` constraint to support all 12 FYIMP categories (`'DSS'`, `'DSC'`, `'DSE'`, `'VAC'`, `'SEC'`, `'MDC'`, `'MOOC'`, `'AEC'`, `'INT'`, `'FWD'`, `'RPH'`, `'CIP'`) and expand `courses_semester_check` to 10 semesters (`CHECK (semester BETWEEN 1 AND 10)`).
+     - **Backend Controller (`hod.controller.ts`)**: Updated `CreateCourseSchema` and `UpdateCourseSchema` using `z.enum(COURSE_CATEGORIES)` with all 12 categories, extended `semester` to `min(1).max(10)`, and added optional `department_id`.
+     - **Backend Service (`hod.service.ts`)**: Added department fallback `targetDeptId = body.department_id || user.department_id`, server error logging with `this.serverLogger.error()`, and explicit error translation for Postgres check violations (`23514`), foreign key violations (`23503`), and not-null violations (`23502`) into descriptive `BadRequestException` messages instead of generic 500 Internal Server Errors.
+     - **Frontend Error Handling (`BlueprintTab.tsx`)**: Updated `handleSaveCourse` to display `data.message || data.error` directly so server error feedback is clearly visible.
+
+
+---
+
+### 30. HOD Dashboard UX Refinements: Clean Student Table, Text-Only Navigation, Centered Blueprint Layout, Drag Auto-Scroll & Conditional Actions
+- **Files Updated**:
+  - `frontend/src/app/dashboard/hod/page.tsx`
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `frontend/src/app/dashboard/hod/BlueprintTab.tsx`
+  - `RUN_CHANGES.md`
+- **Requirements Addressed**:
+  1. **Clean Students Table View**: Remove CAP application number display from the students table view (render only student full name), while retaining CAP number editing in the Edit modal.
+  2. **Text-Only Navigation**: Remove all emoji icons (`📋`, `👥`, `📚`, etc.) from all tab names across desktop, mobile, and dropdown navigation.
+  3. **Constrain Blueprint Width**: Reduce stretched width of the Blueprint editor on larger screens (1920px).
+  4. **Drag Auto-Scroll**: Enable window auto-scrolling when dragging paper slots upward or downward near viewport edges.
+  5. **Conditional Blueprint Action Bar**: Show Save Blueprint and Discard Changes buttons only when changes are made (`hasChanges`), hiding them when pristine or reset.
+- **Changes**:
+  1. **Students Table (`page.tsx`)**:
+     - Removed the secondary `<div style={{ fontSize: '0.78rem', color: '#64748b' }}>CAP: {student.cap_application_number}</div>` element beneath the student name in the table row.
+     - Kept `editCap` in the Edit Student modal so the CAP number remains fully editable.
+  2. **Tab Bar Navigation (`page.tsx`)**:
+     - Stripped the `icon` field from `primaryTabs`, `moreTabs`, and `allTabs`.
+     - Removed `<span className={styles.tabIcon}>` and `<span className={styles.dropdownItemIcon}>` from the desktop tab bar, mobile tab bar, and hamburger dropdown menu JSX.
+  3. **Centered Blueprint Container (`hod-dashboard.module.css`, `BlueprintTab.tsx`)**:
+     - Added `.blueprintContainer` class in `hod-dashboard.module.css` with `max-width: 60rem`, `width: 100%`, `margin: 0 auto`, and `box-sizing: border-box`.
+     - Wrapped the Blueprint editor layout in `BlueprintTab.tsx` with `.blueprintContainer` to provide a clean, focused, readable layout on widescreen monitors.
+  4. **Window Auto-Scroll on Drag (`BlueprintTab.tsx`)**:
+     - Implemented an active `dragover` window event listener when `draggedSlotIdx !== null`.
+     - Added proximity zone detection (140px from top and bottom viewport borders) that dynamically scrolls the window (`window.scrollBy`) proportional to cursor proximity (`scrollSpeed * intensity`).
+     - Added proper cleanup of the event listener on drag end or component unmount.
+  5. **Conditional Action Bar & Dirty State Tracking (`BlueprintTab.tsx`)**:
+     - Added `initialSnapshot` state capturing baseline values for `minCredits`, `maxCredits`, and normalized `pathways`.
+     - Computed dynamic `hasChanges` flag comparing current editor state against snapshot.
+     - Wrapped the sticky bottom action bar (`Save Blueprint` and `Discard Changes`) in `{hasChanges && ( ... )}` so buttons are hidden by default and appear as soon as an edit is made.
+     - Implemented discard confirmation dialog that resets editor state back to `initialSnapshot` and hides the action bar.
+- **Verification**:
+  - Live tested in browser via `browser_subagent` on `http://localhost:3000/dashboard/hod` at 1920x945 viewport.
+  - Verified text-only tab bar without emoji icons (`tab_bar_clean_text_1789104453501.png`).
+  - Verified student table rendering full names cleanly without CAP numbers (`students_table_clean_1789104472006.png`).
+  - Verified Blueprint editor centered with `max-width: 60rem` and action buttons hidden initially (`blueprint_no_save_buttons_1789104496383.png`).
+  - Verified editing credit values reveals Save and Cancel buttons (`blueprint_save_cancel_visible_1789104519893.png`).
+  - Verified paper slots reordering and grip handles (`paper_slots_drag_handles_1789104605573.png`).
+  - Session recording saved: `verify_hod_refinements_1789104419681.webp`.
+
+---
+
+### 32. Global Removal of Allowed Department Checkboxes, Unified Constraints Engine, Responsive 2-Column Modal Layout & Sticky Action Buttons
+- **Files Updated / Created**:
+  - `supabase/migrations/20260911_drop_allowed_department_ids.sql` (New Migration)
+  - `backend/src/modules/hod/hod.controller.ts`
+  - `backend/src/modules/hod/hod.service.ts`
+  - `backend/src/modules/registrations/registrations.service.ts`
+  - `backend/src/modules/allocation/allocation.service.ts`
+  - `frontend/src/app/dashboard/hod/BlueprintTab.tsx`
+  - `frontend/src/app/dashboard/hod/hod-dashboard.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Global Removal of `allowed_department_ids` (Frontend, Backend, Database)**:
+     - **Database Migration (`20260911_drop_allowed_department_ids.sql`)**: Created migration to drop redundant `allowed_department_ids` column from `courses` table (`ALTER TABLE courses DROP COLUMN IF EXISTS allowed_department_ids;`).
+     - **Backend Controller (`hod.controller.ts`)**: Removed `allowed_department_ids` from `CreateCourseSchema` and `UpdateCourseSchema`.
+     - **Backend HOD Service (`hod.service.ts`)**: Removed `allowed_department_ids` from course insertion and update payload mapping.
+     - **Backend Registrations Service (`registrations.service.ts`)**: Removed `allowed_department_ids` from `.select(...)` queries and removed obsolete legacy department filtering in favor of the prerequisite rules engine.
+     - **Backend Allocation Service (`allocation.service.ts`)**: Removed `allowed_department_ids` from `CourseItem` interface and removed hardcoded department check loops in round calculations.
+     - **Frontend (`BlueprintTab.tsx`)**: Removed `courseAllowedDepts` state, removed "Allowed Departments" checkbox UI from course modals, removed `allowed_department_ids` from course creation payloads, and removed `Allowed Depts` table column and cell rendering from the courses list.
+  2. **Unified Course Constraints & Eligibility Engine**:
+     - Standardized department matching and prerequisite rules under the unified `course_prerequisite_rules` engine (`DEPARTMENT`, `COMPLETED_COURSE`, `COMPLETED_SEMESTER`).
+     - Made `DEPARTMENT` the default and primary constraint type in the course modal.
+     - Department selection now utilizes a contextual department picker (`{code} — {name}`) matching Blueprint course rule behavior.
+     - Prerequisite and constraint rules display distinct type badges (`Dept`, `Course`, `Semester`), target details, and delete buttons.
+  3. **Responsive Course Modal Layout**:
+     - **`hod-dashboard.module.css`**:
+       - Added `.courseModalDialog` with `max-width: 980px`, `width: 100%`, `max-height: 90vh`, and `overflow: hidden`.
+       - Added `.courseModalBody` with `flex: 1` and `overflow-y: auto`.
+       - **Desktop View (`@media (min-width: 860px)`)**: Divided into two vertical columns side-by-side:
+         - **Left Column**: Course Details (Code, Title, Credits, Seat Limit, Category, Tag, Theory Hours, Practical Hours).
+         - **Right Column**: Constraints & Eligibility (`border-left: 1px solid #e2e8f0; padding-left: 2rem;`).
+       - **Mobile / Smaller Screens View (`@media (max-width: 859px)`)**: Stacks columns vertically with a distinct horizontal separator (`border-top: 2px solid #e2e8f0; padding-top: 1.5rem;`).
+  4. **Sticky Header and Sticky Action Buttons**:
+     - `.courseModalHeader` is fixed at the top of the dialog (`flex-shrink: 0; border-bottom: 1px solid #e2e8f0;`).
+     - `.courseModalFooter` is permanently pinned to the bottom of the modal (`position: sticky; bottom: 0; z-index: 10; flex-shrink: 0; box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.05);`).
+     - `Cancel` and `Save Changes →` / `Add Course →` buttons remain sticky and always accessible on both desktop and mobile viewports regardless of modal content height or rule list expansion.
+
 
 
 

@@ -108,6 +108,7 @@ export default function HodDashboard() {
   // Edit student modal
   const [editStudent, setEditStudent] = useState<Student | null>(null)
   const [editName, setEditName] = useState('')
+  const [editCap, setEditCap] = useState('')
   const [editSemester, setEditSemester] = useState(1)
   const [updating, setUpdating] = useState(false)
 
@@ -136,11 +137,12 @@ export default function HodDashboard() {
 
       if (!response.ok) {
         setStudentError(result.error ?? 'Failed to export Excel')
-      } else if (result.rows) {
-        if (result.rows.length === 0) {
+      } else {
+        const rows = Array.isArray(result) ? result : (result?.rows || [])
+        if (rows.length === 0) {
           alert('No student records found to export.')
         } else {
-          downloadStudentsExcel(result.rows, targetSem === 'all' ? 'All_Semesters' : `Sem_${targetSem}`)
+          downloadStudentsExcel(rows, targetSem === 'all' ? 'All_Semesters' : `Sem_${targetSem}`)
         }
       }
     } catch {
@@ -193,31 +195,31 @@ export default function HodDashboard() {
   }, [mobileMenuOpen])
 
   // Navigation tab groups
-  const primaryTabs: { id: Tab; label: string; icon: string }[] = [
-    { id: 'defaulters', label: 'Defaulters', icon: '📋' },
-    { id: 'students', label: 'Students', icon: '👥' },
-    { id: 'courses', label: 'Courses', icon: '📚' },
+  const primaryTabs: { id: Tab; label: string }[] = [
+    { id: 'defaulters', label: 'Defaulters' },
+    { id: 'students', label: 'Students' },
+    { id: 'courses', label: 'Courses' },
   ]
 
-  const moreTabs: { id: Tab; label: string; icon: string }[] = [
-    { id: 'upload', label: 'Bulk Upload', icon: '📂' },
-    { id: 'blueprint', label: 'Blueprint', icon: '📐' },
-    { id: 'assignments', label: 'Faculty Assignment', icon: '👨‍🏫' },
-    { id: 'period-marking', label: 'Period Attendance', icon: '⏱️' },
-    { id: 'campus-attendance', label: 'Campus Attendance', icon: '🏛️' },
-    { id: 'manual-allocation', label: 'Manual Allocation', icon: '🎯' },
+  const moreTabs: { id: Tab; label: string }[] = [
+    { id: 'upload', label: 'Bulk Upload' },
+    { id: 'blueprint', label: 'Blueprint' },
+    { id: 'assignments', label: 'Faculty Assignment' },
+    { id: 'period-marking', label: 'Period Attendance' },
+    { id: 'campus-attendance', label: 'Campus Attendance' },
+    { id: 'manual-allocation', label: 'Manual Allocation' },
   ]
 
-  const allTabs: { id: Tab; label: string; icon: string }[] = [
-    { id: 'defaulters', label: 'Defaulters', icon: '📋' },
-    { id: 'upload', label: 'Bulk Upload', icon: '📂' },
-    { id: 'students', label: 'Students', icon: '👥' },
-    { id: 'blueprint', label: 'Blueprint', icon: '📐' },
-    { id: 'courses', label: 'Courses', icon: '📚' },
-    { id: 'assignments', label: 'Faculty Assignment', icon: '👨‍🏫' },
-    { id: 'period-marking', label: 'Period Attendance', icon: '⏱️' },
-    { id: 'campus-attendance', label: 'Campus Attendance', icon: '🏛️' },
-    { id: 'manual-allocation', label: 'Manual Allocation', icon: '🎯' },
+  const allTabs: { id: Tab; label: string }[] = [
+    { id: 'defaulters', label: 'Defaulters' },
+    { id: 'upload', label: 'Bulk Upload' },
+    { id: 'students', label: 'Students' },
+    { id: 'blueprint', label: 'Blueprint' },
+    { id: 'courses', label: 'Courses' },
+    { id: 'assignments', label: 'Faculty Assignment' },
+    { id: 'period-marking', label: 'Period Attendance' },
+    { id: 'campus-attendance', label: 'Campus Attendance' },
+    { id: 'manual-allocation', label: 'Manual Allocation' },
   ]
 
   const isMoreTabActive = moreTabs.some(t => t.id === activeTab)
@@ -383,27 +385,44 @@ export default function HodDashboard() {
 
   async function handleUpdateStudent() {
     if (!editStudent) return
+    if (!editName.trim()) {
+      setStudentError('Full name is required')
+      return
+    }
+    if (!editCap.trim()) {
+      setStudentError('CAP Application Number is required')
+      return
+    }
     setUpdating(true)
     setStudentError('')
-    const response = await fetch('/api/hod/students/update', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        student_id: editStudent.id,
-        full_name: editName,
-        current_semester: editSemester,
-      }),
-    })
-    const result = await response.json()
-    if (!response.ok) {
-      setStudentError(result.error ?? 'Failed to update student')
-    } else {
-      setStudentSuccess('Student updated successfully')
-      setTimeout(() => setStudentSuccess(''), 1000)
-      setEditStudent(null)
-      fetchStudents()
+    try {
+      const response = await fetch('/api/hod/students/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editStudent.id,
+          student_id: editStudent.id,
+          full_name: editName.trim(),
+          cap_application_number: editCap.trim(),
+          current_semester: editSemester,
+        }),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        setStudentError(result.error ?? result.message ?? 'Failed to update student')
+      } else {
+        setStudentSuccess('Student updated successfully')
+        setTimeout(() => setStudentSuccess(''), 1000)
+        setEditStudent(null)
+        setEditCap('')
+        setEditName('')
+        fetchStudents()
+      }
+    } catch {
+      setStudentError('Network error while saving student')
+    } finally {
+      setUpdating(false)
     }
-    setUpdating(false)
   }
 
   async function handleDeleteStudent() {
@@ -493,7 +512,7 @@ export default function HodDashboard() {
           {/* 1. Portal Branding Block */}
           <div className={styles.topBarBranding}>
             <div className={styles.logoSmall}>
-              <Image src="/logo.png" alt="KU" width={30} height={30} priority />
+              <Image src="/knrunilogo.png" alt="KU" width={30} height={30} priority />
             </div>
             <div className={styles.topBarTitles}>
               <p className={styles.topBarTitle}>FYIMP Portal</p>
@@ -546,7 +565,6 @@ export default function HodDashboard() {
             className={`${styles.tabBtn} ${activeTab === tab.id ? styles.tabActive : ''}`}
             onClick={() => changeTab(tab.id)}
           >
-            <span className={styles.tabIcon}>{tab.icon}</span>
             <span>{tab.label}</span>
           </button>
         ))}
@@ -564,7 +582,6 @@ export default function HodDashboard() {
               setMobileMenuOpen(false)
             }}
           >
-            <span className={styles.tabIcon}>{tab.icon}</span>
             <span className={styles.tabLabelText}>{tab.label}</span>
           </button>
         ))}
@@ -601,7 +618,6 @@ export default function HodDashboard() {
                     setMobileMenuOpen(false)
                   }}
                 >
-                  <span className={styles.dropdownItemIcon}>{tab.icon}</span>
                   <span className={styles.dropdownItemLabel}>{tab.label}</span>
                   {activeTab === tab.id && <span className={styles.activeCheck}>✓</span>}
                 </button>
@@ -796,7 +812,7 @@ export default function HodDashboard() {
                         <td>{student.current_semester}</td>
                         <td>
                           <div className={styles.actionBtns}>
-                            <button className={styles.approveBtn} onClick={() => { setEditStudent(student); setEditName(student.full_name); setEditSemester(student.current_semester); setStudentError(''); setStudentSuccess('') }}>✏️</button>
+                            <button className={styles.approveBtn} onClick={() => { setEditStudent(student); setEditName(student.full_name); setEditCap(student.cap_application_number ?? ''); setEditSemester(student.current_semester); setStudentError(''); setStudentSuccess('') }}>✏️</button>
                             <button className={styles.rejectBtn} onClick={() => { setDeleteStudent(student); setStudentError(''); setStudentSuccess('') }}>🗑️</button>
                           </div>
                         </td>
@@ -876,15 +892,21 @@ export default function HodDashboard() {
                   <h3 className={styles.modalTitle}>Edit Student</h3>
                   <div className={styles.fieldGroup}>
                     <div className={styles.field}>
-                      <label className={styles.label}>Full Name</label>
+                      <label className={styles.label}>Full Name *</label>
                       <input type="text" className={styles.input} value={editName} onChange={e => setEditName(e.target.value)} />
                     </div>
                     <div className={styles.field}>
-                      <label className={styles.label}>CAP Number</label>
-                      <input type="text" className={styles.input} value={editStudent.cap_application_number ?? '—'} disabled style={{ opacity: 0.5 }} />
+                      <label className={styles.label}>CAP Number *</label>
+                      <input
+                        type="text"
+                        className={styles.input}
+                        value={editCap}
+                        onChange={e => setEditCap(e.target.value.toUpperCase())}
+                        placeholder="e.g. CAP2025001"
+                      />
                     </div>
                     <div className={styles.field}>
-                      <label className={styles.label}>Current Semester</label>
+                      <label className={styles.label}>Current Semester *</label>
                       <select className={styles.input} value={editSemester} onChange={e => setEditSemester(Number(e.target.value))}>
                         {[1,2,3,4,5,6,7,8,9,10].map(s => <option key={s} value={s}>Semester {s}</option>)}
                       </select>
@@ -892,7 +914,7 @@ export default function HodDashboard() {
                   </div>
                   {studentError && <div className={styles.errorBanner} style={{ marginBottom: '1rem' }}>{studentError}</div>}
                   <div className={styles.modalActions}>
-                    <button className={styles.modalCancelBtn} onClick={() => { setEditStudent(null); setStudentError('') }} disabled={updating}>Cancel</button>
+                    <button className={styles.modalCancelBtn} onClick={() => { setEditStudent(null); setEditCap(''); setEditName(''); setStudentError('') }} disabled={updating}>Cancel</button>
                     <button className={styles.modalConfirmBtn} onClick={handleUpdateStudent} disabled={updating}>{updating ? 'Saving...' : 'Save Changes →'}</button>
                   </div>
                 </div>

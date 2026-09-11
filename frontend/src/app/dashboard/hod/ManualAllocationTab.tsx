@@ -129,31 +129,31 @@ export default function ManualAllocationTab() {
           flexWrap: 'wrap',
           gap: '1rem',
           padding: '1.25rem',
-          background: 'rgba(15, 23, 42, 0.65)',
+          background: '#ffffff',
           borderRadius: '12px',
-          border: '1px solid rgba(51, 65, 85, 0.6)',
+          border: '1px solid #e2e8f0',
         }}
       >
         <div>
-          <h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: '#f8fafc', margin: 0 }}>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#002147', margin: 0 }}>
             Reactive Manual Allocation
           </h2>
-          <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: '0.25rem 0 0 0' }}>
+          <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '0.25rem 0 0 0' }}>
             Resolve unplaced elective slots upon student contact with remaining departmental seats.
           </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <label style={{ fontSize: '0.82rem', color: '#cbd5e1', fontWeight: 500 }}>Semester:</label>
+          <label style={{ fontSize: '0.82rem', color: '#475569', fontWeight: 500 }}>Semester:</label>
           <select
             value={selectedSemester}
             onChange={(e) => setSelectedSemester(Number(e.target.value))}
             style={{
               padding: '0.5rem 0.85rem',
               borderRadius: '8px',
-              border: '1px solid #334155',
-              background: '#0f172a',
-              color: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              background: '#ffffff',
+              color: '#0f172a',
               fontSize: '0.85rem',
               fontWeight: 500,
             }}
@@ -174,9 +174,9 @@ export default function ManualAllocationTab() {
               gap: '0.4rem',
               padding: '0.5rem 0.85rem',
               borderRadius: '8px',
-              border: '1px solid #334155',
-              background: '#1e293b',
-              color: '#f1f5f9',
+              border: '1px solid #cbd5e1',
+              background: '#ffffff',
+              color: '#475569',
               fontSize: '0.82rem',
               cursor: 'pointer',
             }}
@@ -192,9 +192,9 @@ export default function ManualAllocationTab() {
           style={{
             padding: '0.85rem 1.25rem',
             borderRadius: '8px',
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: '#fca5a5',
+            background: '#fee2e2',
+            border: '1px solid #f87171',
+            color: '#b91c1c',
             fontSize: '0.85rem',
           }}
         >
@@ -207,9 +207,9 @@ export default function ManualAllocationTab() {
           style={{
             padding: '0.85rem 1.25rem',
             borderRadius: '8px',
-            background: 'rgba(34, 197, 94, 0.15)',
-            border: '1px solid rgba(34, 197, 94, 0.3)',
-            color: '#86efac',
+            background: '#dcfce7',
+            border: '1px solid #86efac',
+            color: '#15803d',
             fontSize: '0.85rem',
             display: 'flex',
             alignItems: 'center',
@@ -232,9 +232,9 @@ export default function ManualAllocationTab() {
         {/* Section 1: Unresolved Students */}
         <div
           style={{
-            background: 'rgba(15, 23, 42, 0.65)',
+            background: '#ffffff',
             borderRadius: '12px',
-            border: '1px solid rgba(51, 65, 85, 0.6)',
+            border: '1px solid #e2e8f0',
             padding: '1.25rem',
             display: 'flex',
             flexDirection: 'column',
@@ -242,11 +242,11 @@ export default function ManualAllocationTab() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <AlertTriangle size={18} color="#f59e0b" />
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#002147', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <AlertTriangle size={18} color="#d97706" />
               Unresolved Students ({unresolvedStudents.length})
             </h3>
-            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
               Contacted students requiring placement
             </span>
           </div>
@@ -260,7 +260,7 @@ export default function ManualAllocationTab() {
               style={{
                 padding: '3rem 1rem',
                 textAlign: 'center',
-                color: '#94a3b8',
+                color: '#64748b',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -268,7 +268,7 @@ export default function ManualAllocationTab() {
               }}
             >
               <CheckCircle size={32} color="#22c55e" />
-              <p style={{ margin: 0, fontWeight: 500, color: '#f8fafc' }}>
+              <p style={{ margin: 0, fontWeight: 600, color: '#0f172a' }}>
                 All student elective slots are fully resolved!
               </p>
               <span style={{ fontSize: '0.78rem' }}>
@@ -281,9 +281,9 @@ export default function ManualAllocationTab() {
                 <div
                   key={st.student_id}
                   style={{
-                    background: '#1e293b',
+                    background: '#f8fafc',
                     borderRadius: '10px',
-                    border: '1px solid #334155',
+                    border: '1px solid #e2e8f0',
                     padding: '1rem',
                     display: 'flex',
                     flexDirection: 'column',
@@ -292,10 +292,10 @@ export default function ManualAllocationTab() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.92rem', color: '#f1f5f9' }}>
+                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.92rem', color: '#0f172a' }}>
                         {st.full_name}
                       </p>
-                      <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                      <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
                         CAP: {st.cap_application_number}
                       </p>
                     </div>
@@ -305,9 +305,9 @@ export default function ManualAllocationTab() {
                         borderRadius: '4px',
                         fontSize: '0.7rem',
                         fontWeight: 600,
-                        background: 'rgba(245, 158, 11, 0.15)',
-                        color: '#fbbf24',
-                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        background: '#fef3c7',
+                        color: '#b45309',
+                        border: '1px solid #fde68a',
                       }}
                     >
                       {st.unresolved_slots.length} Unresolved Slot(s)
@@ -320,10 +320,10 @@ export default function ManualAllocationTab() {
                       <div
                         key={slot.slot_key}
                         style={{
-                          background: 'rgba(15, 23, 42, 0.6)',
+                          background: '#ffffff',
                           borderRadius: '6px',
                           padding: '0.65rem 0.85rem',
-                          border: '1px solid #334155',
+                          border: '1px solid #e2e8f0',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
@@ -331,24 +331,24 @@ export default function ManualAllocationTab() {
                         }}
                       >
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#38bdf8' }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1e40af' }}>
                             Paper {slot.slot_number} ({slot.slot_key})
                           </span>
                           <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Submitted choices:</span>
+                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Submitted choices:</span>
                             {slot.submitted_preferences.length === 0 ? (
-                              <span style={{ fontSize: '0.7rem', color: '#64748b' }}>None</span>
+                              <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>None</span>
                             ) : (
                               slot.submitted_preferences.map((p) => (
                                 <span
                                   key={p.course_id}
                                   style={{
                                     fontSize: '0.7rem',
-                                    background: '#0f172a',
-                                    border: '1px solid #334155',
+                                    background: '#f1f5f9',
+                                    border: '1px solid #e2e8f0',
                                     padding: '0.1rem 0.35rem',
                                     borderRadius: '4px',
-                                    color: '#cbd5e1',
+                                    color: '#475569',
                                   }}
                                 >
                                   <strong>#{p.rank}</strong> {p.course_code}
@@ -369,7 +369,7 @@ export default function ManualAllocationTab() {
                             gap: '0.4rem',
                             padding: '0.4rem 0.75rem',
                             borderRadius: '6px',
-                            background: '#0284c7',
+                            background: '#1e40af',
                             border: 'none',
                             color: '#ffffff',
                             fontSize: '0.78rem',
@@ -393,9 +393,9 @@ export default function ManualAllocationTab() {
         {/* Section 2: Remaining Department Capacity */}
         <div
           style={{
-            background: 'rgba(15, 23, 42, 0.65)',
+            background: '#ffffff',
             borderRadius: '12px',
-            border: '1px solid rgba(51, 65, 85, 0.6)',
+            border: '1px solid #e2e8f0',
             padding: '1.25rem',
             display: 'flex',
             flexDirection: 'column',
@@ -403,8 +403,8 @@ export default function ManualAllocationTab() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <BookOpen size={18} color="#38bdf8" />
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#002147', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <BookOpen size={18} color="#1e40af" />
               Department Course Capacity
             </h3>
           </div>
@@ -414,7 +414,7 @@ export default function ManualAllocationTab() {
               Loading capacities...
             </div>
           ) : remainingCourses.length === 0 ? (
-            <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0 }}>
+            <p style={{ fontSize: '0.82rem', color: '#64748b', margin: 0 }}>
               No departmental courses configured for Semester {selectedSemester}.
             </p>
           ) : (
@@ -425,9 +425,9 @@ export default function ManualAllocationTab() {
                   <div
                     key={c.id}
                     style={{
-                      background: '#1e293b',
+                      background: '#f8fafc',
                       borderRadius: '8px',
-                      border: '1px solid #334155',
+                      border: '1px solid #e2e8f0',
                       padding: '0.85rem',
                       display: 'flex',
                       flexDirection: 'column',
@@ -436,10 +436,10 @@ export default function ManualAllocationTab() {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
-                        <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#38bdf8' }}>
+                        <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#1e40af' }}>
                           {c.course_code}
                         </span>
-                        <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>
+                        <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.82rem', fontWeight: 600, color: '#0f172a' }}>
                           {c.title}
                         </p>
                       </div>
@@ -449,16 +449,16 @@ export default function ManualAllocationTab() {
                           borderRadius: '4px',
                           fontSize: '0.72rem',
                           fontWeight: 700,
-                          background: isFull ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-                          color: isFull ? '#f87171' : '#4ade80',
-                          border: `1px solid ${isFull ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`,
+                          background: isFull ? '#fee2e2' : '#dcfce7',
+                          color: isFull ? '#dc2626' : '#15803d',
+                          border: `1px solid ${isFull ? '#fecaca' : '#bbf7d0'}`,
                         }}
                       >
                         {c.remaining_seats} seat{c.remaining_seats === 1 ? '' : 's'} left
                       </span>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#94a3b8' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#64748b' }}>
                       <span>
                         Allocated: {c.total_allocated} / {c.seat_limit}
                       </span>
@@ -473,7 +473,7 @@ export default function ManualAllocationTab() {
                         width: '100%',
                         height: '5px',
                         borderRadius: '999px',
-                        background: '#0f172a',
+                        background: '#e2e8f0',
                         overflow: 'hidden',
                       }}
                     >
@@ -481,7 +481,7 @@ export default function ManualAllocationTab() {
                         style={{
                           width: `${Math.min(100, Math.round((c.total_allocated / (c.seat_limit || 1)) * 100))}%`,
                           height: '100%',
-                          background: isFull ? '#ef4444' : '#0284c7',
+                          background: isFull ? '#ef4444' : '#1e40af',
                         }}
                       />
                     </div>
@@ -499,7 +499,7 @@ export default function ManualAllocationTab() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.75)',
+            background: 'rgba(0, 0, 0, 0.4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -509,8 +509,8 @@ export default function ManualAllocationTab() {
         >
           <div
             style={{
-              background: '#0f172a',
-              border: '1px solid #334155',
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
               borderRadius: '12px',
               padding: '1.5rem',
               maxWidth: '520px',
@@ -518,24 +518,24 @@ export default function ManualAllocationTab() {
               display: 'flex',
               flexDirection: 'column',
               gap: '1.25rem',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
             }}
           >
             <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#f8fafc', margin: 0 }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#002147', margin: 0 }}>
                 Manual Course Placement
               </h3>
-              <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: '0.25rem 0 0 0' }}>
+              <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.25rem 0 0 0' }}>
                 Assign an available departmental course to resolve this student&apos;s paper slot.
               </p>
             </div>
 
             <div
               style={{
-                background: '#1e293b',
+                background: '#f8fafc',
                 padding: '0.85rem',
                 borderRadius: '8px',
-                border: '1px solid #334155',
+                border: '1px solid #e2e8f0',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '0.35rem',
@@ -543,18 +543,18 @@ export default function ManualAllocationTab() {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#94a3b8' }}>Student:</span>
-                <strong style={{ color: '#f1f5f9' }}>{allocatingTarget.student.full_name}</strong>
+                <span style={{ color: '#64748b' }}>Student:</span>
+                <strong style={{ color: '#0f172a' }}>{allocatingTarget.student.full_name}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#94a3b8' }}>CAP Register:</span>
-                <span style={{ fontFamily: 'monospace', color: '#f1f5f9' }}>
+                <span style={{ color: '#64748b' }}>CAP Register:</span>
+                <span style={{ fontFamily: 'monospace', color: '#0f172a' }}>
                   {allocatingTarget.student.cap_application_number}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#94a3b8' }}>Target Paper:</span>
-                <strong style={{ color: '#38bdf8' }}>
+                <span style={{ color: '#64748b' }}>Target Paper:</span>
+                <strong style={{ color: '#1e40af' }}>
                   Paper {allocatingTarget.slot.slot_number} ({allocatingTarget.slot.slot_key})
                 </strong>
               </div>
@@ -562,7 +562,7 @@ export default function ManualAllocationTab() {
 
             {/* Course Selector */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#cbd5e1' }}>
+              <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569' }}>
                 Select Course with Remaining Seats:
               </label>
               <select
@@ -571,9 +571,9 @@ export default function ManualAllocationTab() {
                 style={{
                   padding: '0.65rem 0.85rem',
                   borderRadius: '8px',
-                  border: '1px solid #334155',
-                  background: '#1e293b',
-                  color: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#0f172a',
                   fontSize: '0.85rem',
                 }}
               >
@@ -588,6 +588,21 @@ export default function ManualAllocationTab() {
               </select>
             </div>
 
+            {error && (
+              <div
+                style={{
+                  padding: '0.65rem 0.85rem',
+                  borderRadius: '6px',
+                  background: '#fee2e2',
+                  border: '1px solid #f87171',
+                  color: '#b91c1c',
+                  fontSize: '0.8rem',
+                }}
+              >
+                {error}
+              </div>
+            )}
+
             {/* Modal Actions */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
               <button
@@ -597,9 +612,9 @@ export default function ManualAllocationTab() {
                 style={{
                   padding: '0.5rem 1rem',
                   borderRadius: '8px',
-                  background: '#1e293b',
-                  border: '1px solid #334155',
-                  color: '#cbd5e1',
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  color: '#475569',
                   fontSize: '0.82rem',
                   cursor: 'pointer',
                 }}
@@ -613,7 +628,7 @@ export default function ManualAllocationTab() {
                 style={{
                   padding: '0.5rem 1.25rem',
                   borderRadius: '8px',
-                  background: '#0284c7',
+                  background: '#1e40af',
                   border: 'none',
                   color: '#ffffff',
                   fontSize: '0.82rem',

@@ -67,6 +67,45 @@ export class RegistrationsService {
       }
     }
 
+    // Fetch all course_prerequisite_rules to enforce department constraints
+    const { data: allPrereqRules } = await this.supabase.admin
+      .from('course_prerequisite_rules')
+      .select('course_id, rule, target')
+
+    const courseRulesMap = new Map<string, any[]>()
+    if (allPrereqRules) {
+      for (const r of allPrereqRules) {
+        if (!courseRulesMap.has(r.course_id)) {
+          courseRulesMap.set(r.course_id, [])
+        }
+        courseRulesMap.get(r.course_id)!.push(r)
+      }
+    }
+
+    let studentDeptCode = ''
+    if (user.department_id) {
+      for (const [code, id] of deptMap.entries()) {
+        if (id === user.department_id) {
+          studentDeptCode = code
+          break
+        }
+      }
+    }
+
+    const isCourseAllowedForStudent = (c: any) => {
+      const rules = courseRulesMap.get(c.id) || []
+      const deptRules = rules.filter((r) => r.rule === 'DEPARTMENT')
+      if (deptRules.length > 0) {
+        const allAllowed = deptRules.flatMap((r) =>
+          r.target.split(',').map((code: string) => code.trim().toUpperCase()),
+        )
+        if (studentDeptCode && !allAllowed.includes(studentDeptCode.toUpperCase())) {
+          return false
+        }
+      }
+      return true
+    }
+
     const resolvedSlots = await Promise.all(
       slotsInfo.map(async ({ slot, rule, target, name }) => {
         if (
@@ -90,15 +129,10 @@ export class RegistrationsService {
 
         let query = this.supabase.admin
           .from('courses')
-          .select('id, course_code, title, department_id, semester, credits, category, tag, seat_limit, prerequisite_course_ids, allowed_department_ids')
+          .select('id, course_code, title, department_id, semester, credits, category, tag, seat_limit, prerequisite_course_ids')
 
         if (fixedCourseIds.length > 0) {
           query = query.not('id', 'in', `(${fixedCourseIds.join(',')})`)
-        }
-
-        const isDeptAllowed = (c: any) => {
-          if (!c.allowed_department_ids || c.allowed_department_ids.length === 0) return true
-          return c.allowed_department_ids.includes(user.department_id)
         }
 
         if (rule === SLOT_RULES.DEPT_RESTRICTED) {
@@ -113,7 +147,7 @@ export class RegistrationsService {
             .in('category', ['DSC', 'DSE'])
 
           const filtered = (options ?? []).filter((c) =>
-            isDeptAllowed(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isCourseAllowedForStudent(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -134,7 +168,7 @@ export class RegistrationsService {
             .eq('category', 'MDC')
 
           const filtered = (options ?? []).filter((c) =>
-            isDeptAllowed(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isCourseAllowedForStudent(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -151,7 +185,7 @@ export class RegistrationsService {
             .eq('semester', user.current_semester)
 
           const filtered = (options ?? []).filter((c) =>
-            isDeptAllowed(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isCourseAllowedForStudent(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -168,7 +202,7 @@ export class RegistrationsService {
           }
           const { data: options } = await q
           const filtered = (options ?? []).filter((c) =>
-            isDeptAllowed(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isCourseAllowedForStudent(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -523,20 +557,8 @@ export class RegistrationsService {
     if (allElectiveCourseIds.size > 0) {
       const { data: electiveCourses } = await this.supabase.admin
         .from('courses')
-        .select('id, course_code, title, credits, department_id, category, allowed_department_ids')
+        .select('id, course_code, title, credits, department_id, category')
         .in('id', Array.from(allElectiveCourseIds))
-
-      for (const ec of electiveCourses ?? []) {
-        if (
-          ec.allowed_department_ids &&
-          ec.allowed_department_ids.length > 0 &&
-          !ec.allowed_department_ids.includes(user.department_id)
-        ) {
-          throw new BadRequestException(
-            `Course ${ec.course_code} is restricted and not available for your department`,
-          )
-        }
-      }
 
       // Compute total credits based on fixed courses + rank 1 electives for credit check
       const rank1ElectiveIds = unifiedPreferences

@@ -64,7 +64,7 @@ export default function ChangePasswordPage() {
       <div className={styles.card}>
         <div className={styles.cardHeader}>
           <div className={styles.logoWrapper}>
-            <Image src="/logo.png" alt="Kannur University" width={44} height={44} className={styles.logo} />
+            <Image src="/knrunilogo.png" alt="Kannur University" width={44} height={44} className={styles.logo} />
           </div>
           <h1 className={styles.title}>Set Your Password</h1>
           <p className={styles.subtitle}>

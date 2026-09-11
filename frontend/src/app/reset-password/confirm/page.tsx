@@ -83,7 +83,7 @@
 //         <div className={styles.card}>
 //           <div className={styles.cardHeader}>
 //             <div className={styles.logoWrapper}>
-//               <Image src="/logo.png" alt="Kannur University" width={40} height={40} className={styles.logo} />
+//               <Image src="/knrunilogo.png" alt="Kannur University" width={40} height={40} className={styles.logo} />
 //             </div>
 //             <h1 className={styles.portalTitle}>FYIMP Registration Portal</h1>
 //             <div className={styles.goldLine} />
@@ -125,7 +125,7 @@
 //       <div className={styles.card}>
 //         <div className={styles.cardHeader}>
 //           <div className={styles.logoWrapper}>
-//             <Image src="/logo.png" alt="Kannur University" width={40} height={40} className={styles.logo} />
+//             <Image src="/knrunilogo.png" alt="Kannur University" width={40} height={40} className={styles.logo} />
 //           </div>
 //           <h1 className={styles.portalTitle}>FYIMP Registration Portal</h1>
 //           <div className={styles.goldLine} />
@@ -253,7 +253,7 @@
 //         <div className={styles.card}>
 //           <div className={styles.cardHeader}>
 //             <div className={styles.logoWrapper}>
-//               <Image src="/logo.png" alt="Kannur University" width={40} height={40} className={styles.logo} />
+//               <Image src="/knrunilogo.png" alt="Kannur University" width={40} height={40} className={styles.logo} />
 //             </div>
 //             <h1 className={styles.portalTitle}>FYIMP Registration Portal</h1>
 //             <div className={styles.goldLine} />

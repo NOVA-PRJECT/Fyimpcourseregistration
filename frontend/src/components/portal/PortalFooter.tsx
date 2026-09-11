@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import React from 'react'
 
 export interface PortalFooterProps {
@@ -13,7 +14,10 @@ export default function PortalFooter({ className = '', currentYear = 2024 }: Por
     <footer
       className={`w-full border-t border-slate-200/60 bg-white py-5 sm:py-6 px-6 md:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-[#64748B] gap-4 ${className}`}
     >
-      <div>© {currentYear} Kannur University. All rights reserved.</div>
+      <div className="flex items-center gap-2.5">
+        <Image src="/knrunilogo.png" alt="Kannur University" width={22} height={22} className="object-contain" />
+        <span>© {currentYear} Kannur University. All rights reserved.</span>
+      </div>
       <div className="flex items-center gap-6">
         <Link className="hover:text-slate-900 transition-colors" href="/privacy-policy">
           Privacy Policy

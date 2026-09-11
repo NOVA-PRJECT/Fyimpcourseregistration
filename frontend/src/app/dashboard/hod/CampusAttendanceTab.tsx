@@ -471,7 +471,7 @@ export default function CampusAttendanceTab() {
                 <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
                   <th style={{ padding: '10px 14px', width: '40px' }}>#</th>
                   <th style={{ padding: '10px 14px' }}>Student Name</th>
-                  <th style={{ padding: '10px 14px' }}>CAP Application No</th>
+
                   <th style={{ padding: '10px 14px' }}>Sem</th>
                   <th style={{ padding: '10px 14px' }}>Morning Checkpoint</th>
                   <th style={{ padding: '10px 14px' }}>Evening Checkpoint</th>
@@ -493,9 +493,7 @@ export default function CampusAttendanceTab() {
                     <td style={{ padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>
                       {st.full_name}
                     </td>
-                    <td style={{ padding: '10px 14px', color: '#475569', fontFamily: 'monospace' }}>
-                      {st.cap_application_number || '—'}
-                    </td>
+
                     <td style={{ padding: '10px 14px', color: '#64748b' }}>Sem {st.current_semester}</td>
                     <td style={{ padding: '10px 14px' }}>{renderStatusBadge(st.morning, true)}</td>
                     <td style={{ padding: '10px 14px' }}>{renderStatusBadge(st.evening, false)}</td>

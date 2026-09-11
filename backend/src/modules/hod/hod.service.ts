@@ -104,15 +104,20 @@ export class HodService {
   }
 
   // ──────────────── Courses ────────────────
-  async getCourses(semester: number, user: AuthUser, ownOnly?: boolean) {
+  async getCourses(semester: number, user: AuthUser, ownOnly?: boolean, maxSemester?: number) {
     if (ownOnly) {
-      const { data, error } = await this.supabase.admin
+      let query = this.supabase.admin
         .from('courses')
         .select('*, departments(name, code, campus_id)')
         .eq('department_id', user.department_id)
-        .eq('semester', semester)
-        .order('category')
 
+      if (maxSemester !== undefined && !isNaN(maxSemester) && maxSemester > 0) {
+        query = query.lt('semester', maxSemester)
+      } else {
+        query = query.eq('semester', semester)
+      }
+
+      const { data, error } = await query.order('semester').order('category')
       if (error) throw new InternalServerErrorException('Failed to fetch courses')
 
       return (data ?? []).map((c: any) => ({
@@ -131,13 +136,18 @@ export class HodService {
 
     const campusDeptIds = depts && depts.length > 0 ? depts.map((d) => d.id) : [user.department_id]
 
-    const { data, error } = await this.supabase.admin
+    let query = this.supabase.admin
       .from('courses')
       .select('*, departments(name, code, campus_id)')
       .or(`department_id.in.(${campusDeptIds.join(',')}),category.eq.AEC`)
-      .eq('semester', semester)
-      .order('category')
 
+    if (maxSemester !== undefined && !isNaN(maxSemester) && maxSemester > 0) {
+      query = query.lt('semester', maxSemester)
+    } else {
+      query = query.eq('semester', semester)
+    }
+
+    const { data, error } = await query.order('semester').order('category')
     if (error) throw new InternalServerErrorException('Failed to fetch courses')
 
     return (data ?? []).map((c: any) => ({
@@ -161,8 +171,12 @@ export class HodService {
       tag,
       seat_limit,
       prerequisite_course_ids,
-      allowed_department_ids,
     } = body
+
+    const targetDeptId = body.department_id || user.department_id
+    if (!targetDeptId) {
+      throw new BadRequestException('Department ID is required to create a course')
+    }
 
     const { data: created, error } = await this.supabase.admin
       .from('courses')
@@ -175,19 +189,28 @@ export class HodService {
         practical_hours_per_week: practical_hours_per_week ?? 0,
         category,
         tag: tag || null,
-        department_id: user.department_id,
+        department_id: targetDeptId,
         seat_limit: seat_limit ? Number(seat_limit) : 60,
         prerequisite_course_ids: Array.isArray(prerequisite_course_ids) ? prerequisite_course_ids : [],
-        allowed_department_ids: Array.isArray(allowed_department_ids) ? allowed_department_ids : [],
       })
       .select('id')
       .single()
 
     if (error) {
+      this.serverLogger.error(`Failed to create course: ${JSON.stringify(error)}`, 'HodService')
       if (error.code === '23505') {
         throw new ConflictException('Course code already exists')
       }
-      throw new InternalServerErrorException('Failed to add course')
+      if (error.code === '23514') {
+        throw new BadRequestException(`Course constraint violation: ${error.message || 'Check category, semester, or credit values'}`)
+      }
+      if (error.code === '23503') {
+        throw new BadRequestException(`Foreign key violation: ${error.message || 'Department or prerequisite does not exist'}`)
+      }
+      if (error.code === '23502') {
+        throw new BadRequestException(`Missing required field: ${error.message || 'Required field missing'}`)
+      }
+      throw new BadRequestException(error.message || 'Failed to add course')
     }
 
     await this.auditLogger.log({
@@ -214,7 +237,6 @@ export class HodService {
       tag,
       seat_limit,
       prerequisite_course_ids,
-      allowed_department_ids,
     } = body
 
     const updatePayload: Record<string, any> = {
@@ -233,17 +255,25 @@ export class HodService {
     if (prerequisite_course_ids !== undefined) {
       updatePayload.prerequisite_course_ids = Array.isArray(prerequisite_course_ids) ? prerequisite_course_ids : []
     }
-    if (allowed_department_ids !== undefined) {
-      updatePayload.allowed_department_ids = Array.isArray(allowed_department_ids) ? allowed_department_ids : []
-    }
 
-    const { error } = await this.supabase.admin
+    const targetDeptId = body.department_id || user.department_id
+    let query = this.supabase.admin
       .from('courses')
       .update(updatePayload)
       .eq('id', id)
-      .eq('department_id', user.department_id)
 
-    if (error) throw new InternalServerErrorException('Failed to update course')
+    if (targetDeptId) {
+      query = query.eq('department_id', targetDeptId)
+    }
+
+    const { error } = await query
+
+    if (error) {
+      this.serverLogger.error(`Failed to update course: ${JSON.stringify(error)}`, 'HodService')
+      if (error.code === '23505') throw new ConflictException('Course code already exists')
+      if (error.code === '23514') throw new BadRequestException(`Course constraint violation: ${error.message || 'Check category or credit values'}`)
+      throw new BadRequestException(error.message || 'Failed to update course')
+    }
 
     await this.auditLogger.log({
       eventType: AuditEvents.COURSE_UPDATED,
@@ -265,7 +295,10 @@ export class HodService {
       .eq('id', courseId)
       .eq('department_id', user.department_id)
 
-    if (error) throw new InternalServerErrorException('Failed to delete course')
+    if (error) {
+      this.serverLogger.error(`Failed to delete course ${courseId}: ${error.message}`, 'HodService')
+      throw new BadRequestException(`Failed to delete course: ${error.message}`)
+    }
 
     await this.auditLogger.log({
       eventType: AuditEvents.COURSE_DELETED,
@@ -378,16 +411,48 @@ export class HodService {
     return { success: true, message: 'Student added successfully' }
   }
 
-  async updateStudent(body: { id: string; full_name: string; current_semester: number }, user: AuthUser) {
-    const { id, full_name, current_semester } = body
+  async updateStudent(
+    body: { id: string; full_name: string; cap_application_number?: string; current_semester: number },
+    user: AuthUser,
+  ) {
+    const { id, full_name, cap_application_number, current_semester } = body
+
+    const updates: Record<string, any> = {
+      full_name,
+      current_semester,
+    }
+
+    if (cap_application_number) {
+      const cleanCap = cap_application_number.trim()
+      // Check if CAP number is already used by another student
+      const { data: existingStudent } = await this.supabase.admin
+        .from('students')
+        .select('id, full_name')
+        .eq('cap_application_number', cleanCap)
+        .neq('id', id)
+        .maybeSingle()
+
+      if (existingStudent) {
+        throw new BadRequestException(
+          `CAP number "${cleanCap}" is already assigned to student "${existingStudent.full_name}".`,
+        )
+      }
+
+      updates.cap_application_number = cleanCap
+    }
 
     const { error } = await this.supabase.admin
       .from('students')
-      .update({ full_name, current_semester })
+      .update(updates)
       .eq('id', id)
       .eq('department_id', user.department_id)
 
-    if (error) throw new InternalServerErrorException('Failed to update student')
+    if (error) {
+      if (error.code === '23505') {
+        throw new BadRequestException('A student with this CAP Application Number already exists.')
+      }
+      throw new InternalServerErrorException('Failed to update student')
+    }
 
     return { success: true, message: 'Student updated successfully' }
   }
@@ -399,7 +464,10 @@ export class HodService {
       .eq('id', studentId)
       .eq('department_id', user.department_id)
 
-    if (error) throw new InternalServerErrorException('Failed to delete student record')
+    if (error) {
+      this.serverLogger.error(`Failed to delete student ${studentId}: ${error.message}`, 'HodService')
+      throw new BadRequestException(`Failed to delete student: ${error.message}`)
+    }
 
     await this.supabase.admin.auth.admin.deleteUser(studentId)
 
@@ -698,7 +766,13 @@ export class HodService {
       throw new BadRequestException('Cannot remove department Head of Department.')
     }
 
-    // Delete any course assignments first
+    // Clear any assigned_by references pointing to this teacher
+    await this.supabase.admin
+      .from('teacher_course_assignments')
+      .update({ assigned_by: null })
+      .eq('assigned_by', teacherId)
+
+    // Delete any course assignments for this teacher
     await this.supabase.admin
       .from('teacher_course_assignments')
       .delete()

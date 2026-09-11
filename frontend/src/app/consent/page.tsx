@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Footer from '@/component/Footer'
 import styles from './consent.module.css'
@@ -102,6 +103,13 @@ export default function ConsentPage() {
       <header className={styles.header}>
         <div className={styles.headerContent}>
           <div className={styles.logo}>
+            <Image
+              src="/knrunilogo.png"
+              alt="Kannur University"
+              width={28}
+              height={28}
+              style={{ objectFit: 'contain' }}
+            />
             <span className={styles.logoBadge}>FYIMP</span>
             <span className={styles.logoText}>Kannur University</span>
           </div>

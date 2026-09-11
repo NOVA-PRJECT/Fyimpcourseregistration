@@ -19,7 +19,6 @@ export interface CourseItem {
   semester: number
   department_id: string
   seat_limit: number
-  allowed_department_ids: string[]
 }
 
 export interface PrerequisiteRule {
@@ -101,6 +100,15 @@ export class AllocationService {
         throw new BadRequestException('Target for COMPLETED_SEMESTER must be an integer between 1 and 8')
       }
       cleanTarget = String(semNum)
+    } else if (rule === 'DEPARTMENT') {
+      cleanTarget = cleanTarget
+        .split(',')
+        .map((c) => c.trim().toUpperCase())
+        .filter(Boolean)
+        .join(',')
+      if (!cleanTarget) {
+        throw new BadRequestException('At least one department code must be selected')
+      }
     } else {
       cleanTarget = cleanTarget.toUpperCase()
     }
@@ -119,6 +127,46 @@ export class AllocationService {
     // If HOD, check department ownership
     if (user.role === 'hod' && user.department_id && course.department_id !== user.department_id) {
       throw new ForbiddenException('You can only configure prerequisite rules for courses in your department')
+    }
+
+    // If DEPARTMENT rule already exists for this course, update it
+    if (rule === 'DEPARTMENT') {
+      const { data: existingDeptRule } = await this.supabase.admin
+        .from('course_prerequisite_rules')
+        .select('*')
+        .eq('course_id', courseId)
+        .eq('rule', 'DEPARTMENT')
+        .maybeSingle()
+
+      if (existingDeptRule) {
+        const { data: updatedRule, error: updErr } = await this.supabase.admin
+          .from('course_prerequisite_rules')
+          .update({ target: cleanTarget })
+          .eq('id', existingDeptRule.id)
+          .select('*')
+          .single()
+
+        if (updErr) {
+          this.logger.error(`Failed to update department rule: ${updErr.message}`)
+          throw new InternalServerErrorException('Failed to update department rule')
+        }
+
+        await this.auditLogger.log({
+          eventType: AuditEvents.COURSE_UPDATED,
+          userId: user.userId,
+          userRole: user.role,
+          action: `updated prerequisite rule ${rule} (${cleanTarget}) on course ${course.course_code}`,
+          resourceType: 'course',
+          resourceId: courseId,
+          status: 'success',
+        })
+
+        return {
+          success: true,
+          message: 'Department constraint updated successfully',
+          rule: updatedRule,
+        }
+      }
     }
 
     const { data: newRule, error: insertErr } = await this.supabase.admin
@@ -249,7 +297,7 @@ export class AllocationService {
       // Step C: Fetch all courses offered in this semester
       const { data: coursesData, error: courseErr } = await this.supabase.admin
         .from('courses')
-        .select('id, course_code, title, semester, department_id, seat_limit, allowed_department_ids')
+        .select('id, course_code, title, semester, department_id, seat_limit')
         .eq('semester', body.semester)
 
       if (courseErr) throw courseErr
@@ -261,7 +309,6 @@ export class AllocationService {
         semester: c.semester,
         department_id: c.department_id,
         seat_limit: c.seat_limit ? Number(c.seat_limit) : 60,
-        allowed_department_ids: Array.isArray(c.allowed_department_ids) ? c.allowed_department_ids : [],
       }))
 
       const courseMap = new Map<string, CourseItem>(courses.map((c) => [c.id, c]))
@@ -493,7 +540,8 @@ export class AllocationService {
               prereqPoints += 1
             }
           } else if (r.rule === 'DEPARTMENT') {
-            if (studentDeptCode && studentDeptCode.toUpperCase() === r.target.trim().toUpperCase()) {
+            const allowedCodes = r.target.split(',').map((c: string) => c.trim().toUpperCase())
+            if (studentDeptCode && allowedCodes.includes(studentDeptCode.toUpperCase())) {
               prereqPoints += 1
             }
           }
@@ -533,17 +581,16 @@ export class AllocationService {
         for (const pref of studentPrefList) {
           const slotMap = studentSlotState.get(pref.student_id)!
           const slots = extractSlots(pref.preferences)
-          const studentDeptId = (pref.students as any)?.department_id ?? ''
+          const studentDeptCode = (pref.students as any)?.departments?.code ?? ''
 
-          // Check if course allows student's department
-          if (
-            course.allowed_department_ids.length > 0 &&
-            !course.allowed_department_ids.includes(studentDeptId)
-          ) {
-            continue
+          // Check if course has DEPARTMENT constraint
+          const deptRules = (courseRulesMap.get(course.id) || []).filter((r) => r.rule === 'DEPARTMENT')
+          if (deptRules.length > 0) {
+            const allAllowed = deptRules.flatMap((r) => r.target.split(',').map((c) => c.trim().toUpperCase()))
+            if (studentDeptCode && !allAllowed.includes(studentDeptCode.toUpperCase())) {
+              continue
+            }
           }
-
-          for (const slotItem of slots) {
             const slotKey = `slot_${slotItem.slot}`
             const currentSlot = slotMap.get(slotKey)
             if (!currentSlot || currentSlot.resolved || slotItem.is_fixed) continue
@@ -631,17 +678,24 @@ export class AllocationService {
 
             const course = courseMap.get(targetPref.course_id)
             if (!course) continue
-            if (directlyConfirmedCourseIds.has(course.id)) continue
-
-            // Department filter: allowed_department_ids (empty array = all allowed)
-            if (
-              course.allowed_department_ids.length > 0 &&
-              !course.allowed_department_ids.includes(studentDeptId)
-            ) {
-              continue
+            // Enforce course-level DEPARTMENT constraint
+            const deptRules = (courseRulesMap.get(course.id) || []).filter((r) => r.rule === 'DEPARTMENT')
+            if (deptRules.length > 0) {
+              const allAllowed = deptRules.flatMap((r) => r.target.split(',').map((c) => c.trim().toUpperCase()))
+              if (studentDeptCode && !allAllowed.includes(studentDeptCode.toUpperCase())) {
+                continue
+              }
             }
 
-            const score = calculateStudentScore(
+            // Enforce course-level COMPLETED_COURSE prerequisites
+            const coursePrereqs = (courseRulesMap.get(course.id) || []).filter((r) => r.rule === 'COMPLETED_COURSE')
+            if (coursePrereqs.length > 0) {
+              const priorCodes = studentCompletedCourseCodesMap.get(pref.student_id) || new Set()
+              const hasAllPrereqs = coursePrereqs.every((r) => priorCodes.has(r.target.trim().toUpperCase()))
+              if (!hasAllPrereqs) {
+                continue
+              }
+            }
               pref.student_id,
               studentSemester,
               studentDeptCode,

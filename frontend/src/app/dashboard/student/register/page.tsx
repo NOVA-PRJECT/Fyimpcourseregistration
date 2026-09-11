@@ -414,7 +414,7 @@ export default function RegisterPage() {
       <div className={styles.topBar}>
         <div className={styles.topBarLeft}>
           <div className={styles.logoSmall}>
-            <Image src="/logo.png" alt="KU" width={28} height={28} />
+            <Image src="/knrunilogo.png" alt="KU" width={28} height={28} />
           </div>
           <div>
             <p className={styles.topBarTitle}>FYIMP Portal</p>

@@ -154,7 +154,7 @@ export default function LoginPage() {
           <div className={styles.cardHeader}>
             <div className={styles.logoWrapper}>
               <Image
-                src="/logo.png"
+                src="/knrunilogo.png"
                 alt="Kannur University"
                 width={48}
                 height={48}

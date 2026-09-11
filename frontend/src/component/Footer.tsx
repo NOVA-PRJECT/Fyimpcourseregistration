@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import styles from './footer.module.css'
 
 export default function Footer() {
@@ -6,6 +7,7 @@ export default function Footer() {
     <footer className={styles.footerContainer}>
       <div className={styles.footerContent}>
         <div className={styles.left}>
+          <Image src="/knrunilogo.png" alt="Kannur University" width={22} height={22} style={{ objectFit: 'contain', marginRight: '0.4rem', verticalAlign: 'middle', display: 'inline-block' }} />
           <span className={styles.brand}>FYIMP PORTAL</span>
           <span className={styles.dot}>•</span>
           <span className={styles.copy}>

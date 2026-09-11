@@ -184,7 +184,7 @@ export class AssignmentsService {
     // 1. Fetch existing assignment
     const { data: existing, error: fetchError } = await this.supabase.admin
       .from('teacher_course_assignments')
-      .select('id, course_id, teacher_id, courses(department_id, course_code)')
+      .select('id, course_id, teacher_id')
       .eq('id', assignmentId)
       .maybeSingle();
 
@@ -192,8 +192,17 @@ export class AssignmentsService {
       throw new NotFoundException('Assignment record not found.');
     }
 
-    const courseDept = (existing as any).courses?.department_id;
-    if (courseDept !== user.department_id) {
+    const { data: course, error: courseError } = await this.supabase.admin
+      .from('courses')
+      .select('id, department_id, course_code')
+      .eq('id', existing.course_id)
+      .maybeSingle();
+
+    if (courseError || !course) {
+      throw new NotFoundException('Associated course not found.');
+    }
+
+    if (user.role === 'hod' && course.department_id !== user.department_id) {
       throw new ForbiddenException('Cannot modify assignments outside your department.');
     }
 
@@ -208,7 +217,7 @@ export class AssignmentsService {
       throw new NotFoundException('New teacher faculty record not found.');
     }
 
-    if (targetFaculty.department_id !== user.department_id) {
+    if (user.role === 'hod' && targetFaculty.department_id !== user.department_id) {
       throw new ForbiddenException('Cannot assign faculty from another department.');
     }
 
@@ -238,7 +247,7 @@ export class AssignmentsService {
       eventType: 'teacher_reassigned',
       userId: user.userId,
       userRole: user.role,
-      action: `reassigned course ${(existing as any).courses?.course_code} from ${existing.teacher_id} to ${newTeacherId}`,
+      action: `reassigned course ${course.course_code} from ${existing.teacher_id} to ${newTeacherId}`,
       resourceType: 'course_assignment',
       resourceId: assignmentId,
       status: 'success',
@@ -257,7 +266,7 @@ export class AssignmentsService {
   async removeAssignment(user: AuthUser, assignmentId: string, ip: string) {
     const { data: existing, error: fetchError } = await this.supabase.admin
       .from('teacher_course_assignments')
-      .select('id, course_id, teacher_id, courses(department_id)')
+      .select('id, course_id, teacher_id')
       .eq('id', assignmentId)
       .maybeSingle();
 
@@ -265,7 +274,17 @@ export class AssignmentsService {
       throw new NotFoundException('Assignment record not found.');
     }
 
-    if ((existing as any).courses?.department_id !== user.department_id) {
+    const { data: course, error: courseError } = await this.supabase.admin
+      .from('courses')
+      .select('id, department_id, course_code')
+      .eq('id', existing.course_id)
+      .maybeSingle();
+
+    if (courseError || !course) {
+      throw new NotFoundException('Associated course not found.');
+    }
+
+    if (user.role === 'hod' && course.department_id !== user.department_id) {
       throw new ForbiddenException('Cannot delete assignments outside your department.');
     }
 
@@ -282,7 +301,7 @@ export class AssignmentsService {
       eventType: 'teacher_assignment_removed',
       userId: user.userId,
       userRole: user.role,
-      action: `removed assignment ${assignmentId}`,
+      action: `removed assignment for course ${course.course_code} (${assignmentId})`,
       resourceType: 'course_assignment',
       resourceId: assignmentId,
       status: 'success',

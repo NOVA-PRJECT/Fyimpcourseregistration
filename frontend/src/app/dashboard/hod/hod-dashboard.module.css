@@ -197,6 +197,13 @@
   box-sizing: border-box;
 }
 
+.blueprintContainer {
+  max-width: 60rem;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
 /* Semester selector */
 .semesterRow {
   display: flex;
@@ -225,6 +232,7 @@
   cursor: pointer;
   transition: border-color 0.15s ease;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .semesterSelect:focus {
@@ -992,7 +1000,8 @@
   background: #f8f9fa;
 }
 
-.tabActive {
+.tabActive,
+.tabBtn.tabActive {
   color: #002147;
   border-bottom-color: #c9a227;
   background: #f8f9fa;
@@ -1042,6 +1051,13 @@
   background: #f8f9fa;
 }
 
+.mobileTabBtn.tabActive {
+  color: #002147;
+  border-bottom: 2.5px solid #c9a227;
+  background: #f8f9fa;
+  font-weight: 700;
+}
+
 .tabIcon {
   font-size: 0.85rem;
 }
@@ -1082,6 +1098,17 @@
 .moreMenuBtn:hover,
 .moreMenuBtnOpen {
   background: #f8f9fa;
+  color: #002147;
+}
+
+.moreMenuBtn.tabActive {
+  color: #002147;
+  border-bottom: 2.5px solid #c9a227;
+  background: #f8f9fa;
+  font-weight: 700;
+}
+
+.moreMenuBtn.tabActive .chevron {
   color: #002147;
 }
 
@@ -1278,6 +1305,7 @@
   outline: none;
   transition: border-color 0.15s ease;
   -webkit-appearance: none;
+  appearance: none;
   box-sizing: border-box;
 }
 
@@ -1287,6 +1315,7 @@
 }
 
 .modalActions {
+  margin-top:  2rem;
   display: flex;
   gap: 0.75rem;
 }
@@ -1783,5 +1812,356 @@
     justify-content: center;
   }
 }
+
+/* ── BLUEPRINT CONTAINER & DRAG REORDERING ── */
+.blueprintContainer {
+  max-width: 52rem;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.slotDropIndicatorAbove {
+  position: relative;
+}
+
+.slotDropIndicatorAbove::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #c9a227;
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(201, 162, 39, 0.7);
+  z-index: 10;
+  animation: pulseIndicator 1.2s infinite ease-in-out;
+}
+
+.slotDropIndicatorBelow {
+  position: relative;
+}
+
+.slotDropIndicatorBelow::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #c9a227;
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(201, 162, 39, 0.7);
+  z-index: 10;
+  animation: pulseIndicator 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseIndicator {
+  0%, 100% { opacity: 0.8; transform: scaleY(1); }
+  50% { opacity: 1; transform: scaleY(1.4); }
+}
+
+/* ── RESPONSIVE COURSE MODAL (2-COLUMN & STICKY ACTIONS) ── */
+.courseModalDialog {
+  background: #ffffff;
+  border-radius: 1rem;
+  width: 100%;
+  max-width: 980px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+  animation: modalReveal 0.2s ease both;
+  overflow: hidden;
+  position: relative;
+}
+
+.courseModalHeader {
+  padding: 1.15rem 1.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.courseModalHeader .modalTitle {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #002147;
+}
+
+.courseModalCloseBtn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.35rem;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.courseModalCloseBtn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.courseModalBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 1.75rem;
+}
+
+.courseModalGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 860px) {
+  .courseModalGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+}
+
+.courseModalCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.courseModalRightCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+@media (min-width: 860px) {
+  .courseModalRightCol {
+    border-left: 1px solid #e2e8f0;
+    padding-left: 2rem;
+  }
+}
+
+@media (max-width: 859px) {
+  .courseModalRightCol {
+    border-top: 2px solid #e2e8f0;
+    padding-top: 1.5rem;
+  }
+}
+
+.courseModalSectionTitle {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #002147;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 0.25rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.courseModalTwoCol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.courseModalFooter {
+  padding: 1rem 1.75rem;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.05);
+}
+
+/* ── CONSTRAINT PICKERS & CARDS (LIGHT UNIVERSITY THEME) ── */
+.constraintDeptGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.constraintDeptLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  cursor: pointer;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #475569;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.constraintDeptLabel:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.constraintDeptLabelActive {
+  border: 1.5px solid #002147 !important;
+  background: #e6f0fa !important;
+  color: #002147 !important;
+  font-weight: 600;
+}
+
+.priorCourseDropdownWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.priorCourseTrigger {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: #191c1d;
+  background: #f8f9fa;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.5rem;
+  outline: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  transition: border-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.priorCourseTrigger:hover {
+  border-color: #002147;
+  background: #ffffff;
+}
+
+.priorCourseMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1.5px solid #dde1e7;
+  border-radius: 0.6rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  z-index: 60;
+  padding: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.priorCourseSemFilterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.priorCourseSemPill {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.priorCourseSemPill:hover {
+  background: #e2e8f0;
+}
+
+.priorCourseSemPillActive {
+  background: #002147 !important;
+  color: #ffffff !important;
+  border-color: #002147 !important;
+}
+
+.priorCourseSearchInput {
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.78rem;
+  border: 1px solid #dde1e7;
+  border-radius: 0.35rem;
+  background: #f8fafc;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.priorCourseSearchInput:focus {
+  border-color: #002147;
+  background: #ffffff;
+}
+
+.priorCourseList {
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.priorCourseOption {
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.78rem;
+  transition: background 0.15s ease;
+}
+
+.priorCourseOption:hover {
+  background: #f0f4f8;
+}
+
+.constraintCardLight {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s ease;
+}
+
+.constraintCardLight:hover {
+  border-color: #cbd5e1;
+}
+
+
+
 
 

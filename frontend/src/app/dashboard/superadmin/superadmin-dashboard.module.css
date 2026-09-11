@@ -598,6 +598,7 @@
   outline: none;
   box-sizing: border-box;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .input:focus { border-color: #002147; background: #ffffff; }
