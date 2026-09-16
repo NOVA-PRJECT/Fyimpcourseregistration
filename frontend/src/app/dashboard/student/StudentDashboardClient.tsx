@@ -4,7 +4,15 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { LogOut } from 'lucide-react'
+import {
+  LogOut,
+  LayoutDashboard,
+  Bell,
+  BookOpen,
+  Calendar,
+  MapPin,
+  Award,
+} from 'lucide-react'
 
 import styles from './student-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
@@ -42,11 +50,11 @@ interface StudentDashboardClientProps {
 }
 
 const DAYS = [
-  { num: 1, name: 'Monday' },
-  { num: 2, name: 'Tuesday' },
-  { num: 3, name: 'Wednesday' },
-  { num: 4, name: 'Thursday' },
-  { num: 5, name: 'Friday' },
+  { num: 1, name: 'Monday', short: 'Mon' },
+  { num: 2, name: 'Tuesday', short: 'Tue' },
+  { num: 3, name: 'Wednesday', short: 'Wed' },
+  { num: 4, name: 'Thursday', short: 'Thu' },
+  { num: 5, name: 'Friday', short: 'Fri' },
 ]
 
 const PERIODS = [
@@ -57,6 +65,12 @@ const PERIODS = [
   { num: 5, label: 'P5', time: '14:30 - 15:30' },
   { num: 6, label: 'P6', time: '15:30 - 16:30' },
 ]
+
+function getCurrentUserDay(): number {
+  const day = new Date().getDay() // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
+  if (day >= 1 && day <= 5) return day
+  return 1 // Default to Monday on weekends
+}
 
 type StudentTab = 'overview' | 'notifications' | 'courses' | 'timetable' | 'campus-signin' | 'credits'
 
@@ -70,6 +84,7 @@ export default function StudentDashboardClient({
   useBfcacheGuard()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<StudentTab>('overview')
+  const [selectedDay, setSelectedDay] = useState<number | 'all'>(() => getCurrentUserDay())
   const [loggingOut, setLoggingOut] = useState(false)
   const [timetableEntries, setTimetableEntries] = useState<any[]>([])
   const [loadingTimetable, setLoadingTimetable] = useState(false)
@@ -139,23 +154,22 @@ export default function StudentDashboardClient({
           {/* Vertical Separator */}
           <div className={styles.topBarDivider} />
 
-          {/* 2. Student Details Block */}
+          {/* 2. Student Details Block (Desktop) */}
           {studentInfo && (
             <div className={styles.studentIdentity}>
               <p className={styles.studentNameHeader}>{studentInfo.full_name}</p>
               <div className={styles.studentBadges}>
-                <span className={styles.roleBadge}>FYIMP Student</span>
+                <span className={styles.metaBadge}>FYIMP Student</span>
                 {studentInfo.campus_name && (
-                  <span className={styles.campusBadge} title={studentInfo.campus_name}>
+                  <span className={styles.metaBadge} title={studentInfo.campus_name}>
                     {studentInfo.campus_name}
                   </span>
                 )}
                 {studentInfo.department_name && (
-                  <span className={styles.deptBadge} title={studentInfo.department_name}>
+                  <span className={styles.metaBadge} title={studentInfo.department_name}>
                     {studentInfo.department_name}
                   </span>
                 )}
-                <span className={styles.semBadgeTop}>Semester {studentInfo.current_semester ?? 1}</span>
               </div>
             </div>
           )}
@@ -163,6 +177,13 @@ export default function StudentDashboardClient({
 
         {/* 3. Action Controls */}
         <div className={styles.topBarRight}>
+          {studentInfo && (
+            <div className={styles.mobileStudentPill}>
+              <span className={styles.mobileAvatar}>
+                {studentInfo.full_name.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
           <button
             type="button"
             className={styles.logoutBtn}
@@ -170,20 +191,23 @@ export default function StudentDashboardClient({
             disabled={loggingOut}
             title="Log out of portal"
           >
-            <LogOut size={14} />
+            <LogOut size={16} />
             <span className={styles.logoutText}>{loggingOut ? 'Logging out...' : 'Logout'}</span>
           </button>
         </div>
       </header>
 
-      {/* ── FULL VIEWPORT WIDTH TAB BAR (Matched to Director & HOD) ── */}
-      <nav className={styles.tabBar}>
+      {/* ── RESPONSIVE TAB BAR (Top on Desktop, Fixed Bottom on Mobile) ── */}
+      <nav className={styles.tabBar} aria-label="Student Navigation">
         <button
           type="button"
           className={`${styles.tabBtn} ${activeTab === 'overview' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('overview')}
         >
-          Overview
+          <div className={styles.tabIconWrapper}>
+            <LayoutDashboard size={18} className={styles.tabIcon} />
+          </div>
+          <span className={styles.tabText}>Overview</span>
         </button>
 
         <button
@@ -191,14 +215,20 @@ export default function StudentDashboardClient({
           className={`${styles.tabBtn} ${activeTab === 'notifications' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('notifications')}
         >
-          Notifications
+          <div className={styles.tabIconWrapper}>
+            <Bell size={18} className={styles.tabIcon} />
+            {registrationWindow?.isOpen && (
+              <span className={`${styles.tabBadgeDot} ${registrationWindow.isClosingSoon ? styles.tabBadgeDotAlert : ''}`} />
+            )}
+          </div>
+          <span className={styles.tabText}>Notices</span>
           {registrationWindow?.isOpen && (
             <span
               className={`${styles.tabBadge} ${
                 registrationWindow.isClosingSoon ? styles.tabBadgeAlert : styles.tabBadgeOpen
               }`}
             >
-              {registrationWindow.isClosingSoon ? 'Closing Soon' : 'Open'}
+              {registrationWindow.isClosingSoon ? 'Closing' : 'Open'}
             </span>
           )}
         </button>
@@ -208,7 +238,13 @@ export default function StudentDashboardClient({
           className={`${styles.tabBtn} ${activeTab === 'courses' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('courses')}
         >
-          Enrolled Courses
+          <div className={styles.tabIconWrapper}>
+            <BookOpen size={18} className={styles.tabIcon} />
+            {enrolledCourses.length > 0 && (
+              <span className={styles.tabBadgeCountMobile}>{enrolledCourses.length}</span>
+            )}
+          </div>
+          <span className={styles.tabText}>Enrolled</span>
           {enrolledCourses.length > 0 && (
             <span className={`${styles.tabBadge} ${styles.tabBadgeOpen}`}>
               {enrolledCourses.length}
@@ -221,7 +257,10 @@ export default function StudentDashboardClient({
           className={`${styles.tabBtn} ${activeTab === 'timetable' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('timetable')}
         >
-          Timetable
+          <div className={styles.tabIconWrapper}>
+            <Calendar size={18} className={styles.tabIcon} />
+          </div>
+          <span className={styles.tabText}>Timetable</span>
         </button>
 
         <button
@@ -229,7 +268,10 @@ export default function StudentDashboardClient({
           className={`${styles.tabBtn} ${activeTab === 'campus-signin' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('campus-signin')}
         >
-          Campus Sign-In
+          <div className={styles.tabIconWrapper}>
+            <MapPin size={18} className={styles.tabIcon} />
+          </div>
+          <span className={styles.tabText}>Sign-In</span>
         </button>
 
         <button
@@ -237,7 +279,10 @@ export default function StudentDashboardClient({
           className={`${styles.tabBtn} ${activeTab === 'credits' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('credits')}
         >
-          Credit Ledger
+          <div className={styles.tabIconWrapper}>
+            <Award size={18} className={styles.tabIcon} />
+          </div>
+          <span className={styles.tabText}>Ledger</span>
         </button>
       </nav>
 
@@ -613,68 +658,168 @@ export default function StudentDashboardClient({
               </div>
             </div>
 
+            {/* Day Selector Bar */}
+            <div className={styles.daySelectorBar}>
+              <button
+                type="button"
+                className={`${styles.daySelectBtn} ${styles.fullWeekBtn} ${selectedDay === 'all' ? styles.daySelectBtnActive : ''}`}
+                onClick={() => setSelectedDay('all')}
+              >
+                Full Week
+              </button>
+              {DAYS.map((d) => (
+                <button
+                  key={d.num}
+                  type="button"
+                  className={`${styles.daySelectBtn} ${selectedDay === d.num ? styles.daySelectBtnActive : ''}`}
+                  onClick={() => setSelectedDay(d.num)}
+                >
+                  {d.short}
+                </button>
+              ))}
+            </div>
+
+            <div className={styles.mobileScrollHint}>
+              <span>⇄ Swipe horizontally to explore full daily schedule</span>
+            </div>
+
             <div className={styles.timetableContainer}>
               {loadingTimetable ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
                   Loading your weekly class schedule...
                 </div>
               ) : (
-                <table className={styles.timetableTable}>
-                  <thead>
-                    <tr>
-                      <th className={`${styles.timetableTh} ${styles.timetableThDay}`}>Day</th>
-                      {PERIODS.map((p) => (
-                        <th key={p.num} className={styles.timetableTh}>
-                          <div>{p.label}</div>
-                          <div style={{ fontSize: '0.62rem', fontWeight: 500, color: '#64748b' }}>{p.time}</div>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {DAYS.map((day) => (
-                      <tr key={day.num}>
-                        <td className={styles.timetableDayCell}>{day.name}</td>
-                        {PERIODS.map((period) => {
-                          const matchingEntry = timetableEntries.find(
-                            (e) =>
-                              e.day === day.num &&
-                              e.period === period.num &&
-                              (enrolledCourseIds.has(e.courseId) ||
-                                enrolledCodes.has((e.courseCode || '').trim().toUpperCase())),
-                          )
+                <>
+                  {/* Desktop Grid View */}
+                  <div className={styles.desktopTimetable}>
+                    <table className={styles.timetableTable}>
+                      <thead>
+                        <tr>
+                          <th className={`${styles.timetableTh} ${styles.timetableThDay}`}>Day</th>
+                          {PERIODS.map((p) => (
+                            <th key={p.num} className={styles.timetableTh}>
+                              <div>{p.label}</div>
+                              <div style={{ fontSize: '0.62rem', fontWeight: 500, color: '#64748b' }}>{p.time}</div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(selectedDay === 'all' ? DAYS : DAYS.filter((d) => d.num === selectedDay)).map((day) => (
+                          <tr key={day.num}>
+                            <td className={styles.timetableDayCell}>{day.name}</td>
+                            {PERIODS.map((period) => {
+                              const matchingEntry = timetableEntries.find(
+                                (e) =>
+                                  e.day === day.num &&
+                                  e.period === period.num &&
+                                  (enrolledCourseIds.has(e.courseId) ||
+                                    enrolledCodes.has((e.courseCode || '').trim().toUpperCase())),
+                              )
 
-                          return (
-                            <td key={period.num} className={styles.timetableTd}>
-                              {matchingEntry ? (
-                                <div
-                                  className={`${styles.timetableSlotFilled} ${
-                                    matchingEntry.isLabBlock ? styles.timetableSlotLab : ''
-                                  }`}
-                                >
-                                  <div>
-                                    <div className={styles.timetableCourseCode}>{matchingEntry.courseCode}</div>
-                                    <div className={styles.timetableCourseTitle} title={matchingEntry.courseName}>
-                                      {matchingEntry.courseName}
+                              return (
+                                <td key={period.num} className={styles.timetableTd}>
+                                  {matchingEntry ? (
+                                    <div
+                                      className={`${styles.timetableSlotFilled} ${
+                                        matchingEntry.isLabBlock ? styles.timetableSlotLab : ''
+                                      }`}
+                                    >
+                                      <div>
+                                        <div className={styles.timetableCourseCode}>{matchingEntry.courseCode}</div>
+                                        <div className={styles.timetableCourseTitle} title={matchingEntry.courseName}>
+                                          {matchingEntry.courseName}
+                                        </div>
+                                      </div>
+                                      <div className={styles.timetableMetaRow}>
+                                        <span>{matchingEntry.category || 'Core'}</span>
+                                        {matchingEntry.isLabBlock && (
+                                          <span className={styles.timetableLabBadge}>Lab</span>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                  <div className={styles.timetableMetaRow}>
-                                    <span>{matchingEntry.category || 'Core'}</span>
-                                    {matchingEntry.isLabBlock && (
-                                      <span className={styles.timetableLabBadge}>Lab</span>
-                                    )}
-                                  </div>
+                                  ) : (
+                                    <div className={styles.timetableSlotEmpty}>—</div>
+                                  )}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Vertical Period Schedule */}
+                  {(() => {
+                    const activeMobileDayNum = selectedDay === 'all' ? getCurrentUserDay() : selectedDay
+                    const activeDayObj = DAYS.find((d) => d.num === activeMobileDayNum) || DAYS[0]
+                    const currentTodayNum = getCurrentUserDay()
+                    const isToday = activeDayObj.num === currentTodayNum
+
+                    return (
+                      <div className={styles.mobileTimetable}>
+                        <div className={styles.mobileDayHeader}>
+                          <div className={styles.mobileDayTitle}>
+                            <span>{activeDayObj.name}</span>
+                            {isToday && <span className={styles.todayBadge}>Today</span>}
+                          </div>
+                          <span className={styles.mobileDaySub}>6 Scheduled Periods</span>
+                        </div>
+
+                        <div className={styles.verticalPeriodList}>
+                          {PERIODS.map((period) => {
+                            const matchingEntry = timetableEntries.find(
+                              (e) =>
+                                e.day === activeDayObj.num &&
+                                e.period === period.num &&
+                                (enrolledCourseIds.has(e.courseId) ||
+                                  enrolledCodes.has((e.courseCode || '').trim().toUpperCase())),
+                            )
+
+                            return (
+                              <div key={period.num} className={styles.verticalPeriodCard}>
+                                <div className={styles.verticalPeriodTimeCol}>
+                                  <span className={styles.verticalPeriodNum}>{period.label}</span>
+                                  <span className={styles.verticalPeriodTime}>{period.time}</span>
                                 </div>
-                              ) : (
-                                <div className={styles.timetableSlotEmpty}>—</div>
-                              )}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+                                <div className={styles.verticalPeriodContent}>
+                                  {matchingEntry ? (
+                                    <div
+                                      className={`${styles.verticalPeriodFilled} ${
+                                        matchingEntry.isLabBlock ? styles.verticalPeriodLab : ''
+                                      }`}
+                                    >
+                                      <div className={styles.verticalPeriodHeader}>
+                                        <span className={styles.verticalCourseCode}>{matchingEntry.courseCode}</span>
+                                        <div className={styles.verticalBadgeGroup}>
+                                          <span className={styles.verticalCategoryBadge}>
+                                            {matchingEntry.category || 'Core'}
+                                          </span>
+                                          {matchingEntry.isLabBlock && (
+                                            <span className={styles.timetableLabBadge}>Lab</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className={styles.verticalCourseTitle}>
+                                        {matchingEntry.courseName}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className={styles.verticalPeriodEmpty}>
+                                      <span>— Free Period / No Class —</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </>
               )}
             </div>
           </div>

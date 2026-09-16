@@ -52,7 +52,6 @@ export class StudentService {
           slot_5_course_id,
           slot_6_course_id,
           allocation_metadata,
-          preferences,
           selections
         `)
         .eq('student_id', user.userId)
@@ -126,8 +125,6 @@ export class StudentService {
         } else if (typeof pref.preferences === 'object') {
           Object.assign(prefs, pref.preferences)
         }
-      } else if (reg?.preferences && typeof reg.preferences === 'object') {
-        Object.assign(prefs, reg.preferences)
       }
 
       for (let s = 1; s <= 6; s++) {

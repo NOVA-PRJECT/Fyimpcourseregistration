@@ -120,6 +120,21 @@
   flex-wrap: wrap;
 }
 
+.metaBadge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 0.12rem 0.55rem;
+  border-radius: 2rem;
+  background: rgba(0, 33, 71, 0.08);
+  color: #002147;
+  border: 1px solid rgba(0, 33, 71, 0.25);
+  white-space: nowrap;
+  line-height: 1.3;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .roleBadge {
   font-size: 0.6rem;
   font-weight: 700;
@@ -243,6 +258,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0.45rem;
   text-align: center;
   padding: 0.75rem 0.75rem;
   font-family: inherit;
@@ -269,8 +285,48 @@
   background: #f0f4f8;
 }
 
+.tabIconWrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tabIcon {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+.tabText {
+  display: inline;
+}
+
+.tabBadgeDot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #16a34a;
+  border: 1.5px solid #ffffff;
+}
+
+.tabBadgeDotAlert {
+  background: #ea580c;
+}
+
+.tabBadgeCountMobile {
+  display: none;
+}
+
+.mobileStudentPill {
+  display: none;
+}
+
 .tabBadge {
-  margin-left: 0.4rem;
+  margin-left: 0.2rem;
   font-size: 0.65rem;
   padding: 0.1rem 0.4rem;
   border-radius: 9999px;
@@ -2208,6 +2264,170 @@
   border-radius: 0.25rem;
 }
 
+/* ── TIMETABLE MOBILE VERTICAL STACK & RESPONSIVE TOGGLES ── */
+.desktopTimetable {
+  display: block;
+}
+
+.mobileTimetable {
+  display: none;
+}
+
+.mobileDayHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.85rem;
+  padding: 0 0.25rem;
+}
+
+.mobileDayTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.todayBadge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: #0284c7;
+  color: #ffffff;
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+  letter-spacing: 0.04em;
+}
+
+.mobileDaySub {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.verticalPeriodList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+.verticalPeriodCard {
+  display: flex;
+  align-items: stretch;
+  gap: 0.75rem;
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  box-sizing: border-box;
+}
+
+.verticalPeriodTimeCol {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-width: 68px;
+  padding-right: 0.65rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.verticalPeriodNum {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #38bdf8;
+  line-height: 1;
+}
+
+.verticalPeriodTime {
+  font-size: 0.62rem;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.verticalPeriodContent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.verticalPeriodFilled {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  background: rgba(2, 132, 199, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 0.45rem;
+  padding: 0.5rem 0.65rem;
+  box-sizing: border-box;
+}
+
+.verticalPeriodLab {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(192, 132, 252, 0.35);
+}
+
+.verticalPeriodHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.verticalCourseCode {
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #38bdf8;
+}
+
+.verticalPeriodLab .verticalCourseCode {
+  color: #c084fc;
+}
+
+.verticalBadgeGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.verticalCategoryBadge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.12rem 0.4rem;
+  border-radius: 0.25rem;
+}
+
+.verticalCourseTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.verticalPeriodEmpty {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.65rem;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-style: italic;
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 0.45rem;
+}
+
 /* ── NOTIFICATIONS & DEADLINES TAB STYLES ── */
 .notificationSection {
   display: flex;
@@ -2317,4 +2537,343 @@
   color: #475569;
   margin: 0;
   line-height: 1.4;
+}
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE SYSTEM (Bottom Tab Bar & Responsive UI)
+══════════════════════════════════════════════════════════ */
+
+/* Desktop defaults for day selector and scroll hints */
+.daySelectorBar {
+  display: none;
+}
+
+.mobileScrollHint {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* ── 1. FIXED BOTTOM NAVIGATION BAR ── */
+  .tabBar {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    z-index: 1000 !important;
+    background: #ffffff !important;
+    border-top: 1px solid #e2e8f0 !important;
+    border-bottom: none !important;
+    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.08) !important;
+    display: flex !important;
+    justify-content: space-around !important;
+    align-items: center !important;
+    padding: 0.35rem 0.2rem !important;
+    padding-bottom: max(0.45rem, env(safe-area-inset-bottom)) !important;
+    height: auto !important;
+    min-height: 58px !important;
+    overflow-x: hidden !important;
+  }
+
+  .tabBtn {
+    flex: 1;
+    flex-direction: column !important;
+    justify-content: center !important;
+    gap: 0.18rem !important;
+    padding: 0.3rem 0.15rem !important;
+    border-bottom: none !important;
+    border-top: 2.5px solid transparent !important;
+    border-radius: 0.5rem !important;
+    font-size: 0.65rem !important;
+    min-width: 0 !important;
+    line-height: 1.1 !important;
+  }
+
+  .tabBtn:hover {
+    background: transparent !important;
+  }
+
+  .tabActive {
+    border-top-color: #002147 !important;
+    border-bottom-color: transparent !important;
+    color: #002147 !important;
+    background: #f1f5f9 !important;
+    font-weight: 700 !important;
+  }
+
+  .tabIcon {
+    width: 19px !important;
+    height: 19px !important;
+  }
+
+  .tabText {
+    font-size: 0.62rem !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
+  }
+
+  .tabBadge {
+    display: none !important;
+  }
+
+  .tabBadgeCountMobile {
+    display: flex;
+    position: absolute;
+    top: -4px;
+    right: -7px;
+    background: #002147;
+    color: #ffffff;
+    font-size: 0.55rem;
+    font-weight: 800;
+    min-width: 13px;
+    height: 13px;
+    border-radius: 9999px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.2rem;
+    border: 1px solid #ffffff;
+  }
+
+  /* ── 2. PAGE & VIEWPORT CONTENT ADJUSTMENTS ── */
+  .pageWrapper {
+    min-height: 100dvh;
+    padding-bottom: 0;
+  }
+
+  .tabContentWrapper {
+    margin: 0.75rem auto 5rem !important;
+    padding: 0 0.75rem !important;
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)) !important;
+    gap: 1rem !important;
+  }
+
+  /* ── 3. TOP BAR ADAPTATIONS ── */
+  .topBar {
+    padding: 0.45rem 0.75rem !important;
+    position: sticky !important;
+    top: 0 !important;
+  }
+
+  .topBarDivider {
+    display: none !important;
+  }
+
+  .studentIdentity {
+    display: none !important;
+  }
+
+  .mobileStudentPill {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    padding: 0.2rem 0.5rem;
+    border-radius: 9999px;
+  }
+
+  .mobileAvatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #002147;
+    color: #ffffff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobileSemText {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #002147;
+  }
+
+  .logoutText {
+    display: none !important;
+  }
+
+  .logoutBtn {
+    padding: 0.45rem 0.55rem !important;
+    border-radius: 0.4rem !important;
+  }
+
+  /* ── 4. OVERVIEW TAB ADAPTATIONS ── */
+  .heroProfileCard {
+    padding: 1rem !important;
+    gap: 0.85rem !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+  }
+
+  .heroAvatar {
+    width: 3.25rem !important;
+    height: 3.25rem !important;
+    font-size: 1.25rem !important;
+  }
+
+  .heroMeta {
+    min-width: 0 !important;
+    width: 100% !important;
+    align-items: center !important;
+  }
+
+  .heroChips {
+    justify-content: center !important;
+  }
+
+  .heroName {
+    font-size: 1.15rem !important;
+  }
+
+  .dashboardGrid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .registrationCard {
+    padding: 1.15rem !important;
+  }
+
+  .regCtaBtn {
+    width: 100% !important;
+    text-align: center !important;
+    padding: 0.85rem 1rem !important;
+    font-size: 0.88rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .academicCard {
+    padding: 1.15rem !important;
+  }
+
+  .detailGrid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
+  }
+
+  .quickNavCard {
+    padding: 1.15rem !important;
+  }
+
+  /* ── 5. COURSES TAB ADAPTATIONS ── */
+  .enrolledSection {
+    margin-top: 0 !important;
+  }
+
+  .enrolledHeader {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.6rem !important;
+  }
+
+  .enrolledTitle {
+    font-size: 1.05rem !important;
+  }
+
+  .courseGrid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+
+  /* ── 6. TIMETABLE TAB ADAPTATIONS ── */
+  .daySelectorBar {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding: 0.25rem 0;
+    margin-bottom: 0.6rem;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .daySelectorBar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .daySelectBtn {
+    padding: 0.35rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #475569;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+
+  .daySelectBtnActive {
+    background: #002147;
+    color: #ffffff;
+    border-color: #002147;
+  }
+
+  .fullWeekBtn {
+    display: none !important;
+  }
+
+  .desktopTimetable {
+    display: none !important;
+  }
+
+  .mobileTimetable {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+
+  .mobileScrollHint {
+    display: none !important;
+  }
+
+  .timetableContainer {
+    padding: 0.75rem 0.65rem !important;
+    border-radius: 0.75rem !important;
+    overflow-x: visible !important;
+  }
+
+  /* ── 7. NOTIFICATIONS TAB ADAPTATIONS ── */
+  .notificationCard {
+    padding: 1rem !important;
+  }
+
+  .notificationGrid {
+    grid-template-columns: 1fr !important;
+    gap: 0.65rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .detailGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .topBarBranding .topBarTitles {
+    gap: 0;
+  }
+
+  .topBarTitle {
+    font-size: 0.8rem !important;
+  }
+
+  .topBarSubtitle {
+    font-size: 0.6rem !important;
+  }
+
+  .tabBtn {
+    padding: 0.25rem 0.1rem !important;
+  }
+
+  .tabText {
+    font-size: 0.58rem !important;
+  }
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import styles from '@/app/dashboard/student/credits/credit-ledger.module.css'
+import styles from './credit-ledger.module.css'
 
 interface CategoryItem {
   category: string
@@ -82,16 +82,16 @@ interface CreditLedgerViewProps {
 export const MASTER_FYIMP_CATEGORIES = [
   { category: 'DSC', title: 'Discipline Specific Core (DSC)', min3Year: 60, min4Year: 80 },
   { category: 'DSE', title: 'Discipline Specific Elective (DSE)', min3Year: 24, min4Year: 32 },
-  { category: 'DSS', title: 'Discipline Specific Skill (DSS)', min3Year: 6, min4Year: 6 },
   { category: 'MDC', title: 'Multidisciplinary Course (MDC)', min3Year: 9, min4Year: 9 },
-  { category: 'AEC', title: 'Ability Enhancement Course (AEC)', min3Year: 9, min4Year: 9 },
-  { category: 'SEC', title: 'Skill Enhancement Course (SEC)', min3Year: 9, min4Year: 9 },
   { category: 'VAC', title: 'Value Addition Course (VAC)', min3Year: 6, min4Year: 6 },
+  { category: 'SEC', title: 'Skill Enhancement Course (SEC)', min3Year: 9, min4Year: 9 },
+  { category: 'AEC', title: 'Ability Enhancement Course (AEC)', min3Year: 9, min4Year: 9 },
   { category: 'MOC', title: 'Minor Open Elective (MOC)', min3Year: 8, min4Year: 12 },
   { category: 'MOOC', title: 'Massive Open Online Course (MOOC)', min3Year: 2, min4Year: 4 },
   { category: 'INT', title: 'Internship (INT)', min3Year: 4, min4Year: 4 },
   { category: 'RPH', title: 'Research Project / Honours (RPH)', min3Year: 0, min4Year: 12 },
   { category: 'FWD', title: 'Field Work / Dissertation (FWD)', min3Year: 0, min4Year: 4 },
+  { category: 'DSS', title: 'Discipline Specific Skill (DSS)', min3Year: 6, min4Year: 6 },
   { category: 'DMP', title: 'Department Major Project (DMP)', min3Year: 0, min4Year: 8 },
   { category: 'CIP', title: 'Community Interaction (CIP)', min3Year: 2, min4Year: 2 },
 ]
@@ -194,7 +194,9 @@ export default function CreditLedgerView({
           <div className={styles.circularGrid}>
             {(() => {
               const categoryList = MASTER_FYIMP_CATEGORIES.map((master) => {
-                const existing = (categories || []).find((c) => c.category === master.category)
+                const existing = (categories || []).find(
+                  (c) => (c.category || '').trim().toUpperCase() === master.category
+                )
                 if (existing) {
                   return existing
                 }
@@ -210,13 +212,6 @@ export default function CreditLedgerView({
                   isMet4Year: master.min4Year === 0,
                 }
               })
-
-              // Also include any extra custom categories returned by server that aren't in the standard master list
-              for (const c of (categories || [])) {
-                if (!categoryList.some((cl) => cl.category === c.category)) {
-                  categoryList.push(c)
-                }
-              }
 
               return categoryList.map((cat) => {
                 const target = cat.min4Year > 0 ? cat.min4Year : cat.min3Year > 0 ? cat.min3Year : Math.max(cat.earned, 1)
@@ -258,7 +253,6 @@ export default function CreditLedgerView({
 
                     <div className={styles.categoryCardMeta}>
                       <span className={styles.categoryCardCode}>{cat.category}</span>
-                      <h3 className={styles.categoryCardTitle}>{cat.title}</h3>
                       <span className={styles.categoryTarget}>
                         Target: {targetLabel}
                       </span>
@@ -286,8 +280,6 @@ export default function CreditLedgerView({
                   <th>Level Band</th>
                   <th>Prefix Rule</th>
                   <th>Earned Credits</th>
-                  <th>Regulation Bound</th>
-                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -300,17 +292,7 @@ export default function CreditLedgerView({
                       <code>First digit: {band.band.charAt(0)}</code>
                     </td>
                     <td>
-                      <strong style={{ fontSize: '1rem', color: '#0f172a' }}>{band.earned}</strong>
-                    </td>
-                    <td>Min {band.minimum} Credits</td>
-                    <td>
-                      {band.isMet ? (
-                        <span className={`${styles.statusTag} ${styles.met}`}>✓ Met</span>
-                      ) : (
-                        <span className={`${styles.statusTag} ${styles.shortfall}`}>
-                          -{band.shortfall} credits short
-                        </span>
-                      )}
+                      <strong style={{ fontSize: '1rem', color: '#0f172a' }}>{band.earned} Credits</strong>
                     </td>
                   </tr>
                 ))}
@@ -376,7 +358,6 @@ export default function CreditLedgerView({
                   <th>Code</th>
                   <th>Course Title</th>
                   <th>Category</th>
-                  <th>Band</th>
                   <th>Department</th>
                   <th>Credits</th>
                 </tr>
@@ -385,14 +366,13 @@ export default function CreditLedgerView({
                 {registeredCourses.map((c) => (
                   <tr key={c.id}>
                     <td>
-                      <span className={`${styles.statusTag} ${styles.info}`}>Sem {c.semester}</span>
+                      <span className={`${styles.statusTag} ${styles.info}`}>{c.semester}</span>
                     </td>
                     <td>
                       <code style={{ fontWeight: 700, color: '#1e3a8a' }}>{c.courseCode}</code>
                     </td>
                     <td>{c.title}</td>
                     <td>{c.normalizedCategory}</td>
-                    <td>{c.levelBand}</td>
                     <td>{c.departmentName}</td>
                     <td>
                       <strong>{c.credits}</strong>

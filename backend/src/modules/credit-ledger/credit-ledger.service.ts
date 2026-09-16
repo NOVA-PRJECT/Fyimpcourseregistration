@@ -53,36 +53,42 @@ export class CreditLedgerService {
   }
 
   /**
-   * Maps raw database course categories to canonical regulation categories.
+   * Maps course category and course code to one of the 14 canonical FYIMP categories:
+   * DSC, DSE, MDC, VAC, SEC, AEC, MOC, MOOC, INT, RPH, FWD, DSS, DMP, CIP.
    */
-  normalizeCategory(rawCategory: string, courseTitle?: string): string {
+  normalizeCategory(rawCategory: string, courseCode?: string, courseTitle?: string): string {
     const cat = (rawCategory || '').trim().toUpperCase()
+    const code = (courseCode || '').trim().toUpperCase()
     const title = (courseTitle || '').trim().toUpperCase()
 
-    if (cat === 'DSC') return 'DSC'
-    if (cat === 'DSE') return 'DSE'
-    if (cat === 'DSS') return 'DSS'
-    if (cat === 'MDC') return 'MDC'
-    if (cat === 'AEC') return 'AEC'
-    if (cat === 'SEC') return 'SEC'
-    if (cat === 'VAC') return 'VAC'
-    if (cat === 'MOC') return 'MOC'
-    if (cat === 'MOOC') return 'MOOC'
-    if (cat === 'INT' || cat.includes('INTERN') || title.includes('INTERNSHIP')) {
-      return 'INT'
+    // 1. Direct match on raw category if it is any of the canonical 14
+    const CANONICAL = [
+      'DSC', 'DSE', 'MDC', 'VAC', 'SEC', 'AEC', 'MOC',
+      'MOOC', 'INT', 'RPH', 'FWD', 'DSS', 'DMP', 'CIP',
+    ]
+    if (CANONICAL.includes(cat)) {
+      return cat
     }
-    if (cat === 'RPH' || title.includes('HONOURS RESEARCH') || title.includes('RESEARCH PROJECT')) {
-      return 'RPH'
+
+    // 2. Check if courseCode equals or contains any canonical category tag
+    // (Check MOOC before MOC to prevent substring prefix overlap)
+    const CODE_TAGS = [
+      'MOOC', 'DSC', 'DSE', 'MDC', 'VAC', 'SEC', 'AEC',
+      'MOC', 'INT', 'RPH', 'FWD', 'DSS', 'DMP', 'CIP',
+    ]
+    for (const tag of CODE_TAGS) {
+      if (code.includes(tag)) {
+        return tag
+      }
     }
-    if (cat === 'FWD' || title.includes('FIELD WORK') || title.includes('DISSERTATION')) {
-      return 'FWD'
-    }
-    if (cat === 'DMP' || title.includes('MAJOR PROJECT')) {
-      return 'DMP'
-    }
-    if (cat === 'CIP' || title.includes('COMMUNITY INTERACTION')) {
-      return 'CIP'
-    }
+
+    // 3. Fallback for title/keywords (internship, research project, dissertation, etc.)
+    if (cat.includes('INTERN') || title.includes('INTERNSHIP') || code.includes('INTERN')) return 'INT'
+    if (title.includes('HONOURS RESEARCH') || title.includes('RESEARCH PROJECT') || code.includes('RESEARCH')) return 'RPH'
+    if (title.includes('FIELD WORK') || title.includes('DISSERTATION')) return 'FWD'
+    if (title.includes('MAJOR PROJECT')) return 'DMP'
+    if (title.includes('COMMUNITY INTERACTION')) return 'CIP'
+
     return cat || 'Other'
   }
 
@@ -150,7 +156,7 @@ export class CreditLedgerService {
       throw new InternalServerErrorException(`Failed to retrieve registration records: ${regError.message}`)
     }
 
-    // 4. Collect registered course IDs across both flat slots and JSONB
+    // 4. Collect registered course IDs across flat slots and selections JSONB
     // Pair each course ID with the semester it was taken in
     const courseSemesterMap = new Map<string, number>()
     const courseIdSet = new Set<string>()
@@ -215,7 +221,7 @@ export class CreditLedgerService {
     // 6. Build the registered courses list
     const registeredCourses: RegisteredCourseItem[] = courseRecords.map((c) => {
       const levelBand = this.deriveLevelBand(c.course_code)
-      const normalizedCategory = this.normalizeCategory(c.category, c.title)
+      const normalizedCategory = this.normalizeCategory(c.category, c.course_code, c.title)
       const sem = courseSemesterMap.get(c.id) || 1
       const deptName = (c.departments as any)?.name || 'General'
 
@@ -257,27 +263,10 @@ export class CreditLedgerService {
         min4Year: req.min4Year,
         shortfall3Year,
         shortfall4Year,
-        isMet3Year: req.min3Year === 0 || earned >= req.min3Year,
-        isMet4Year: req.min4Year === 0 || earned >= req.min4Year,
+        isMet3Year: (req.min3Year as number) <= 0 || earned >= req.min3Year,
+        isMet4Year: (req.min4Year as number) <= 0 || earned >= req.min4Year,
       }
     })
-
-    // Also include any other category present in registered courses that wasn't in CATEGORY_REQUIREMENTS
-    for (const [catName, earned] of catCreditsMap.entries()) {
-      if (!categoryKeys.includes(catName as any)) {
-        categories.push({
-          category: catName,
-          title: catName,
-          earned,
-          min3Year: 0,
-          min4Year: 0,
-          shortfall3Year: 0,
-          shortfall4Year: 0,
-          isMet3Year: true,
-          isMet4Year: true,
-        })
-      }
-    }
 
     // 9. Aggregate Level Band Breakdown
     const bandCreditsMap = new Map<string, number>()

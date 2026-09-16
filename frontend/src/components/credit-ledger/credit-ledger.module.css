@@ -403,3 +403,136 @@
     transform: rotate(360deg);
   }
 }
+
+/* ══════════════════════════════════════════════════════════
+   CREDIT LEDGER MOBILE RESPONSIVENESS
+══════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .ledgerHeaderCard {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.85rem !important;
+    padding: 1rem !important;
+  }
+
+  .ledgerHeaderTitle {
+    font-size: 1.1rem !important;
+  }
+
+  .totalCreditsBox {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 0.6rem 1rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .totalCreditsValue {
+    font-size: 1.75rem !important;
+    margin-top: 0 !important;
+  }
+
+  .sectionCard {
+    padding: 1rem 0.85rem !important;
+    border-radius: 0.65rem !important;
+    gap: 1rem !important;
+  }
+
+  .sectionTitle {
+    font-size: 1rem !important;
+  }
+
+  .circularGrid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.65rem !important;
+  }
+
+  .circularCard {
+    padding: 0.85rem 0.5rem !important;
+    gap: 0.5rem !important;
+    border-radius: 0.65rem !important;
+  }
+
+  .circleWrapper {
+    width: 76px !important;
+    height: 76px !important;
+  }
+
+  .circleSvg {
+    width: 76px !important;
+    height: 76px !important;
+  }
+
+  .circleCreditNum {
+    font-size: 1.15rem !important;
+  }
+
+  .circleCreditUnit {
+    font-size: 0.58rem !important;
+  }
+
+  .categoryCardCode {
+    font-size: 0.62rem !important;
+  }
+
+  .categoryCardTitle {
+    font-size: 0.72rem !important;
+    line-height: 1.25 !important;
+    min-height: 2.2em !important;
+  }
+
+  .categoryTarget {
+    font-size: 0.62rem !important;
+  }
+
+  .tableResponsive {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .ledgerTable {
+    min-width: 520px !important;
+  }
+
+  .ledgerTable th,
+  .ledgerTable td {
+    padding: 0.5rem 0.6rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  .barItem {
+    padding: 0.5rem 0.65rem !important;
+  }
+
+  .barDeptTitle {
+    font-size: 0.78rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .circularGrid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+
+  .circularCard {
+    padding: 0.75rem 0.35rem !important;
+  }
+
+  .circleWrapper {
+    width: 68px !important;
+    height: 68px !important;
+  }
+
+  .circleSvg {
+    width: 68px !important;
+    height: 68px !important;
+  }
+
+  .circleCreditNum {
+    font-size: 1rem !important;
+  }
+}

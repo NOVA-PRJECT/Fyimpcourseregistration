@@ -39,28 +39,40 @@ describe('CreditLedgerService', () => {
   })
 
   describe('normalizeCategory', () => {
-    it('should map standard categories', () => {
+    it('should map standard categories directly', () => {
       expect(service.normalizeCategory('AEC')).toBe('AEC')
       expect(service.normalizeCategory('SEC')).toBe('SEC')
       expect(service.normalizeCategory('VAC')).toBe('VAC')
       expect(service.normalizeCategory('MDC')).toBe('MDC')
+      expect(service.normalizeCategory('MOC')).toBe('MOC')
+      expect(service.normalizeCategory('MOOC')).toBe('MOOC')
     })
 
-    it('should combine DSC, DSE, DSS into DSC / DSE', () => {
-      expect(service.normalizeCategory('DSC')).toBe('DSC / DSE')
-      expect(service.normalizeCategory('DSE')).toBe('DSC / DSE')
-      expect(service.normalizeCategory('DSS')).toBe('DSC / DSE')
+    it('should keep DSC, DSE, and DSS as separate and distinct categories', () => {
+      expect(service.normalizeCategory('DSC')).toBe('DSC')
+      expect(service.normalizeCategory('DSE')).toBe('DSE')
+      expect(service.normalizeCategory('DSS')).toBe('DSS')
+    })
+
+    it('should resolve categories from course code if raw category is missing or general', () => {
+      expect(service.normalizeCategory('', 'ENG101DSC')).toBe('DSC')
+      expect(service.normalizeCategory('General', 'CHE201DSE')).toBe('DSE')
+      expect(service.normalizeCategory('', 'SW-MOOC-101')).toBe('MOOC')
+      expect(service.normalizeCategory('', 'HIS-MDC-01')).toBe('MDC')
     })
 
     it('should identify Internship', () => {
-      expect(service.normalizeCategory('INT')).toBe('Internship')
-      expect(service.normalizeCategory('INTERNSHIP')).toBe('Internship')
-      expect(service.normalizeCategory('', 'Summer Internship Program')).toBe('Internship')
+      expect(service.normalizeCategory('INT')).toBe('INT')
+      expect(service.normalizeCategory('INTERNSHIP')).toBe('INT')
+      expect(service.normalizeCategory('', '', 'Summer Internship Program')).toBe('INT')
     })
 
-    it('should identify Research Project', () => {
-      expect(service.normalizeCategory('RPH')).toBe('Research Project')
-      expect(service.normalizeCategory('', 'Honours Research Project')).toBe('Research Project')
+    it('should identify Research Project and Field Work', () => {
+      expect(service.normalizeCategory('RPH')).toBe('RPH')
+      expect(service.normalizeCategory('', '', 'Honours Research Project')).toBe('RPH')
+      expect(service.normalizeCategory('FWD')).toBe('FWD')
+      expect(service.normalizeCategory('DMP')).toBe('DMP')
+      expect(service.normalizeCategory('CIP')).toBe('CIP')
     })
   })
 })
