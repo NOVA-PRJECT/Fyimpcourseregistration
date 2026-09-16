@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { LogOut } from 'lucide-react'
 import styles from './director-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
@@ -34,6 +35,13 @@ export default function DirectorDashboard() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [lastPromotedAt, setLastPromotedAt] = useState<string | null>(null)
 
+  // Auto-clear promotion success message after 5 s
+  useEffect(() => {
+    if (!promoteSuccess) return
+    const t = setTimeout(() => setPromoteSuccess(''), 5000)
+    return () => clearTimeout(t)
+  }, [promoteSuccess])
+
   // Allocation state
   const [allocationSemester, setAllocationSemester] = useState<number>(1)
   const [allocationAcademicYear, setAllocationAcademicYear] = useState<string>('')
@@ -41,6 +49,7 @@ export default function DirectorDashboard() {
   const [triggeringRun, setTriggeringRun] = useState(false)
   const [showRerunConfirm, setShowRerunConfirm] = useState(false)
   const [showWindowOpenWarning, setShowWindowOpenWarning] = useState(false)
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [allocationError, setAllocationError] = useState('')
   const [allocationSuccess, setAllocationSuccess] = useState('')
 
@@ -181,6 +190,18 @@ export default function DirectorDashboard() {
         body: JSON.stringify({ deadline: nowIso }),
       })
       setCurrentDeadline(nowIso)
+      setDeadline(nowIso.slice(0, 16))
+      // Keep sessionStorage in sync so returning to the tab shows correct status
+      if (typeof window !== 'undefined') {
+        const cached = sessionStorage.getItem('fyimp_director_settings_cache')
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached)
+            parsed.settings = { ...(parsed.settings || {}), deadline: nowIso }
+            sessionStorage.setItem('fyimp_director_settings_cache', JSON.stringify(parsed))
+          } catch {}
+        }
+      }
     } catch {}
     await executeRunAllocation()
   }
@@ -208,7 +229,7 @@ export default function DirectorDashboard() {
         throw new Error(data.error || 'Failed to start course allocation')
       }
 
-      setAllocationSuccess(`Course allocation run initiated! (Run ID: ${data.run_id})`)
+      setAllocationSuccess('Course allocation run completed successfully!')
       setAllocationRun({ status: 'running', triggered_at: new Date().toISOString() })
     } catch (err: any) {
       setAllocationError(err.message || 'Error triggering allocation')
@@ -245,7 +266,8 @@ export default function DirectorDashboard() {
     const data = await response.json()
 
     if (!response.ok) {
-      setWindowError(data.error ?? 'Failed to update settings.')
+      const msg = (typeof data.message === 'string' ? data.message : data.message?.error) || data.error || 'Failed to update settings.'
+      setWindowError(msg)
       setSavingWindow(false)
       return
     }
@@ -267,10 +289,12 @@ export default function DirectorDashboard() {
     }
   }
 
-  async function handleCloseImmediately() {
-    if (!confirm('Are you sure you want to close course registration immediately for this campus? Students will no longer be able to submit choices.')) {
-      return
-    }
+  function handleCloseImmediately() {
+    setShowCloseConfirm(true)
+  }
+
+  async function executeCloseImmediately() {
+    setShowCloseConfirm(false)
     const nowIso = new Date().toISOString()
     setSavingWindow(true)
     setWindowError('')
@@ -284,7 +308,8 @@ export default function DirectorDashboard() {
 
     const data = await response.json()
     if (!response.ok) {
-      setWindowError(data.error ?? 'Failed to close registration window.')
+      const msg = (typeof data.message === 'string' ? data.message : data.message?.error) || data.error || 'Failed to close registration window.'
+      setWindowError(msg)
       setSavingWindow(false)
       return
     }
@@ -314,19 +339,25 @@ export default function DirectorDashboard() {
 
     const response = await fetch('/api/admin/campus/promote-students', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
     })
 
     const data = await response.json()
 
     if (!response.ok) {
-      setPromoteError(data.error ?? 'Failed to promote students.')
+      const msg = (typeof data.message === 'string' ? data.message : data.message?.error) || data.error || 'Failed to promote students.'
+      setPromoteError(msg)
       setPromoting(false)
       setPromoteStep(0)
       return
     }
 
     const nowIso = new Date().toISOString()
-    setPromoteSuccess(`${data.message}${data.graduated_count > 0 ? ` (${data.graduated_count} students graduated and removed)` : ''}`)
+    const countDisplay = typeof data.promoted_count === 'number' ? data.promoted_count : ''
+    const rawMsg = typeof data.message === 'string' && !data.message.includes('[object')
+      ? data.message
+      : `${countDisplay ? `${countDisplay} ` : ''}Students promoted to next semester successfully.`
+    setPromoteSuccess(`${rawMsg}${data.graduated_count > 0 ? ` (${data.graduated_count} students graduated and removed)` : ''}`)
     setLastPromotedAt(nowIso)
     setPromoting(false)
     setPromoteStep(0)
@@ -348,36 +379,55 @@ export default function DirectorDashboard() {
   return (
     <div className={styles.pageWrapper}>
 
-      {/* Top Bar */}
-      <div className={styles.topBar}>
+      {/* Unified Executive Header Bar */}
+      <header className={styles.topBar}>
         <div className={styles.topBarLeft}>
-          <div className={styles.logoSmall}>
-            <Image src="/knrunilogo.png" alt="KU" width={28} height={28} />
-          </div>
-          <div>
-            <p className={styles.topBarTitle}>FYIMP Portal</p>
-            <p className={styles.topBarSubtitle}>Campus Director</p>
-          </div>
-        </div>
-        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
-          {loggingOut ? 'Logging out...' : 'Logout'}
-        </button>
-      </div>
-
-      {/* Director Info Card */}
-      <div className={styles.infoCard}>
-        {loadingDirector ? (
-          <div style={{ height: '2.5rem' }} />
-        ) : (
-          <>
-            <p className={styles.directorName}>{directorName || 'Campus Director'}</p>
-            <div className={styles.directorDetails}>
-              <span className={`${styles.detailBadge} ${styles.roleBadge}`}>Campus Director</span>
-              <span className={styles.detailBadge}>{campusName}</span>
+          {/* 1. Portal Branding Block */}
+          <div className={styles.topBarBranding}>
+            <div className={styles.logoSmall}>
+              <Image src="/knrunilogo.png" alt="KU" width={30} height={30} priority />
             </div>
-          </>
-        )}
-      </div>
+            <div className={styles.topBarTitles}>
+              <p className={styles.topBarTitle}>FYIMP Portal</p>
+              <p className={styles.topBarSubtitle}>Campus Director</p>
+            </div>
+          </div>
+
+          {/* Vertical Divider */}
+          <div className={styles.topBarDivider} />
+
+          {/* 2. Director Details Block */}
+          {loadingDirector ? (
+            <div className={styles.topBarSkeleton} />
+          ) : (
+            <div className={styles.directorIdentity}>
+              <p className={styles.directorName}>{directorName || 'Campus Director'}</p>
+              <div className={styles.directorDetails}>
+                <span className={styles.roleBadge}>Campus Director</span>
+                {campusName && (
+                  <span className={styles.campusBadge} title={campusName}>
+                    {campusName}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. Action Controls */}
+        <div className={styles.topBarRight}>
+          <button
+            type="button"
+            className={styles.logoutBtn}
+            onClick={handleLogout}
+            disabled={loggingOut}
+            title="Log out of portal"
+          >
+            <LogOut size={14} />
+            <span className={styles.logoutText}>{loggingOut ? 'Logging out...' : 'Logout'}</span>
+          </button>
+        </div>
+      </header>
 
       {/* Tab Bar */}
       <div className={styles.tabBar}>
@@ -385,25 +435,25 @@ export default function DirectorDashboard() {
           className={`${styles.tabBtn} ${activeTab === 'registration' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('registration')}
         >
-          📅 Registration Window
+          Registration Window
         </button>
         <button
           className={`${styles.tabBtn} ${activeTab === 'timetable' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('timetable')}
         >
-          ⚡ Timetable Generator
+          Timetable Generator
         </button>
         <button
           className={`${styles.tabBtn} ${activeTab === 'promotion' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('promotion')}
         >
-          🎓 Semester Promotion
+          Semester Promotion
         </button>
         <button
           className={`${styles.tabBtn} ${activeTab === 'allocation' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('allocation')}
         >
-          🎯 Course Allocation
+          Course Allocation
         </button>
       </div>
 
@@ -528,6 +578,62 @@ export default function DirectorDashboard() {
           </div>
         )}
 
+        {/* ── CLOSE REGISTRATION CONFIRMATION MODAL ── */}
+        {showCloseConfirm && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.75)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '1rem',
+            }}
+          >
+            <div
+              style={{
+                background: '#0f172a',
+                border: '1px solid #dc2626',
+                borderRadius: '12px',
+                padding: '1.75rem',
+                maxWidth: '460px',
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1rem',
+              }}
+            >
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f87171', margin: 0 }}>
+                🔒 Close Registration Window?
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5, margin: 0 }}>
+                This will <strong>immediately close</strong> course registration for this campus. Students will no longer be able to submit or change their elective preferences.
+              </p>
+              <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: 0 }}>
+                Are you sure you want to proceed?
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <button
+                  className={styles.primaryBtn}
+                  onClick={() => setShowCloseConfirm(false)}
+                  style={{ background: '#334155' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className={styles.primaryBtn}
+                  onClick={executeCloseImmediately}
+                  style={{ background: '#dc2626' }}
+                >
+                  Yes, Close Registration →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── TAB 2: TIMETABLE GENERATOR ── */}
         {activeTab === 'timetable' && (
           <div>
@@ -566,7 +672,11 @@ export default function DirectorDashboard() {
               {promoteStep === 0 && (
                 <button
                   className={styles.primaryBtn}
-                  onClick={() => setPromoteStep(1)}
+                  onClick={() => {
+                    setPromoteStep(1)
+                    setPromoteError('')
+                    setPromoteSuccess('')
+                  }}
                   style={{ background: '#c9a227', color: '#002147' }}
                 >
                   Promote All Students →
@@ -611,40 +721,85 @@ export default function DirectorDashboard() {
                 </div>
               )}
 
-              {/* Step 2: Explicit confirmation */}
-              {promoteStep === 2 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', alignItems: 'center' }}>
-                  <div style={{ background: '#fdf2f2', border: '1px solid #f5c6c6', borderRadius: '0.6rem', padding: '0.9rem 1rem', width: '100%', maxWidth: '28rem', boxSizing: 'border-box' }}>
-                    <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#c0392b', margin: 0 }}>
-                      ⚠️ Has the next semester officially started?
-                    </p>
-                    <p style={{ fontSize: '0.78rem', color: '#44474e', margin: '0.35rem 0 0' }}>
-                      This will increment every student's semester by 1 and permanently remove Semester 10 graduates.
-                    </p>
+              {/* Step 2: Explicit confirmation (or locked if within 90 days) */}
+              {promoteStep === 2 && (() => {
+                const isWithin90Days = lastPromotedAt
+                  ? new Date(lastPromotedAt) > new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+                  : false
+
+                if (isWithin90Days) {
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', alignItems: 'center' }}>
+                      <div style={{
+                        background: '#fdf2f2',
+                        border: '2px solid #f5c6c6',
+                        borderRadius: '0.75rem',
+                        padding: '1.25rem 1.5rem',
+                        width: '100%',
+                        maxWidth: '30rem',
+                        boxSizing: 'border-box',
+                        textAlign: 'center',
+                      }}>
+                        <p style={{ fontSize: '1.5rem', margin: '0 0 0.5rem' }}>🔒</p>
+                        <p style={{ fontSize: '0.92rem', fontWeight: 700, color: '#c0392b', margin: '0 0 0.5rem' }}>
+                          Promotion Locked
+                        </p>
+                        <p style={{ fontSize: '0.8rem', color: '#44474e', margin: 0, lineHeight: 1.5 }}>
+                          Students were last promoted on{' '}
+                          <strong>{new Date(lastPromotedAt!).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.
+                          <br />
+                          A minimum of <strong>90 days</strong> must pass before the next promotion.
+                        </p>
+                      </div>
+                      <button
+                        className={styles.primaryBtn}
+                        onClick={() => setPromoteStep(0)}
+                        style={{ background: '#9ba1ab' }}
+                      >
+                        Back
+                      </button>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', alignItems: 'center' }}>
+                    <div style={{ background: '#fdf2f2', border: '1px solid #f5c6c6', borderRadius: '0.6rem', padding: '0.9rem 1rem', width: '100%', maxWidth: '28rem', boxSizing: 'border-box' }}>
+                      <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#c0392b', margin: 0 }}>
+                        ⚠️ Has the next semester officially started?
+                      </p>
+                      <p style={{ fontSize: '0.78rem', color: '#44474e', margin: '0.35rem 0 0' }}>
+                        This will increment every student's semester by 1 and permanently remove Semester 10 graduates.
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                      <button
+                        className={styles.primaryBtn}
+                        onClick={handlePromoteStudents}
+                        disabled={promoting}
+                        style={{
+                          background: '#c0392b',
+                          cursor: promoting ? 'wait' : 'pointer',
+                        }}
+                      >
+                        {promoting
+                          ? <><span className={styles.spinner} /> Promoting...</>
+                          : 'Yes, Start New Semester →'
+                        }
+                      </button>
+                      <button
+                        className={styles.primaryBtn}
+                        onClick={() => setPromoteStep(0)}
+                        disabled={promoting}
+                        style={{ background: '#9ba1ab' }}
+                      >
+                        No, Cancel
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-                    <button
-                      className={styles.primaryBtn}
-                      onClick={handlePromoteStudents}
-                      disabled={promoting}
-                      style={{ background: '#c0392b' }}
-                    >
-                      {promoting
-                        ? <><span className={styles.spinner} /> Promoting...</>
-                        : 'Yes, Start New Semester →'
-                      }
-                    </button>
-                    <button
-                      className={styles.primaryBtn}
-                      onClick={() => setPromoteStep(0)}
-                      disabled={promoting}
-                      style={{ background: '#9ba1ab' }}
-                    >
-                      No, Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
           </div>
         )}
@@ -665,13 +820,25 @@ export default function DirectorDashboard() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1.25rem' }}>
                 <div className={styles.field}>
                   <label className={styles.label}>Academic Year</label>
-                  <input
-                    type="text"
+                  <select
                     className={styles.input}
                     value={allocationAcademicYear}
-                    onChange={(e) => setAllocationAcademicYear(e.target.value)}
-                    placeholder="e.g. 2026-27"
-                  />
+                    onChange={(e) => {
+                      setAllocationAcademicYear(e.target.value)
+                      setAllocationRun(null)
+                      setAllocationError('')
+                    }}
+                  >
+                    {(() => {
+                      const now = new Date()
+                      const month = now.getMonth() + 1
+                      const baseYear = month >= 6 ? now.getFullYear() : now.getFullYear() - 1
+                      return [baseYear - 1, baseYear, baseYear + 1].map((y) => {
+                        const label = `${y}-${String(y + 1).slice(2)}`
+                        return <option key={label} value={label}>{label}</option>
+                      })
+                    })()}
+                  </select>
                 </div>
 
                 <div className={styles.field}>
@@ -679,7 +846,11 @@ export default function DirectorDashboard() {
                   <select
                     className={styles.input}
                     value={allocationSemester}
-                    onChange={(e) => setAllocationSemester(Number(e.target.value))}
+                    onChange={(e) => {
+                      setAllocationSemester(Number(e.target.value))
+                      setAllocationRun(null)
+                      setAllocationError('')
+                    }}
                   >
                     {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
                       <option key={s} value={s}>
@@ -781,8 +952,51 @@ export default function DirectorDashboard() {
                       </div>
                     )}
                     {allocationRun.error_message && (
-                      <div style={{ color: '#f87171', background: 'rgba(239,68,68,0.1)', padding: '0.5rem', borderRadius: '6px' }}>
-                        Error: {allocationRun.error_message}
+                      <div
+                        style={{
+                          color: '#f87171',
+                          background: 'rgba(239,68,68,0.1)',
+                          border: '1px solid rgba(239,68,68,0.25)',
+                          padding: '0.65rem 0.85rem',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '0.75rem',
+                        }}
+                      >
+                        <div>
+                          <div><strong>Last Run Error:</strong> {allocationRun.error_message}</div>
+                          <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
+                            Click &quot;Retry Course Allocation&quot; below to trigger a clean run with the current schema.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const runId = allocationRun?.id
+                            if (runId) {
+                              try {
+                                await fetch(`/api/allocation/runs/${runId}`, { method: 'DELETE' })
+                              } catch {
+                                // best-effort — clear UI even if API fails
+                              }
+                            }
+                            setAllocationRun(null)
+                          }}
+                          style={{
+                            background: 'rgba(239,68,68,0.15)',
+                            border: '1px solid rgba(239,68,68,0.4)',
+                            color: '#f87171',
+                            borderRadius: '4px',
+                            padding: '0.3rem 0.6rem',
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Dismiss ✕
+                        </button>
                       </div>
                     )}
                   </div>
@@ -796,7 +1010,11 @@ export default function DirectorDashboard() {
                   onClick={() => handleRunAllocation(false)}
                   disabled={triggeringRun || allocationRun?.status === 'running'}
                   style={{
-                    background: allocationRun?.status === 'completed' ? '#0284c7' : '#059669',
+                    background: allocationRun?.status === 'completed'
+                      ? '#0284c7'
+                      : allocationRun?.status === 'failed'
+                      ? '#d97706'
+                      : '#059669',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.5rem',
@@ -809,6 +1027,8 @@ export default function DirectorDashboard() {
                     </>
                   ) : allocationRun?.status === 'completed' ? (
                     'Re-Run Allocation →'
+                  ) : allocationRun?.status === 'failed' ? (
+                    'Retry Course Allocation →'
                   ) : (
                     'Run Course Allocation →'
                   )}

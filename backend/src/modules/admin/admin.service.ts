@@ -385,7 +385,9 @@ export class AdminService {
       const ninetyDaysAgo = new Date()
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
       if (lastPromoted > ninetyDaysAgo) {
-        throw new BadRequestException('Accidental double-promotion blocked: students have already been promoted within the last 90 days.')
+        throw new BadRequestException(
+          `Promotion is locked: students were already promoted on ${lastPromoted.toLocaleDateString('en-IN')}. A minimum of 90 days must pass before the next promotion.`,
+        )
       }
     }
 
@@ -412,6 +414,14 @@ export class AdminService {
       )
     }
 
+    // Extract the promoted count from the RPC result.
+    // The function returns: jsonb_build_object('success', true, 'promoted_count', v_count)
+    const finalCount = typeof promotedCount === 'number'
+      ? promotedCount
+      : (typeof promotedCount === 'object' && promotedCount !== null)
+      ? (Number((promotedCount as any).promoted_count) || 0)
+      : (Number(promotedCount) || 0)
+
     await this.auditLogger.log({
       eventType: AuditEvents.STUDENT_PROMOTED,
       userId: director.userId,
@@ -421,16 +431,16 @@ export class AdminService {
       resourceId: campusId,
       status: 'success',
       metadata: {
-        promoted_count: promotedCount,
+        promoted_count: finalCount,
         graduated_count: nearMaxStudents?.length ?? 0,
       },
     })
 
     return {
       success: true,
-      promoted_count: promotedCount,
+      promoted_count: finalCount,
       graduated_count: nearMaxStudents?.length ?? 0,
-      message: `${promotedCount} students promoted to next semester`,
+      message: `${finalCount} students promoted to next semester`,
     }
   }
 

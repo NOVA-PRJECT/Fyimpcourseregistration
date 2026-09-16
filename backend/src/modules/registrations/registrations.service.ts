@@ -12,7 +12,7 @@ import { ServerLoggerService } from '../../core/logging/server-logger.service'
 import { AuthUser } from '../../core/auth/types'
 import { SLOT_RULES } from '../../core/constants/courseCategories'
 import { Pathway, PathwaySlot } from '../../core/types/course.types'
-import { isCourseEligibleForSlot } from '../../core/utils/slotRules'
+import { isCourseEligibleForSlot, normalizeCourseCode } from '../../core/utils/slotRules'
 
 @Injectable()
 export class RegistrationsService {
@@ -43,14 +43,22 @@ export class RegistrationsService {
       throw new BadRequestException('Pathway has no configured course slots')
     }
 
-    const fixedTargets = slotsInfo
-      .filter(
-        (s) =>
-          s.rule === SLOT_RULES.FIXED ||
-          s.rule === SLOT_RULES.AEC_ELECT ||
-          s.rule === SLOT_RULES.CAMPUS_FIXED,
-      )
-      .map((s) => s.target)
+    const fixedTargets: string[] = []
+    slotsInfo.forEach((s) => {
+      if (
+        s.rule === SLOT_RULES.FIXED ||
+        s.rule === SLOT_RULES.AEC_ELECT ||
+        s.rule === SLOT_RULES.CAMPUS_FIXED
+      ) {
+        if (s.target) {
+          const norm = normalizeCourseCode(s.target)
+          fixedTargets.push(norm)
+          if (s.target.trim() !== norm) {
+            fixedTargets.push(s.target.trim())
+          }
+        }
+      }
+    })
 
     let fixedCourseIds: string[] = []
     let fixedCoursesMap: Record<string, any> = {}
@@ -63,47 +71,11 @@ export class RegistrationsService {
 
       if (fixedCourses) {
         fixedCourseIds = fixedCourses.map((c) => c.id)
-        fixedCoursesMap = Object.fromEntries(fixedCourses.map((c) => [c.course_code, c]))
-      }
-    }
-
-    // Fetch all course_prerequisite_rules to enforce department constraints
-    const { data: allPrereqRules } = await this.supabase.admin
-      .from('course_prerequisite_rules')
-      .select('course_id, rule, target')
-
-    const courseRulesMap = new Map<string, any[]>()
-    if (allPrereqRules) {
-      for (const r of allPrereqRules) {
-        if (!courseRulesMap.has(r.course_id)) {
-          courseRulesMap.set(r.course_id, [])
-        }
-        courseRulesMap.get(r.course_id)!.push(r)
-      }
-    }
-
-    let studentDeptCode = ''
-    if (user.department_id) {
-      for (const [code, id] of deptMap.entries()) {
-        if (id === user.department_id) {
-          studentDeptCode = code
-          break
+        for (const c of fixedCourses) {
+          fixedCoursesMap[c.course_code] = c
+          fixedCoursesMap[normalizeCourseCode(c.course_code)] = c
         }
       }
-    }
-
-    const isCourseAllowedForStudent = (c: any) => {
-      const rules = courseRulesMap.get(c.id) || []
-      const deptRules = rules.filter((r) => r.rule === 'DEPARTMENT')
-      if (deptRules.length > 0) {
-        const allAllowed = deptRules.flatMap((r) =>
-          r.target.split(',').map((code: string) => code.trim().toUpperCase()),
-        )
-        if (studentDeptCode && !allAllowed.includes(studentDeptCode.toUpperCase())) {
-          return false
-        }
-      }
-      return true
     }
 
     const resolvedSlots = await Promise.all(
@@ -113,7 +85,8 @@ export class RegistrationsService {
           rule === SLOT_RULES.AEC_ELECT ||
           rule === SLOT_RULES.CAMPUS_FIXED
         ) {
-          const c = fixedCoursesMap[target]
+          const normTarget = normalizeCourseCode(target)
+          const c = fixedCoursesMap[normTarget] || fixedCoursesMap[target?.trim()]
           return {
             slot,
             rule,
@@ -136,18 +109,18 @@ export class RegistrationsService {
         }
 
         if (rule === SLOT_RULES.DEPT_RESTRICTED) {
-          const deptCodes = ((target as string) ?? '').split(',').map((code: string) => code.trim())
+          const deptCodes = ((target as string) ?? '').split(',').map((code: string) => code.trim().toUpperCase())
           const deptIds = deptCodes
-            .map((code: string) => deptMap.get(code))
+            .map((code: string) => deptMap.get(code) || (Array.from(deptMap.values()).includes(code) ? code : undefined))
             .filter((id): id is string => id !== undefined)
           if (deptIds.length === 0) return { slot, rule, name, options: [] }
           const { data: options } = await query
             .in('department_id', deptIds)
             .eq('semester', user.current_semester)
-            .in('category', ['DSC', 'DSE'])
+            .in('category', ['DSC', 'DSE', 'DSS'])
 
           const filtered = (options ?? []).filter((c) =>
-            isCourseAllowedForStudent(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap, name),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -157,18 +130,28 @@ export class RegistrationsService {
         }
 
         if (rule === SLOT_RULES.EXCLUDE_DEPT) {
-          const deptCodes = ((target as string) ?? '').split(',').map((code: string) => code.trim())
+          const deptCodes = ((target as string) ?? '').split(',').map((code: string) => code.trim().toUpperCase())
           const deptIds = deptCodes
-            .map((code: string) => deptMap.get(code))
+            .map((code: string) => deptMap.get(code) || (Array.from(deptMap.values()).includes(code) ? code : undefined))
             .filter((id): id is string => id !== undefined)
           if (deptIds.length === 0) return { slot, rule, name, options: [] }
-          const { data: options } = await query
+
+          const isMdc = (name && name.toUpperCase().includes('MDC')) || ((target as string) ?? '').toUpperCase().includes('MDC')
+
+          let queryEx = query
             .not('department_id', 'in', `(${deptIds.join(',')})`)
             .eq('semester', user.current_semester)
-            .eq('category', 'MDC')
+
+          if (isMdc) {
+            queryEx = queryEx.eq('category', 'MDC')
+          } else {
+            queryEx = queryEx.in('category', ['DSC', 'DSE', 'DSS'])
+          }
+
+          const { data: options } = await queryEx
 
           const filtered = (options ?? []).filter((c) =>
-            isCourseAllowedForStudent(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap, name),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -181,11 +164,11 @@ export class RegistrationsService {
         if (rule === SLOT_RULES.POOL_RESTRICTED) {
           const { data: options } = await query
             .eq('department_id', user.department_id)
-            .eq('tag', target)
+            .eq('tag', target?.trim())
             .eq('semester', user.current_semester)
 
           const filtered = (options ?? []).filter((c) =>
-            isCourseAllowedForStudent(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap, name),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -196,13 +179,21 @@ export class RegistrationsService {
 
         // GLOBAL_BASKET — other departments by tag
         if (rule === SLOT_RULES.GLOBAL_BASKET) {
-          let q = query.eq('tag', target).eq('semester', user.current_semester)
-          if (target.includes('MDC')) {
+          const trimmedTarget = ((target as string) ?? '').trim()
+          let q = query.eq('semester', user.current_semester)
+
+          if (trimmedTarget.includes('-')) {
+            q = q.eq('tag', trimmedTarget)
+          } else {
+            q = q.or(`tag.eq.${trimmedTarget},course_code.eq.${trimmedTarget}`)
+          }
+
+          if (trimmedTarget.toUpperCase().includes('MDC')) {
             q = q.neq('department_id', user.department_id)
           }
           const { data: options } = await q
           const filtered = (options ?? []).filter((c) =>
-            isCourseAllowedForStudent(c) && isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap),
+            isCourseEligibleForSlot(c, rule, target, user.department_id ?? '', deptMap, name),
           )
           const mapped = filtered.map((c) => ({
             ...c,
@@ -219,12 +210,27 @@ export class RegistrationsService {
   }
 
   async getBlueprint(user: AuthUser) {
-    const campusId = user.campus_id
-    const departmentId = user.department_id
-    const semester = user.current_semester
+    let campusId = user.campus_id
+    let departmentId = user.department_id
+    let semester = user.current_semester
+
+    // Fetch authoritative student record from students table
+    const { data: studentRecord } = await this.supabase.admin
+      .from('students')
+      .select('campus_id, department_id, current_semester, full_name')
+      .eq('id', user.userId)
+      .maybeSingle()
+
+    if (studentRecord) {
+      if (studentRecord.campus_id) campusId = studentRecord.campus_id
+      if (studentRecord.department_id) departmentId = studentRecord.department_id
+      if (studentRecord.current_semester) semester = studentRecord.current_semester
+    }
 
     if (!campusId || !departmentId || !semester) {
-      throw new BadRequestException('Student academic profile incomplete')
+      throw new BadRequestException(
+        'Student academic profile incomplete. Department, campus, or semester information is missing.',
+      )
     }
 
     const [settingsRes, blueprintRes, deptRes] = await Promise.all([
@@ -232,27 +238,42 @@ export class RegistrationsService {
         .from('campus_settings')
         .select('deadline, min_credits, max_credits, academic_year')
         .eq('campus_id', campusId)
-        .single(),
+        .maybeSingle(),
       this.supabase.admin
         .from('semester_blueprints')
         .select('*')
         .eq('department_id', departmentId)
         .eq('semester', semester)
-        .single(),
+        .maybeSingle(),
       this.supabase.admin.from('departments').select('id, name, code'),
     ])
 
-    if (settingsRes.error || !settingsRes.data) {
-      throw new NotFoundException('Campus settings not configured')
+    const departmentsData = deptRes.data ?? []
+    const studentDept = departmentsData.find((d) => d.id === departmentId)
+    const studentDeptName = studentDept?.name || 'your department'
+
+    if (settingsRes.error) {
+      this.logger.error(`Failed to query campus settings: ${settingsRes.error.message}`)
+      throw new InternalServerErrorException('Failed to retrieve campus registration settings')
     }
-    if (blueprintRes.error || !blueprintRes.data) {
-      throw new NotFoundException('No blueprint configured for your semester')
+    if (!settingsRes.data) {
+      throw new NotFoundException(
+        'Registration settings have not been configured for your campus yet. Please contact your Campus Director.',
+      )
+    }
+
+    if (blueprintRes.error) {
+      this.logger.error(`Failed to query semester blueprint: ${blueprintRes.error.message}`)
+      throw new InternalServerErrorException('Failed to retrieve semester curriculum blueprint')
+    }
+    if (!blueprintRes.data) {
+      throw new NotFoundException(
+        `No curriculum blueprint configured for ${studentDeptName} (Semester ${semester}). Please contact your Head of Department (HOD) to configure the semester blueprint.`,
+      )
     }
 
     const settings = settingsRes.data
     const blueprint = blueprintRes.data
-    const departmentsData = deptRes.data ?? []
-
     const deadline = settings.deadline ? new Date(settings.deadline) : null
     const windowOpen = deadline !== null && new Date() < deadline
 
@@ -261,11 +282,28 @@ export class RegistrationsService {
       throw new BadRequestException('Blueprint has no pathways configured')
     }
 
-    const deptMap = new Map(departmentsData.map((d) => [d.code, d.id]))
+    const deptMap = new Map<string, string>()
+    for (const d of departmentsData) {
+      if (d.code) {
+        deptMap.set(d.code, d.id)
+        deptMap.set(d.code.toUpperCase(), d.id)
+        deptMap.set(d.code.toLowerCase(), d.id)
+      }
+      if (d.id) {
+        deptMap.set(d.id, d.id)
+      }
+    }
     const deptIdToName = new Map(departmentsData.map((d) => [d.id, d.name]))
 
+    const effectiveUser: AuthUser = {
+      ...user,
+      campus_id: campusId,
+      department_id: departmentId,
+      current_semester: semester,
+    }
+
     const defaultPathway = pathways[0]
-    const slots = await this.resolvePathwaySlots(defaultPathway, user, deptMap, deptIdToName)
+    const slots = await this.resolvePathwaySlots(defaultPathway, effectiveUser, deptMap, deptIdToName)
 
     const [prefRes, regRes] = await Promise.all([
       this.supabase.admin
@@ -336,6 +374,8 @@ export class RegistrationsService {
       academicYear: settings.academic_year,
       minCredits: blueprint.min_credits ?? settings.min_credits ?? 20,
       maxCredits: blueprint.max_credits ?? settings.max_credits ?? 24,
+      min_credits: blueprint.min_credits ?? settings.min_credits ?? 20,
+      max_credits: blueprint.max_credits ?? settings.max_credits ?? 24,
       pathways,
       selectedPathwayId: existingPref?.pathway_id ?? existingReg?.pathway_id ?? defaultPathway.id,
       slots,
@@ -365,14 +405,28 @@ export class RegistrationsService {
   }
 
   async getPathwaySlots(pathwayId: string, user: AuthUser) {
-    const { data: blueprint } = await this.supabase.admin
+    let departmentId = user.department_id
+    let semester = user.current_semester
+
+    const { data: studentRecord } = await this.supabase.admin
+      .from('students')
+      .select('campus_id, department_id, current_semester')
+      .eq('id', user.userId)
+      .maybeSingle()
+
+    if (studentRecord) {
+      if (studentRecord.department_id) departmentId = studentRecord.department_id
+      if (studentRecord.current_semester) semester = studentRecord.current_semester
+    }
+
+    const { data: blueprint, error: bpErr } = await this.supabase.admin
       .from('semester_blueprints')
       .select('*')
-      .eq('department_id', user.department_id)
-      .eq('semester', user.current_semester)
-      .single()
+      .eq('department_id', departmentId)
+      .eq('semester', semester)
+      .maybeSingle()
 
-    if (!blueprint) throw new NotFoundException('Blueprint not found for this semester')
+    if (bpErr || !blueprint) throw new NotFoundException('Blueprint not found for this semester')
 
     const pathways = blueprint.pathways as Pathway[] | null
     const pathway = pathways?.find((p) => p.id === pathwayId)
@@ -382,7 +436,17 @@ export class RegistrationsService {
       .from('departments')
       .select('id, name, code')
 
-    const deptMap = new Map((departmentsData ?? []).map((d) => [d.code, d.id]))
+    const deptMap = new Map<string, string>()
+    for (const d of departmentsData ?? []) {
+      if (d.code) {
+        deptMap.set(d.code, d.id)
+        deptMap.set(d.code.toUpperCase(), d.id)
+        deptMap.set(d.code.toLowerCase(), d.id)
+      }
+      if (d.id) {
+        deptMap.set(d.id, d.id)
+      }
+    }
     const deptIdToName = new Map((departmentsData ?? []).map((d) => [d.id, d.name]))
 
     const slots = await this.resolvePathwaySlots(pathway, user, deptMap, deptIdToName)
@@ -408,7 +472,23 @@ export class RegistrationsService {
   ) {
     const { semester, pathway_id, courses, preferences } = body
 
-    if (semester !== user.current_semester) {
+    let campusId = user.campus_id
+    let departmentId = user.department_id
+    let currentSemester = user.current_semester
+
+    const { data: studentRecord } = await this.supabase.admin
+      .from('students')
+      .select('campus_id, department_id, current_semester')
+      .eq('id', user.userId)
+      .maybeSingle()
+
+    if (studentRecord) {
+      if (studentRecord.campus_id) campusId = studentRecord.campus_id
+      if (studentRecord.department_id) departmentId = studentRecord.department_id
+      if (studentRecord.current_semester) currentSemester = studentRecord.current_semester
+    }
+
+    if (semester !== currentSemester) {
       throw new BadRequestException('Submitted semester does not match current semester')
     }
 
@@ -416,20 +496,20 @@ export class RegistrationsService {
       this.supabase.admin
         .from('campus_settings')
         .select('deadline, min_credits, max_credits, academic_year')
-        .eq('campus_id', user.campus_id)
-        .single(),
+        .eq('campus_id', campusId)
+        .maybeSingle(),
       this.supabase.admin
         .from('semester_blueprints')
         .select('*')
-        .eq('department_id', user.department_id)
+        .eq('department_id', departmentId)
         .eq('semester', semester)
-        .single(),
+        .maybeSingle(),
     ])
 
     const settings = settingsRes.data
     const blueprint = blueprintRes.data
 
-    if (!settings) throw new NotFoundException('Campus settings not found')
+    if (!settings) throw new NotFoundException('Campus registration settings not found')
     if (!blueprint) throw new NotFoundException('No blueprint found for your semester')
 
     const deadline = settings.deadline ? new Date(settings.deadline) : null
@@ -477,7 +557,13 @@ export class RegistrationsService {
         s.rule === SLOT_RULES.AEC_ELECT ||
         s.rule === SLOT_RULES.CAMPUS_FIXED
       ) {
-        if (s.target) fixedTargets.push(s.target)
+        if (s.target) {
+          const norm = normalizeCourseCode(s.target)
+          fixedTargets.push(norm)
+          if (s.target.trim() !== norm) {
+            fixedTargets.push(s.target.trim())
+          }
+        }
       }
     })
 
@@ -488,7 +574,10 @@ export class RegistrationsService {
         .select('id, course_code, title, credits, department_id, category')
         .in('course_code', fixedTargets)
       if (fixedCourses) {
-        fixedCoursesMap = Object.fromEntries(fixedCourses.map((c) => [c.course_code, c]))
+        for (const c of fixedCourses) {
+          fixedCoursesMap[c.course_code] = c
+          fixedCoursesMap[normalizeCourseCode(c.course_code)] = c
+        }
       }
     }
 
@@ -511,8 +600,10 @@ export class RegistrationsService {
         s.rule === SLOT_RULES.AEC_ELECT ||
         s.rule === SLOT_RULES.CAMPUS_FIXED
 
-      if (isFixed && s.target && fixedCoursesMap[s.target]) {
-        const fc = fixedCoursesMap[s.target]
+      const normTarget = normalizeCourseCode(s.target)
+      const fc = fixedCoursesMap[normTarget] || fixedCoursesMap[s.target?.trim()]
+
+      if (isFixed && fc) {
         unifiedPreferences.push({
           slot: slotNum,
           rule: s.rule,
@@ -572,10 +663,21 @@ export class RegistrationsService {
 
     const totalCredits = evaluatedCourses.reduce((sum, c) => sum + (c.credits ?? 0), 0)
 
+    const minCredits = blueprint.min_credits ?? settings.min_credits ?? 20
+    const maxCredits = blueprint.max_credits ?? settings.max_credits ?? 24
+
+    if (totalCredits < minCredits || totalCredits > maxCredits) {
+      throw new BadRequestException(
+        `Total registered credits (${totalCredits}) must be between ${minCredits} and ${maxCredits}`,
+      )
+    }
+
+    const isUpdate = !!(existingPref || existingReg)
+
     // 1. Save unified preferences to registration_preferences table
     const prefUpsertPayload = {
       student_id: user.userId,
-      campus_id: user.campus_id,
+      campus_id: campusId || user.campus_id,
       semester,
       academic_year: settings.academic_year,
       pathway_id,
@@ -597,7 +699,7 @@ export class RegistrationsService {
     // 2. Write confirmed fixed slots to student_registrations table (keeping elective slots NULL until allocation runs)
     const regPayload: Record<string, any> = {
       student_id: user.userId,
-      campus_id: user.campus_id,
+      campus_id: campusId || user.campus_id,
       semester,
       academic_year: settings.academic_year,
       pathway_id,
@@ -625,15 +727,20 @@ export class RegistrationsService {
       eventType: AuditEvents.REGISTRATION_SUBMITTED,
       userId: user.userId,
       userRole: user.role,
-      action: `submitted course registration preferences for semester ${semester}`,
+      action: isUpdate
+        ? `updated course registration preferences for semester ${semester}`
+        : `submitted course registration preferences for semester ${semester}`,
       resourceType: 'registration',
       status: 'success',
-      metadata: { totalCredits, coursesCount: evaluatedCourses.length },
+      metadata: { totalCredits, coursesCount: evaluatedCourses.length, isUpdate },
     })
 
     return {
       success: true,
-      message: 'Course registration preferences submitted successfully',
+      isUpdate,
+      message: isUpdate
+        ? 'Course registration preferences updated successfully'
+        : 'Course registration preferences submitted successfully',
       total_credits: totalCredits,
     }
   }

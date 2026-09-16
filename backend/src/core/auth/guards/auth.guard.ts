@@ -72,10 +72,12 @@ export class AuthGuard implements CanActivate {
     } else if (role === 'student') {
       const { data: s } = await this.supabaseService.admin
         .from('students')
-        .select('current_semester, full_name, must_change_password')
+        .select('department_id, campus_id, current_semester, full_name, must_change_password')
         .eq('id', user.id)
         .maybeSingle()
       if (s) {
+        if (s.department_id) departmentId = s.department_id
+        if (s.campus_id) campusId = s.campus_id
         currentSemester = s.current_semester
         fullName = s.full_name
         mustChangePassword = s.must_change_password

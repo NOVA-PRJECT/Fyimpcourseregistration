@@ -59,18 +59,29 @@ export class CreditLedgerService {
     const cat = (rawCategory || '').trim().toUpperCase()
     const title = (courseTitle || '').trim().toUpperCase()
 
+    if (cat === 'DSC') return 'DSC'
+    if (cat === 'DSE') return 'DSE'
+    if (cat === 'DSS') return 'DSS'
+    if (cat === 'MDC') return 'MDC'
     if (cat === 'AEC') return 'AEC'
     if (cat === 'SEC') return 'SEC'
     if (cat === 'VAC') return 'VAC'
-    if (cat === 'MDC') return 'MDC'
+    if (cat === 'MOC') return 'MOC'
+    if (cat === 'MOOC') return 'MOOC'
     if (cat === 'INT' || cat.includes('INTERN') || title.includes('INTERNSHIP')) {
-      return 'Internship'
+      return 'INT'
     }
-    if (['DSC', 'DSE', 'DSS', 'DMP'].includes(cat)) {
-      return 'DSC / DSE'
+    if (cat === 'RPH' || title.includes('HONOURS RESEARCH') || title.includes('RESEARCH PROJECT')) {
+      return 'RPH'
     }
-    if (cat === 'RPH' || cat.includes('RESEARCH') || cat.includes('PROJECT') || title.includes('RESEARCH PROJECT')) {
-      return 'Research Project'
+    if (cat === 'FWD' || title.includes('FIELD WORK') || title.includes('DISSERTATION')) {
+      return 'FWD'
+    }
+    if (cat === 'DMP' || title.includes('MAJOR PROJECT')) {
+      return 'DMP'
+    }
+    if (cat === 'CIP' || title.includes('COMMUNITY INTERACTION')) {
+      return 'CIP'
     }
     return cat || 'Other'
   }
@@ -232,85 +243,41 @@ export class CreditLedgerService {
       catCreditsMap.set(c.normalizedCategory, current + c.credits)
     }
 
-    const categories = [
-      {
-        category: 'AEC',
-        title: CATEGORY_REQUIREMENTS.AEC.name,
-        earned: catCreditsMap.get('AEC') || 0,
-        min3Year: CATEGORY_REQUIREMENTS.AEC.min3Year,
-        min4Year: CATEGORY_REQUIREMENTS.AEC.min4Year,
-        shortfall3Year: Math.max(0, CATEGORY_REQUIREMENTS.AEC.min3Year - (catCreditsMap.get('AEC') || 0)),
-        shortfall4Year: Math.max(0, CATEGORY_REQUIREMENTS.AEC.min4Year - (catCreditsMap.get('AEC') || 0)),
-        isMet3Year: (catCreditsMap.get('AEC') || 0) >= CATEGORY_REQUIREMENTS.AEC.min3Year,
-        isMet4Year: (catCreditsMap.get('AEC') || 0) >= CATEGORY_REQUIREMENTS.AEC.min4Year,
-      },
-      {
-        category: 'SEC',
-        title: CATEGORY_REQUIREMENTS.SEC.name,
-        earned: catCreditsMap.get('SEC') || 0,
-        min3Year: CATEGORY_REQUIREMENTS.SEC.min3Year,
-        min4Year: CATEGORY_REQUIREMENTS.SEC.min4Year,
-        shortfall3Year: Math.max(0, CATEGORY_REQUIREMENTS.SEC.min3Year - (catCreditsMap.get('SEC') || 0)),
-        shortfall4Year: Math.max(0, CATEGORY_REQUIREMENTS.SEC.min4Year - (catCreditsMap.get('SEC') || 0)),
-        isMet3Year: (catCreditsMap.get('SEC') || 0) >= CATEGORY_REQUIREMENTS.SEC.min3Year,
-        isMet4Year: (catCreditsMap.get('SEC') || 0) >= CATEGORY_REQUIREMENTS.SEC.min4Year,
-      },
-      {
-        category: 'VAC',
-        title: CATEGORY_REQUIREMENTS.VAC.name,
-        earned: catCreditsMap.get('VAC') || 0,
-        min3Year: CATEGORY_REQUIREMENTS.VAC.min3Year,
-        min4Year: CATEGORY_REQUIREMENTS.VAC.min4Year,
-        shortfall3Year: Math.max(0, CATEGORY_REQUIREMENTS.VAC.min3Year - (catCreditsMap.get('VAC') || 0)),
-        shortfall4Year: Math.max(0, CATEGORY_REQUIREMENTS.VAC.min4Year - (catCreditsMap.get('VAC') || 0)),
-        isMet3Year: (catCreditsMap.get('VAC') || 0) >= CATEGORY_REQUIREMENTS.VAC.min3Year,
-        isMet4Year: (catCreditsMap.get('VAC') || 0) >= CATEGORY_REQUIREMENTS.VAC.min4Year,
-      },
-      {
-        category: 'MDC',
-        title: CATEGORY_REQUIREMENTS.MDC.name,
-        earned: catCreditsMap.get('MDC') || 0,
-        min3Year: CATEGORY_REQUIREMENTS.MDC.min3Year,
-        min4Year: CATEGORY_REQUIREMENTS.MDC.min4Year,
-        shortfall3Year: Math.max(0, CATEGORY_REQUIREMENTS.MDC.min3Year - (catCreditsMap.get('MDC') || 0)),
-        shortfall4Year: Math.max(0, CATEGORY_REQUIREMENTS.MDC.min4Year - (catCreditsMap.get('MDC') || 0)),
-        isMet3Year: (catCreditsMap.get('MDC') || 0) >= CATEGORY_REQUIREMENTS.MDC.min3Year,
-        isMet4Year: (catCreditsMap.get('MDC') || 0) >= CATEGORY_REQUIREMENTS.MDC.min4Year,
-      },
-      {
-        category: 'Internship',
-        title: CATEGORY_REQUIREMENTS.INTERNSHIP.name,
-        earned: catCreditsMap.get('Internship') || 0,
-        min3Year: CATEGORY_REQUIREMENTS.INTERNSHIP.min3Year,
-        min4Year: CATEGORY_REQUIREMENTS.INTERNSHIP.min4Year,
-        shortfall3Year: Math.max(0, CATEGORY_REQUIREMENTS.INTERNSHIP.min3Year - (catCreditsMap.get('Internship') || 0)),
-        shortfall4Year: Math.max(0, CATEGORY_REQUIREMENTS.INTERNSHIP.min4Year - (catCreditsMap.get('Internship') || 0)),
-        isMet3Year: (catCreditsMap.get('Internship') || 0) >= CATEGORY_REQUIREMENTS.INTERNSHIP.min3Year,
-        isMet4Year: (catCreditsMap.get('Internship') || 0) >= CATEGORY_REQUIREMENTS.INTERNSHIP.min4Year,
-      },
-      {
-        category: 'DSC / DSE',
-        title: CATEGORY_REQUIREMENTS.DSC_DSE.name,
-        earned: catCreditsMap.get('DSC / DSE') || 0,
-        min3Year: CATEGORY_REQUIREMENTS.DSC_DSE.min3Year,
-        min4Year: CATEGORY_REQUIREMENTS.DSC_DSE.min4Year,
-        shortfall3Year: Math.max(0, CATEGORY_REQUIREMENTS.DSC_DSE.min3Year - (catCreditsMap.get('DSC / DSE') || 0)),
-        shortfall4Year: Math.max(0, CATEGORY_REQUIREMENTS.DSC_DSE.min4Year - (catCreditsMap.get('DSC / DSE') || 0)),
-        isMet3Year: (catCreditsMap.get('DSC / DSE') || 0) >= CATEGORY_REQUIREMENTS.DSC_DSE.min3Year,
-        isMet4Year: (catCreditsMap.get('DSC / DSE') || 0) >= CATEGORY_REQUIREMENTS.DSC_DSE.min4Year,
-      },
-      {
-        category: 'Research Project',
-        title: CATEGORY_REQUIREMENTS.RESEARCH_PROJECT.name,
-        earned: catCreditsMap.get('Research Project') || 0,
-        min3Year: CATEGORY_REQUIREMENTS.RESEARCH_PROJECT.min3Year,
-        min4Year: CATEGORY_REQUIREMENTS.RESEARCH_PROJECT.min4Year,
-        shortfall3Year: Math.max(0, CATEGORY_REQUIREMENTS.RESEARCH_PROJECT.min3Year - (catCreditsMap.get('Research Project') || 0)),
-        shortfall4Year: Math.max(0, CATEGORY_REQUIREMENTS.RESEARCH_PROJECT.min4Year - (catCreditsMap.get('Research Project') || 0)),
-        isMet3Year: (catCreditsMap.get('Research Project') || 0) >= CATEGORY_REQUIREMENTS.RESEARCH_PROJECT.min3Year,
-        isMet4Year: (catCreditsMap.get('Research Project') || 0) >= CATEGORY_REQUIREMENTS.RESEARCH_PROJECT.min4Year,
-      },
-    ]
+    const categoryKeys = Object.keys(CATEGORY_REQUIREMENTS) as (keyof typeof CATEGORY_REQUIREMENTS)[]
+    const categories = categoryKeys.map((catKey) => {
+      const req = CATEGORY_REQUIREMENTS[catKey]
+      const earned = catCreditsMap.get(catKey) || 0
+      const shortfall3Year = Math.max(0, req.min3Year - earned)
+      const shortfall4Year = Math.max(0, req.min4Year - earned)
+      return {
+        category: catKey,
+        title: req.name,
+        earned,
+        min3Year: req.min3Year,
+        min4Year: req.min4Year,
+        shortfall3Year,
+        shortfall4Year,
+        isMet3Year: req.min3Year === 0 || earned >= req.min3Year,
+        isMet4Year: req.min4Year === 0 || earned >= req.min4Year,
+      }
+    })
+
+    // Also include any other category present in registered courses that wasn't in CATEGORY_REQUIREMENTS
+    for (const [catName, earned] of catCreditsMap.entries()) {
+      if (!categoryKeys.includes(catName as any)) {
+        categories.push({
+          category: catName,
+          title: catName,
+          earned,
+          min3Year: 0,
+          min4Year: 0,
+          shortfall3Year: 0,
+          shortfall4Year: 0,
+          isMet3Year: true,
+          isMet4Year: true,
+        })
+      }
+    }
 
     // 9. Aggregate Level Band Breakdown
     const bandCreditsMap = new Map<string, number>()
@@ -359,7 +326,7 @@ export class CreditLedgerService {
     // 3-Year Exit
     const unmetCat3Year: string[] = []
     for (const cat of categories) {
-      if (cat.category !== 'Research Project' && !cat.isMet3Year) {
+      if (cat.min3Year > 0 && !cat.isMet3Year) {
         unmetCat3Year.push(`${cat.category} (${cat.shortfall3Year} credits short)`)
       }
     }
@@ -375,7 +342,7 @@ export class CreditLedgerService {
     // 4-Year Exit
     const unmetCat4Year: string[] = []
     for (const cat of categories) {
-      if (!cat.isMet4Year) {
+      if (cat.min4Year > 0 && !cat.isMet4Year) {
         unmetCat4Year.push(`${cat.category} (${cat.shortfall4Year} credits short)`)
       }
     }

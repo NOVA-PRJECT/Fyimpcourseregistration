@@ -12,83 +12,101 @@
   flex-direction: column;
 }
 
-/* ── TOP BAR ── */
+/* ── UNIFIED EXECUTIVE TOP BAR ── */
 .topBar {
-  background-color: #002147;
-  padding: 1.1rem 1.25rem;
+  background: #ffffff;
+  padding: 0.4rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 2px 8px rgba(0, 33, 71, 0.3);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  gap: 1.25rem;
 }
 
 .topBarLeft {
   display: flex;
   align-items: center;
+  gap: 1.25rem;
+  min-width: 0;
+  flex: 1;
+}
+
+/* 1. Portal Branding Block */
+.topBarBranding {
+  display: flex;
+  align-items: center;
   gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .logoSmall {
-  width: 2rem;
-  height: 2rem;
+  width: 2.35rem;
+  height: 2.35rem;
   border-radius: 50%;
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(201,162,39,0.3);
+  background: rgba(0, 33, 71, 0.15);
+  border: 1.5px solid rgba(0, 33, 71, 1.0);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.topBarTitles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
 .topBarTitle {
-  color: #ffffff;
-  font-size: 0.8rem;
+  color: #002147;
+  font-size: 0.85rem;
   font-weight: 700;
   margin: 0;
+  line-height: 1.2;
 }
 
 .topBarSubtitle {
-  color: rgba(255,255,255,0.45);
+  color: #002147;
   font-size: 0.65rem;
+  font-weight: 600;
   margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  line-height: 1.2;
 }
 
-.logoutBtn {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 0.4rem;
-  color: rgba(255,255,255,0.7);
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.35rem 0.75rem;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  font-family: inherit;
+/* Vertical Separator */
+.topBarDivider {
+  width: 1px;
+  height: 2.2rem;
+  background: rgba(0, 33, 71, 0.1);
+  flex-shrink: 0;
 }
 
-.logoutBtn:hover {
-  background: rgba(255,255,255,0.15);
-  color: #ffffff;
-}
-
-/* ── DIRECTOR INFO CARD ── */
-.infoCard {
-  background: #ffffff;
-  border-bottom: 1px solid #e2e5ea;
-  padding: 1rem 1.25rem;
+/* 2. Director Details Block */
+.directorIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
 }
 
 .directorName {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: #002147;
-  margin: 0 0 0.35rem 0;
+  margin: 0;
+  margin-bottom: 0.3rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .directorDetails {
@@ -98,20 +116,86 @@
   flex-wrap: wrap;
 }
 
-.detailBadge {
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 0.2rem 0.55rem;
+.roleBadge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.08rem 0.45rem;
   border-radius: 2rem;
-  background: #f0f4f8;
-  color: #44474e;
-  border: 1px solid #dde1e7;
+  background: rgba(0, 33, 71, 0.1);
+  color: #002147;
+  border: 1px solid rgba(0, 33, 71, 1.0);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  line-height: 1.3;
 }
 
-.roleBadge {
-  background: #002147;
+.campusBadge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 0.08rem 0.45rem;
+  border-radius: 2rem;
+  background: rgba(0, 33, 71, 0.1);
+  color: #002147;
+  border: 1px solid rgba(0, 33, 71, 1.0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 22rem;
+  line-height: 1.3;
+}
+
+.topBarSkeleton {
+  height: 1.5rem;
+  width: 15rem;
+  border-radius: 0.4rem;
+  background: rgba(0, 33, 71, 0.1);
+  animation: pulse 1.5s infinite;
+}
+
+/* 3. Action Controls */
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.logoutBtn {
+  background: rgba(0, 33, 71, 1.0);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.45rem;
+  color: rgba(255, 255, 255, 1.0);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.42rem 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.logoutBtn:hover {
+  background: #001633;
+  border-color: rgba(255, 255, 255, 0.3);
   color: #ffffff;
-  border-color: #002147;
+  transform: translateY(-1px);
+}
+
+.logoutBtn:active {
+  transform: translateY(0);
+}
+
+.logoutBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.logoutText {
+  display: inline;
 }
 
 /* ── FULL VIEWPORT WIDTH TAB BAR WITH EQUAL SPAN TABS ── */
@@ -358,7 +442,7 @@
   margin-bottom: 1rem;
   text-align: center;
   width: 100%;
-  max-width: 28rem;
+  max-width: 50rem;
   box-sizing: border-box;
 }
 
@@ -373,7 +457,7 @@
   margin-bottom: 1rem;
   text-align: center;
   width: 100%;
-  max-width: 28rem;
+  max-width: 50rem;
   box-sizing: border-box;
 }
 
@@ -399,7 +483,70 @@
 }
 
 @media (min-width: 640px) {
-  .topBar { padding: 1.1rem 1.5rem; }
-  .infoCard { padding: 1.25rem 1.5rem; }
-  .mainContent { padding: 1.5rem; }
+  .topBar { padding: 0.85rem 1.75rem; }
+  .mainContent { padding: 1.5rem 2rem; }
+}
+
+@media (min-width: 1280px) {
+  .topBar { padding: 0.85rem 2.5rem; }
+  .mainContent { padding: 2rem 2.5rem; }
+}
+
+/* ── RESPONSIVE MEDIA QUERIES (TABLET & MOBILE) ── */
+@media (max-width: 900px) {
+  .topBar {
+    padding: 0.35rem 0.85rem;
+    gap: 0.75rem;
+  }
+  .topBarLeft {
+    gap: 0.75rem;
+  }
+  .topBarSubtitle {
+    display: none;
+  }
+  .logoSmall {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .topBarDivider {
+    height: 1.6rem;
+  }
+  .mainContent {
+    padding: 1rem 0.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .topBarTitles {
+    display: none;
+  }
+  .topBarDivider {
+    display: none;
+  }
+  .topBarLeft {
+    gap: 0.65rem;
+  }
+  .directorName {
+    font-size: 0.88rem;
+    max-width: 14rem;
+    margin-bottom: 0.15rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .topBar {
+    padding: 0.3rem 0.5rem;
+  }
+  .logoutText {
+    display: none;
+  }
+  .logoutBtn {
+    padding: 0.42rem 0.55rem;
+  }
+  .directorName {
+    font-size: 0.82rem;
+  }
 }

@@ -80,6 +80,9 @@ export default function CampusDirectorTimetablePage() {
   const [academicYear, setAcademicYear] = useState('2026-27');
   const [semester, setSemester] = useState(1);
   const [registrationClosed, setRegistrationClosed] = useState(true);
+  const [currentDeadline, setCurrentDeadline] = useState<string | null>(null);
+  const [closingWindow, setClosingWindow] = useState(false);
+  const [showCloseWindowConfirmModal, setShowCloseWindowConfirmModal] = useState(false);
 
   // Dynamic Constraints & Base Rules Modal State
   const [showRulesModal, setShowRulesModal] = useState(false);
@@ -429,13 +432,18 @@ export default function CampusDirectorTimetablePage() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.settings?.deadline) {
+          setCurrentDeadline(data.settings.deadline);
           const isClosed = new Date() >= new Date(data.settings.deadline);
           setRegistrationClosed(isClosed);
         } else {
+          setCurrentDeadline(null);
           setRegistrationClosed(true);
         }
       })
-      .catch(() => setRegistrationClosed(true));
+      .catch(() => {
+        setCurrentDeadline(null);
+        setRegistrationClosed(true);
+      });
   }, []);
 
   // Set default selected department once data loads (prefer first department with active entries)
@@ -523,8 +531,48 @@ export default function CampusDirectorTimetablePage() {
     };
   }, [showGenerationOverlay, jobStatus]);
 
+  async function handleCloseRegistrationWindow(proceedWithGeneration: boolean = false) {
+    setClosingWindow(true);
+    setErrorMsg(null);
+    try {
+      const nowIso = new Date().toISOString();
+      const res = await fetch('/api/director/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deadline: nowIso }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const msg = (typeof data.message === 'string' ? data.message : data.message?.error) || data.error || 'Failed to close registration window';
+        setErrorMsg(msg);
+        setClosingWindow(false);
+        return;
+      }
+      setCurrentDeadline(nowIso);
+      setRegistrationClosed(true);
+      setShowCloseWindowConfirmModal(false);
+      setSuccessMsg('Registration window closed successfully. Timetable generation is now unlocked.');
+      setClosingWindow(false);
+
+      if (proceedWithGeneration) {
+        await executeGeneration();
+      }
+    } catch {
+      setErrorMsg('Network error while closing registration window');
+      setClosingWindow(false);
+    }
+  }
+
   // Handle Generate Timetable
   async function handleGenerate() {
+    if (!registrationClosed) {
+      setShowCloseWindowConfirmModal(true);
+      return;
+    }
+    await executeGeneration();
+  }
+
+  async function executeGeneration() {
     setErrorMsg(null);
     setSuccessMsg(null);
     setJobError(null);
@@ -544,8 +592,10 @@ export default function CampusDirectorTimetablePage() {
 
       const data = await res.json();
       if (!res.ok) {
-        setErrorMsg(data.error || 'Failed to start timetable generation');
-        setJobError(data.error || 'Failed to start timetable generation');
+        const errorText = (typeof data.message === 'string' ? data.message : data.message?.error) || data.error || 'Failed to start timetable generation';
+        setErrorMsg(errorText);
+        setJobError(errorText);
+        setJobStatus('failed');
         return;
       }
 
@@ -553,8 +603,10 @@ export default function CampusDirectorTimetablePage() {
       setJobStatus('queued');
       setJobProgress(5);
     } catch {
-      setErrorMsg('Network error starting timetable generation');
-      setJobError('Network error starting timetable generation');
+      const networkErr = 'Network error starting timetable generation';
+      setErrorMsg(networkErr);
+      setJobError(networkErr);
+      setJobStatus('failed');
     }
   }
 
@@ -764,6 +816,30 @@ export default function CampusDirectorTimetablePage() {
       </div>
 
       <div className={styles.mainContent}>
+        {/* Registration Window Warning Banner */}
+        {!registrationClosed && (
+          <div className={styles.registrationWarningBanner}>
+            <div className={styles.registrationWarningContent}>
+              <span className={styles.registrationWarningIcon}>⚠️</span>
+              <div>
+                <p className={styles.registrationWarningTitle}>
+                  Student Registration Window is Currently Open
+                </p>
+                <p className={styles.registrationWarningText}>
+                  Registrations are open until {currentDeadline ? new Date(currentDeadline).toLocaleString('en-IN') : 'the set deadline'}. Student registrations must be closed before generating timetables so enrollments remain stable.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className={styles.closeWindowQuickBtn}
+              onClick={() => router.push('/dashboard/director')}
+            >
+              Go to Registration Window →
+            </button>
+          </div>
+        )}
+
         {/* Controls Card */}
         <div className={styles.headerCard}>
           <div className={styles.controlsRow}>
@@ -1178,23 +1254,23 @@ export default function CampusDirectorTimetablePage() {
           <div className={styles.generationModalCard}>
             <div className={styles.generationModalHeader}>
               <div className={styles.generationModalIcon}>
-                {jobStatus === 'completed' ? '✓' : jobStatus === 'failed' ? '⚠️' : '✨'}
+                {jobStatus === 'completed' ? '✓' : (jobStatus === 'failed' || !!jobError) ? '⚠️' : '✨'}
               </div>
               <div style={{ flex: 1 }}>
                 <h3 className={styles.generationModalTitle}>
                   <span>AI Timetable Scheduler</span>
-                  {(jobStatus === 'running' || jobStatus === 'queued') && (
+                  {(jobStatus === 'running' || jobStatus === 'queued') && !jobError && (
                     <span style={{ fontSize: '0.7rem', color: '#818cf8', background: 'rgba(99, 102, 241, 0.2)', padding: '0.15rem 0.5rem', borderRadius: '0.25rem', fontWeight: 600 }}>
                       LIVE PROCESSING
                     </span>
                   )}
                 </h3>
                 <p className={styles.generationModalSubtitle}>
-                  {jobStatus === 'completed' && (stepMessage || '🎉 Timetable generation complete! All department schedules placed.')}
-                  {jobStatus === 'failed' && (jobError || '❌ Generation interrupted due to scheduling constraints.')}
-                  {(jobStatus === 'running' || jobStatus === 'queued') && (
-                    stepMessage || '🧠 Processing scheduling constraints and student registrations with AI...'
-                  )}
+                  {jobError
+                    ? jobError
+                    : jobStatus === 'completed'
+                    ? (stepMessage || '🎉 Timetable generation complete! All department schedules placed.')
+                    : (stepMessage || '🧠 Processing scheduling constraints and student registrations with AI...')}
                 </p>
               </div>
               <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#818cf8' }}>
@@ -1274,10 +1350,10 @@ export default function CampusDirectorTimetablePage() {
               </div>
             )}
 
-            {/* Footer Buttons for Failed or Completed States */}
-            {(jobStatus === 'failed' || jobStatus === 'completed') && (
+            {/* Footer Buttons for Failed, Completed, or Error States */}
+            {(jobStatus === 'failed' || jobStatus === 'completed' || !!jobError) && (
               <div className={styles.generationModalFooter} style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-                {jobStatus === 'failed' && (
+                {(jobStatus === 'failed' || !!jobError) && (
                   <button
                     style={{
                       background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
@@ -1297,7 +1373,10 @@ export default function CampusDirectorTimetablePage() {
                 )}
                 <button
                   className={styles.generationModalCloseBtn}
-                  onClick={() => setShowGenerationOverlay(false)}
+                  onClick={() => {
+                    setShowGenerationOverlay(false);
+                    setJobError(null);
+                  }}
                 >
                   {jobStatus === 'completed' ? 'View Generated Timetable →' : 'Close Overlay'}
                 </button>
@@ -2011,6 +2090,71 @@ export default function CampusDirectorTimetablePage() {
               >
                 {publishing ? 'Publishing...' : 'Yes, Publish'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Confirm Close Window & Generate Modal */}
+      {showCloseWindowConfirmModal && (
+        <div className={styles.rulesModalOverlay}>
+          <div className={styles.rulesModal} style={{ maxWidth: '460px' }}>
+            <div className={styles.rulesModalHeader}>
+              <h3 className={styles.rulesModalTitle}>
+                <span>⚠️ Registration Window Open</span>
+              </h3>
+              <button
+                className={styles.rulesModalCloseBtn}
+                onClick={() => setShowCloseWindowConfirmModal(false)}
+                disabled={closingWindow}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: '1.25rem 1.5rem' }}>
+              <p style={{ margin: '0 0 0.85rem 0', color: '#1e293b', fontSize: '0.92rem', lineHeight: '1.5' }}>
+                Student registration is currently open until{' '}
+                <strong>{currentDeadline ? new Date(currentDeadline).toLocaleString('en-IN') : 'the set deadline'}</strong>.
+              </p>
+              <p style={{ margin: '0 0 1.5rem 0', color: '#64748b', fontSize: '0.85rem', lineHeight: '1.5' }}>
+                To schedule an accurate timetable with no course conflicts, student registrations must be closed before generating. Would you like to close registrations now and generate the timetable?
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #cbd5e1',
+                    padding: '0.55rem 1rem',
+                    borderRadius: '0.45rem',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    color: '#475569',
+                  }}
+                  onClick={() => setShowCloseWindowConfirmModal(false)}
+                  disabled={closingWindow}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    background: '#002147',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '0.55rem 1.25rem',
+                    borderRadius: '0.45rem',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    cursor: closingWindow ? 'not-allowed' : 'pointer',
+                    opacity: closingWindow ? 0.7 : 1,
+                  }}
+                  onClick={() => handleCloseRegistrationWindow(true)}
+                  disabled={closingWindow}
+                >
+                  {closingWindow ? 'Closing & Generating...' : 'Close Window & Generate ⚡'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

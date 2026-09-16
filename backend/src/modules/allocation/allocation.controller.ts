@@ -71,6 +71,16 @@ export class AllocationController {
     return this.allocationService.getRunStatus(academicYear || '', isNaN(sem) ? 1 : sem, user)
   }
 
+  // ──────────────── Clear Stale Failed Run ────────────────
+  @Delete('runs/:runId')
+  @Roles('campus_director')
+  async clearFailedRun(
+    @Param('runId') runId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.allocationService.clearFailedRun(runId, user)
+  }
+
   // ──────────────── HOD: Unresolved Students ────────────────
   @Get('unresolved')
   @Roles('hod')

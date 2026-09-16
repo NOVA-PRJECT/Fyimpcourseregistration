@@ -257,6 +257,29 @@ export class AllocationService {
       throw new BadRequestException('Campus ID is required to run course allocation')
     }
 
+    // Validate academicYear format: must be YYYY-YY (e.g. 2026-27)
+    if (!body.academicYear || !/^\d{4}-\d{2}$/.test(body.academicYear)) {
+      throw new BadRequestException(
+        'Invalid academic year format. Expected format: YYYY-YY (e.g. 2026-27)',
+      )
+    }
+
+    // Validate that the two parts are consecutive years (e.g. 2026-27, not 2026-99)
+    const [startYearStr, shortEndStr] = body.academicYear.split('-')
+    const startYear = parseInt(startYearStr, 10)
+    const expectedShortEnd = String(startYear + 1).slice(2)
+    if (shortEndStr !== expectedShortEnd) {
+      throw new BadRequestException(
+        `Invalid academic year: ${body.academicYear}. The year must be consecutive (e.g. 2026-27)`,
+      )
+    }
+
+    // Validate semester range
+    const sem = Number(body.semester)
+    if (isNaN(sem) || sem < 1 || sem > 8) {
+      throw new BadRequestException('Semester must be between 1 and 8')
+    }
+
     // Step A: Check if a run is already in progress
     const { data: activeRun } = await this.supabase.admin
       .from('allocation_runs')
@@ -581,6 +604,7 @@ export class AllocationService {
         for (const pref of studentPrefList) {
           const slotMap = studentSlotState.get(pref.student_id)!
           const slots = extractSlots(pref.preferences)
+          const studentDeptId = (pref.students as any)?.department_id ?? ''
           const studentDeptCode = (pref.students as any)?.departments?.code ?? ''
 
           // Check if course has DEPARTMENT constraint
@@ -591,6 +615,8 @@ export class AllocationService {
               continue
             }
           }
+
+          for (const slotItem of slots) {
             const slotKey = `slot_${slotItem.slot}`
             const currentSlot = slotMap.get(slotKey)
             if (!currentSlot || currentSlot.resolved || slotItem.is_fixed) continue
@@ -696,6 +722,8 @@ export class AllocationService {
                 continue
               }
             }
+
+            const score = calculateStudentScore(
               pref.student_id,
               studentSemester,
               studentDeptCode,
@@ -948,6 +976,57 @@ export class AllocationService {
       success: true,
       run: run ?? null,
     }
+  }
+
+  // ──────────────── Clear Stale Failed Run ────────────────
+  async clearFailedRun(runId: string, user: AuthUser) {
+    const campusId = user.campus_id
+    if (!campusId) {
+      throw new BadRequestException('Campus ID missing')
+    }
+
+    // Fetch the run to verify it belongs to this campus and is actually failed
+    const { data: run, error: fetchErr } = await this.supabase.admin
+      .from('allocation_runs')
+      .select('id, campus_id, status')
+      .eq('id', runId)
+      .maybeSingle()
+
+    if (fetchErr || !run) {
+      throw new NotFoundException('Allocation run not found')
+    }
+
+    if (run.campus_id !== campusId) {
+      throw new ForbiddenException('You can only clear allocation runs for your campus')
+    }
+
+    if (run.status === 'running') {
+      throw new BadRequestException('Cannot clear a run that is currently in progress')
+    }
+
+    // Delete from system_logs (allocation_runs is a view backed by system_logs)
+    const { error: delErr } = await this.supabase.admin
+      .from('system_logs')
+      .delete()
+      .eq('id', runId)
+      .eq('log_type', 'allocation_run')
+
+    if (delErr) {
+      this.logger.error(`Failed to clear allocation run ${runId}: ${delErr.message}`)
+      throw new InternalServerErrorException('Failed to clear allocation run record')
+    }
+
+    await this.auditLogger.log({
+      eventType: AuditEvents.ALLOCATION_RUN_COMPLETED,
+      userId: user.userId,
+      userRole: user.role,
+      action: `cleared stale failed allocation run ${runId}`,
+      resourceType: 'allocation_run',
+      resourceId: runId,
+      status: 'success',
+    })
+
+    return { success: true, message: 'Allocation run record cleared' }
   }
 
   // ──────────────── HOD: Unresolved Students ────────────────

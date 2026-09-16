@@ -128,8 +128,10 @@ interface BlueprintData {
   window_status: 'OPEN' | 'CLOSED'
   windowOpen?: boolean
   deadline: string
-  min_credits: number
-  max_credits: number
+  min_credits?: number
+  max_credits?: number
+  minCredits?: number
+  maxCredits?: number
   slots?: BlueprintSlot[]
   pathways?: PathwaySummary[]
   pathway_id?: string
@@ -152,6 +154,7 @@ interface SlotRankedPreferences {
 type PageState =
   | 'loading_blueprint'
   | 'closed'
+  | 'error'
   | 'pathway_picker'
   | 'loading_slots'
   | 'ready'
@@ -185,8 +188,9 @@ export default function RegisterPage() {
         const data = await response.json()
 
         if (!response.ok) {
-          setError(data.error ?? 'Failed to load courses. Please try again.')
-          setPageState('closed')
+          const errMsg = data.message || data.error || 'Failed to load courses. Please try again.'
+          setError(errMsg)
+          setPageState('error')
           return
         }
 
@@ -228,6 +232,19 @@ export default function RegisterPage() {
             rank3: list.find((p: any) => p.rank === 3)?.course_id || '',
           }
         }
+
+        // Auto-select sole course options (slots with exactly 1 eligible course)
+        if (rawBp.slots && rawBp.slots.length > 0) {
+          rawBp.slots.forEach((s: BlueprintSlot) => {
+            if (s.options && s.options.length === 1 && !initialPrefs[s.slot]?.rank1) {
+              if (!initialPrefs[s.slot]) {
+                initialPrefs[s.slot] = { rank1: '', rank2: '', rank3: '' }
+              }
+              initialPrefs[s.slot].rank1 = s.options[0].id
+            }
+          })
+        }
+
         setRankedPreferences(initialPrefs)
 
         // Single pathway — slots already resolved
@@ -254,8 +271,8 @@ export default function RegisterPage() {
 
         setPageState('ready')
       } catch (err) {
-        setError('Error loading registration blueprint')
-        setPageState('closed')
+        setError('Error loading registration blueprint. Please try again.')
+        setPageState('error')
       }
     }
 
@@ -278,7 +295,23 @@ export default function RegisterPage() {
       return
     }
 
-    setResolvedSlots(data.data.slots)
+    const slots = data.data.slots as BlueprintSlot[]
+    setResolvedSlots(slots)
+
+    // Auto-select sole course options on pathway change
+    setRankedPreferences((prev) => {
+      const updated = { ...prev }
+      slots.forEach((s) => {
+        if (s.options && s.options.length === 1 && !updated[s.slot]?.rank1) {
+          updated[s.slot] = {
+            ...(updated[s.slot] || { rank1: '', rank2: '', rank3: '' }),
+            rank1: s.options[0].id,
+          }
+        }
+      })
+      return updated
+    })
+
     setPageState('ready')
   }
 
@@ -317,7 +350,11 @@ export default function RegisterPage() {
     if (!resolvedSlots.length) return 0
     let total = 0
     resolvedSlots.forEach((slot) => {
-      const isFixed = slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED'
+      const isFixed =
+        slot.rule === 'FIXED' ||
+        slot.rule === 'CAMPUS_FIXED' ||
+        slot.rule === 'AEC_ELECT' ||
+        (!!slot.course && (!slot.options || slot.options.length === 0))
       if (isFixed && slot.course) {
         total += slot.course.credits
       } else {
@@ -337,7 +374,11 @@ export default function RegisterPage() {
     const preferencesPayload: Record<string, { course_id: string; rank: number }[]> = {}
 
     for (const slot of resolvedSlots) {
-      const isFixed = slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED'
+      const isFixed =
+        slot.rule === 'FIXED' ||
+        slot.rule === 'CAMPUS_FIXED' ||
+        slot.rule === 'AEC_ELECT' ||
+        (!!slot.course && (!slot.options || slot.options.length === 0))
       if (!isFixed) {
         const slotKey = `slot_${slot.slot}`
         const currentPrefs = rankedPreferences[slot.slot] || { rank1: '', rank2: '', rank3: '' }
@@ -380,12 +421,21 @@ export default function RegisterPage() {
     const data = await response.json()
 
     if (!response.ok) {
-      setError(data.error ?? 'Submission failed. Please try again.')
+      const errMsg = data.message || data.error || 'Submission failed. Please try again.'
+      setError(errMsg)
       setPageState('ready')
       return
     }
 
-    setSuccessMsg(data.message || 'Course preferences successfully submitted!')
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem('fyimp_student_summary')
+      } catch {
+        // Ignore storage error
+      }
+    }
+
+    setSuccessMsg(data.message || 'Course preferences successfully saved!')
     setPageState('submitted')
     setTimeout(() => {
       router.push('/dashboard/student')
@@ -403,46 +453,58 @@ export default function RegisterPage() {
     setPageState('pathway_picker')
   }
 
+  const minCredits = blueprint?.minCredits ?? blueprint?.min_credits ?? 20
+  const maxCredits = blueprint?.maxCredits ?? blueprint?.max_credits ?? 24
   const totalCredits = calculateCredits()
   const isValidCredits = blueprint
-    ? totalCredits >= blueprint.min_credits && totalCredits <= blueprint.max_credits
+    ? totalCredits >= minCredits && totalCredits <= maxCredits
     : false
 
   return (
     <div className={styles.pageWrapper}>
-      {/* Top Bar */}
-      <div className={styles.topBar}>
+      {/* Executive Top Bar */}
+      <header className={styles.topBar}>
         <div className={styles.topBarLeft}>
-          <div className={styles.logoSmall}>
-            <Image src="/knrunilogo.png" alt="KU" width={28} height={28} />
+          <div className={styles.topBarBranding}>
+            <div className={styles.logoSmall}>
+              <Image src="/knrunilogo.png" alt="KU" width={30} height={30} priority />
+            </div>
+            <div className={styles.topBarTitles}>
+              <p className={styles.topBarTitle}>FYIMP Portal</p>
+              <p className={styles.topBarSubtitle}>Course Registration</p>
+            </div>
           </div>
-          <div>
-            <p className={styles.topBarTitle}>FYIMP Portal</p>
-            <p className={styles.topBarSubtitle}>
-              {studentInfo?.full_name
-                ? `${studentInfo.full_name} — Sem ${studentInfo.current_semester}`
-                : 'Course Registration'}
-            </p>
-          </div>
+          <div className={styles.topBarDivider} />
+          {studentInfo && (
+            <div className={styles.studentIdentity}>
+              <p className={styles.studentNameHeader}>{studentInfo.full_name}</p>
+              <div className={styles.studentBadges}>
+                <span className={styles.roleBadge}>FYIMP Student</span>
+                <span className={styles.semBadgeTop}>Semester {studentInfo.current_semester ?? 1}</span>
+              </div>
+            </div>
+          )}
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <Link
             href="/dashboard/student"
             className={styles.logoutBtn}
             style={{
-              background: 'rgba(255,255,255,0.05)',
+              background: '#f1f5f9',
+              color: '#002147',
+              border: '1px solid #cbd5e1',
               textDecoration: 'none',
               display: 'inline-flex',
               alignItems: 'center',
             }}
           >
-            ← Back
+            ← Back to Dashboard
           </Link>
           <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
             {loggingOut ? 'Logging out...' : 'Logout'}
           </button>
         </div>
-      </div>
+      </header>
 
       <div className={styles.mainContent}>
         <ResourceBanner />
@@ -453,6 +515,36 @@ export default function RegisterPage() {
             <div style={{ height: '3.5rem', borderRadius: '0.75rem' }} className={styles.skeletonLightPulse} />
             <div style={{ height: '10rem', borderRadius: '0.75rem' }} className={styles.skeletonLightPulse} />
             <div style={{ height: '10rem', borderRadius: '0.75rem' }} className={styles.skeletonLightPulse} />
+          </div>
+        )}
+
+        {/* Error / Blueprint Not Configured State */}
+        {pageState === 'error' && (
+          <div className={styles.closedState}>
+            <div className={styles.closedIcon}>📋</div>
+            <p className={styles.closedTitle}>Registration Unavailable</p>
+            <p className={styles.closedSubtitle}>
+              {error || 'Your department course blueprint or campus registration settings are not currently available.'}
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '1rem' }}>
+              <button
+                className={styles.closedBackBtn}
+                onClick={() => router.push('/dashboard/student')}
+              >
+                ← Back to Dashboard
+              </button>
+              <button
+                className={styles.closedBackBtn}
+                style={{ background: '#0284c7', color: '#ffffff', borderColor: '#0284c7' }}
+                onClick={() => {
+                  setError('')
+                  setPageState('loading_blueprint')
+                  window.location.reload()
+                }}
+              >
+                ↻ Try Again
+              </button>
+            </div>
           </div>
         )}
 
@@ -552,20 +644,53 @@ export default function RegisterPage() {
           resolvedSlots.length > 0 && (
             <>
               {/* Window Status Banner */}
-              <div
-                className={`${styles.windowBanner} ${
-                  windowIsOpen ? styles.open : styles.closed
-                }`}
-              >
-                <div className={styles.windowDot} />
-                {windowIsOpen
-                  ? `Registration open — closes ${new Date(blueprint.deadline).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}`
-                  : 'Registration window is closed'}
-              </div>
+              {(() => {
+                const isClosingSoon =
+                  windowIsOpen && blueprint.deadline
+                    ? new Date(blueprint.deadline).getTime() - Date.now() <= 24 * 60 * 60 * 1000 &&
+                      new Date(blueprint.deadline).getTime() > Date.now()
+                    : false
+                const hoursLeft =
+                  isClosingSoon && blueprint.deadline
+                    ? Math.max(
+                        0,
+                        Math.floor((new Date(blueprint.deadline).getTime() - Date.now()) / (1000 * 60 * 60)),
+                      )
+                    : null
+
+                return (
+                  <div
+                    className={`${styles.windowBanner} ${
+                      !windowIsOpen
+                        ? styles.closed
+                        : isClosingSoon
+                        ? styles.closingSoon
+                        : styles.open
+                    }`}
+                  >
+                    <div className={styles.windowDot} />
+                    {!windowIsOpen
+                      ? 'Registration window is closed'
+                      : isClosingSoon
+                      ? `⚠️ Closing Soon — Registration closes in ${hoursLeft} hour${
+                          hoursLeft === 1 ? '' : 's'
+                        } (${new Date(blueprint.deadline).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })})`
+                      : `Registration open — closes ${new Date(blueprint.deadline).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}`}
+                  </div>
+                )
+              })()}
 
               {/* Change Track button (only for multi-pathway) */}
               {blueprint.pathways &&
@@ -604,7 +729,7 @@ export default function RegisterPage() {
                   >
                     {totalCredits}
                     <span className={styles.creditRange}>
-                      &nbsp;(min {blueprint.min_credits} — max {blueprint.max_credits})
+                      &nbsp;(min {minCredits} — max {maxCredits})
                     </span>
                   </span>
                 </div>
@@ -616,7 +741,11 @@ export default function RegisterPage() {
 
               <div className={styles.slotsContainer}>
                 {resolvedSlots.map((slot) => {
-                  const isFixed = slot.rule === 'FIXED' || slot.rule === 'CAMPUS_FIXED'
+                  const isFixed =
+                    slot.rule === 'FIXED' ||
+                    slot.rule === 'CAMPUS_FIXED' ||
+                    slot.rule === 'AEC_ELECT' ||
+                    (!!slot.course && (!slot.options || slot.options.length === 0))
                   const slotKey = `slot_${slot.slot}`
                   const existingCourseId = existingSlots[slotKey]
                   const meta = allocationMetadata[slotKey]
@@ -753,22 +882,29 @@ export default function RegisterPage() {
                       {!isFixed && windowIsOpen && !isAllocated && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                           <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>
-                            Rank up to 3 preferences for this paper. The algorithm allocates round-by-round based on capacity and prerequisites.
+                            {(slot.options?.length ?? 0) === 1
+                              ? 'Prescribed elective paper for your department track. Auto-selected as your primary paper.'
+                              : 'Rank up to 3 preferences for this paper. The algorithm allocates round-by-round based on capacity and prerequisites.'}
                           </p>
 
                           <div>
-                            <label
-                              style={{
-                                fontSize: '0.72rem',
-                                color: '#38bdf8',
-                                fontWeight: 700,
-                                textTransform: 'uppercase',
-                                display: 'block',
-                                marginBottom: '0.25rem',
-                              }}
-                            >
-                              1st Choice (Primary) *
-                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <label
+                                style={{
+                                  fontSize: '0.72rem',
+                                  color: '#38bdf8',
+                                  fontWeight: 700,
+                                  textTransform: 'uppercase',
+                                  display: 'block',
+                                  marginBottom: '0.25rem',
+                                }}
+                              >
+                                {(slot.options?.length ?? 0) === 1 ? 'Prescribed Paper *' : '1st Choice (Primary) *'}
+                              </label>
+                              {(slot.options?.length ?? 0) === 1 && (
+                                <span className={styles.soleChoiceBadge}>✓ Auto-Selected Paper</span>
+                              )}
+                            </div>
                             <CustomSelect
                               options={slot.options ?? []}
                               value={rankedPreferences[slot.slot]?.rank1 ?? ''}
@@ -778,55 +914,61 @@ export default function RegisterPage() {
                             />
                           </div>
 
-                          <div>
-                            <label
-                              style={{
-                                fontSize: '0.72rem',
-                                color: '#94a3b8',
-                                fontWeight: 600,
-                                textTransform: 'uppercase',
-                                display: 'block',
-                                marginBottom: '0.25rem',
-                              }}
-                            >
-                              2nd Choice (Backup Round 2)
-                            </label>
-                            <CustomSelect
-                              options={(slot.options ?? []).filter(
-                                (c) => c.id !== rankedPreferences[slot.slot]?.rank1,
-                              )}
-                              value={rankedPreferences[slot.slot]?.rank2 ?? ''}
-                              onChange={(val) => handlePreferenceChange(slot.slot, 'rank2', val)}
-                              disabled={pageState === 'submitting'}
-                              placeholder="— Select 2nd Choice (Optional) —"
-                            />
-                          </div>
+                          {/* 2nd Choice (Backup Round 2) — only if more than 1 option exists */}
+                          {(slot.options?.length ?? 0) > 1 && (
+                            <div>
+                              <label
+                                style={{
+                                  fontSize: '0.72rem',
+                                  color: '#94a3b8',
+                                  fontWeight: 600,
+                                  textTransform: 'uppercase',
+                                  display: 'block',
+                                  marginBottom: '0.25rem',
+                                }}
+                              >
+                                2nd Choice (Backup Round 2)
+                              </label>
+                              <CustomSelect
+                                options={(slot.options ?? []).filter(
+                                  (c) => c.id !== rankedPreferences[slot.slot]?.rank1,
+                                )}
+                                value={rankedPreferences[slot.slot]?.rank2 ?? ''}
+                                onChange={(val) => handlePreferenceChange(slot.slot, 'rank2', val)}
+                                disabled={pageState === 'submitting'}
+                                placeholder="— Select 2nd Choice (Optional) —"
+                              />
+                            </div>
+                          )}
 
-                          <div>
-                            <label
-                              style={{
-                                fontSize: '0.72rem',
-                                color: '#94a3b8',
-                                fontWeight: 600,
-                                textTransform: 'uppercase',
-                                display: 'block',
-                                marginBottom: '0.25rem',
-                              }}
-                            >
-                              3rd Choice (Backup Round 3)
-                            </label>
-                            <CustomSelect
-                              options={(slot.options ?? []).filter(
-                                (c) =>
-                                  c.id !== rankedPreferences[slot.slot]?.rank1 &&
-                                  c.id !== rankedPreferences[slot.slot]?.rank2,
-                              )}
-                              value={rankedPreferences[slot.slot]?.rank3 ?? ''}
-                              onChange={(val) => handlePreferenceChange(slot.slot, 'rank3', val)}
-                              disabled={pageState === 'submitting'}
-                              placeholder="— Select 3rd Choice (Optional) —"
-                            />
-                          </div>
+                          {/* 3rd Choice (Backup Round 3) — only if more than 2 options exist */}
+                          {(slot.options?.length ?? 0) > 2 && (
+                            <div>
+                              <label
+                                style={{
+                                  fontSize: '0.72rem',
+                                  color: '#94a3b8',
+                                  fontWeight: 600,
+                                  textTransform: 'uppercase',
+                                  display: 'block',
+                                  marginBottom: '0.25rem',
+                                }}
+                              >
+                                3rd Choice (Backup Round 3)
+                              </label>
+                              <CustomSelect
+                                options={(slot.options ?? []).filter(
+                                  (c) =>
+                                    c.id !== rankedPreferences[slot.slot]?.rank1 &&
+                                    c.id !== rankedPreferences[slot.slot]?.rank2,
+                                )}
+                                value={rankedPreferences[slot.slot]?.rank3 ?? ''}
+                                onChange={(val) => handlePreferenceChange(slot.slot, 'rank3', val)}
+                                disabled={pageState === 'submitting'}
+                                placeholder="— Select 3rd Choice (Optional) —"
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

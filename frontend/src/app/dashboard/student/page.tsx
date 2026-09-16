@@ -27,12 +27,23 @@ export interface EnrolledCourse {
   isConfirmed: boolean
 }
 
+export interface RegistrationWindow {
+  isOpen: boolean
+  deadline: string | null
+  isClosingSoon: boolean
+  hoursRemaining: number | null
+  academicYear: string | null
+  minCredits: number
+  maxCredits: number
+}
+
 export default function StudentDashboardPage() {
   const router = useRouter()
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null)
   const [hasSubmission, setHasSubmission] = useState(false)
   const [enrolledCourses, setEnrolledCourses] = useState<EnrolledCourse[]>([])
   const [totalRegisteredCredits, setTotalRegisteredCredits] = useState(0)
+  const [registrationWindow, setRegistrationWindow] = useState<RegistrationWindow | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -47,6 +58,7 @@ export default function StudentDashboardPage() {
             setHasSubmission(parsed.hasSubmission ?? false)
             setEnrolledCourses(parsed.enrolledCourses || [])
             setTotalRegisteredCredits(parsed.totalRegisteredCredits || 0)
+            if (parsed.registrationWindow) setRegistrationWindow(parsed.registrationWindow)
             setLoading(false)
           }
         }
@@ -81,6 +93,7 @@ export default function StudentDashboardPage() {
         setHasSubmission(data.hasSubmission)
         setEnrolledCourses(data.enrolledCourses || [])
         setTotalRegisteredCredits(data.totalRegisteredCredits || 0)
+        setRegistrationWindow(data.registrationWindow || null)
 
         // Cache for subsequent instant transitions
         try {
@@ -101,48 +114,56 @@ export default function StudentDashboardPage() {
   if (loading && !studentInfo) {
     return (
       <div className={styles.pageWrapper}>
-        {/* Top Bar */}
-        <div className={styles.topBar}>
+        {/* Executive Top Bar Skeleton */}
+        <header className={styles.topBar}>
           <div className={styles.topBarLeft}>
-            <div className={styles.logoSmall}>
-              <Image src="/knrunilogo.png" alt="KU" width={28} height={28} />
+            <div className={styles.topBarBranding}>
+              <div className={styles.logoSmall}>
+                <Image src="/knrunilogo.png" alt="KU" width={30} height={30} priority />
+              </div>
+              <div className={styles.topBarTitles}>
+                <p className={styles.topBarTitle}>FYIMP Portal</p>
+                <p className={styles.topBarSubtitle}>Student Portal</p>
+              </div>
             </div>
-            <div>
-              <p className={styles.topBarTitle}>FYIMP Portal</p>
-              <p className={styles.topBarSubtitle}>Student Dashboard</p>
-            </div>
+            <div className={styles.topBarDivider} />
+            <div style={{ width: '12rem', height: '1.5rem', borderRadius: '0.35rem' }} className={styles.skeletonPulse} />
           </div>
-          <div style={{ width: '70px', height: '28px' }} className={styles.skeletonPulse} />
+          <div style={{ width: '70px', height: '28px', borderRadius: '0.45rem' }} className={styles.skeletonPulse} />
+        </header>
+
+        {/* Tab Bar Skeleton */}
+        <div className={styles.tabBar} style={{ padding: '0.75rem 1rem', gap: '1rem' }}>
+          <div style={{ width: '5rem', height: '1.2rem', borderRadius: '0.25rem' }} className={styles.skeletonPulse} />
+          <div style={{ width: '6rem', height: '1.2rem', borderRadius: '0.25rem' }} className={styles.skeletonPulse} />
+          <div style={{ width: '7rem', height: '1.2rem', borderRadius: '0.25rem' }} className={styles.skeletonPulse} />
+          <div style={{ width: '5rem', height: '1.2rem', borderRadius: '0.25rem' }} className={styles.skeletonPulse} />
+          <div style={{ width: '6rem', height: '1.2rem', borderRadius: '0.25rem' }} className={styles.skeletonPulse} />
         </div>
 
-        {/* Profile Section Skeleton */}
-        <div className={styles.profileSection}>
-          <div className={styles.profileTop}>
-            <div className={`${styles.skeletonAvatar} ${styles.skeletonPulse}`} />
-            <div className={styles.profileMeta} style={{ gap: '0.5rem', display: 'flex', flexDirection: 'column' }}>
-              <div className={`${styles.skeletonTextLg} ${styles.skeletonPulse}`} />
-              <div className={`${styles.skeletonTextSm} ${styles.skeletonPulse}`} style={{ width: '110px' }} />
+        {/* Main Content Skeleton */}
+        <main className={styles.tabContentWrapper}>
+          <div className={styles.profileSection}>
+            <div className={styles.profileTop}>
+              <div className={`${styles.skeletonAvatar} ${styles.skeletonPulse}`} />
+              <div className={styles.profileMeta} style={{ gap: '0.5rem', display: 'flex', flexDirection: 'column' }}>
+                <div className={`${styles.skeletonTextLg} ${styles.skeletonPulse}`} />
+                <div className={`${styles.skeletonTextSm} ${styles.skeletonPulse}`} style={{ width: '110px' }} />
+              </div>
+            </div>
+
+            <div className={styles.profileGrid} style={{ marginTop: '1.5rem' }}>
+              <div className={`${styles.skeletonChip} ${styles.skeletonPulse}`} />
+              <div className={`${styles.skeletonChip} ${styles.skeletonPulse}`} />
+              <div className={`${styles.skeletonChip} ${styles.skeletonPulse}`} />
+              <div className={`${styles.skeletonChip} ${styles.skeletonPulse}`} />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.5rem' }}>
+              <div style={{ height: '3rem', borderRadius: '0.65rem' }} className={styles.skeletonPulse} />
             </div>
           </div>
-
-          <div className={styles.profileGrid} style={{ marginTop: '1.5rem' }}>
-            <div className={`${styles.skeletonChip} ${styles.skeletonPulse}`} />
-            <div className={`${styles.skeletonChip} ${styles.skeletonPulse}`} />
-            <div className={`${styles.skeletonChip} ${styles.skeletonPulse}`} />
-            <div className={`${styles.skeletonChip} ${styles.skeletonPulse}`} />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1.5rem' }}>
-            <div style={{ height: '3rem', borderRadius: '0.65rem' }} className={styles.skeletonPulse} />
-            <div style={{ height: '3rem', borderRadius: '0.65rem' }} className={styles.skeletonPulse} />
-          </div>
-        </div>
-
-        {/* Action / Course Section Skeleton */}
-        <div style={{ maxWidth: '1200px', width: '100%', margin: '1.5rem auto', padding: '0 1rem', boxSizing: 'border-box' }}>
-          <div style={{ height: '7rem', borderRadius: '0.85rem', marginBottom: '1.5rem' }} className={styles.skeletonLightPulse} />
-          <div style={{ height: '14rem', borderRadius: '0.85rem' }} className={styles.skeletonLightPulse} />
-        </div>
+        </main>
       </div>
     )
   }
@@ -157,6 +178,7 @@ export default function StudentDashboardPage() {
       hasSubmission={hasSubmission}
       enrolledCourses={enrolledCourses}
       totalRegisteredCredits={totalRegisteredCredits}
+      registrationWindow={registrationWindow}
     />
   )
 }

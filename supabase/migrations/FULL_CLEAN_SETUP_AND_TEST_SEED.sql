@@ -111,7 +111,6 @@ CREATE TABLE courses (
     practical_hours_per_week SMALLINT NOT NULL DEFAULT 0,
     seat_limit INTEGER NOT NULL DEFAULT 60,
     prerequisite_course_ids UUID[] DEFAULT '{}',
-    allowed_department_ids UUID[] DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

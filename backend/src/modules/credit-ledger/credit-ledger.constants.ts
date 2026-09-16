@@ -3,13 +3,20 @@
  */
 
 export const CATEGORY_REQUIREMENTS = {
+  DSC: { name: 'Discipline Specific Core (DSC)', min3Year: 60, min4Year: 80 },
+  DSE: { name: 'Discipline Specific Elective (DSE)', min3Year: 24, min4Year: 32 },
+  DSS: { name: 'Discipline Specific Skill (DSS)', min3Year: 6, min4Year: 6 },
+  MDC: { name: 'Multidisciplinary Course (MDC)', min3Year: 9, min4Year: 9 },
   AEC: { name: 'Ability Enhancement Course (AEC)', min3Year: 9, min4Year: 9 },
   SEC: { name: 'Skill Enhancement Course (SEC)', min3Year: 9, min4Year: 9 },
   VAC: { name: 'Value Addition Course (VAC)', min3Year: 6, min4Year: 6 },
-  MDC: { name: 'Multidisciplinary Course (MDC)', min3Year: 9, min4Year: 9 },
-  INTERNSHIP: { name: 'Internship', min3Year: 4, min4Year: 4 },
-  DSC_DSE: { name: 'Discipline-Specific (DSC / DSE Combined)', min3Year: 96, min4Year: 124 },
-  RESEARCH_PROJECT: { name: 'Research Project', min3Year: 0, min4Year: 12 },
+  MOC: { name: 'Minor Open Elective (MOC)', min3Year: 8, min4Year: 12 },
+  MOOC: { name: 'Massive Open Online Course (MOOC)', min3Year: 2, min4Year: 4 },
+  INT: { name: 'Internship (INT)', min3Year: 4, min4Year: 4 },
+  RPH: { name: 'Research Project / Honours (RPH)', min3Year: 0, min4Year: 12 },
+  FWD: { name: 'Field Work / Dissertation (FWD)', min3Year: 0, min4Year: 4 },
+  DMP: { name: 'Department Major Project (DMP)', min3Year: 0, min4Year: 8 },
+  CIP: { name: 'Community Interaction (CIP)', min3Year: 2, min4Year: 2 },
 } as const
 
 export const LEVEL_BAND_REQUIREMENTS = {

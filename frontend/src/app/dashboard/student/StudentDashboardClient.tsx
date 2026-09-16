@@ -1,13 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { LogOut } from 'lucide-react'
 
 import styles from './student-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 import CampusSignInCard from './CampusSignInCard'
+import CreditLedgerView from '@/components/credit-ledger/CreditLedgerView'
+import { RegistrationWindow } from './page'
 
 interface StudentInfo {
   id?: string
@@ -35,234 +38,666 @@ interface StudentDashboardClientProps {
   hasSubmission: boolean
   enrolledCourses?: EnrolledCourse[]
   totalRegisteredCredits?: number
+  registrationWindow?: RegistrationWindow | null
 }
+
+const DAYS = [
+  { num: 1, name: 'Monday' },
+  { num: 2, name: 'Tuesday' },
+  { num: 3, name: 'Wednesday' },
+  { num: 4, name: 'Thursday' },
+  { num: 5, name: 'Friday' },
+]
+
+const PERIODS = [
+  { num: 1, label: 'P1', time: '09:30 - 10:30' },
+  { num: 2, label: 'P2', time: '10:30 - 11:30' },
+  { num: 3, label: 'P3', time: '11:30 - 12:30' },
+  { num: 4, label: 'P4', time: '13:30 - 14:30' },
+  { num: 5, label: 'P5', time: '14:30 - 15:30' },
+  { num: 6, label: 'P6', time: '15:30 - 16:30' },
+]
+
+type StudentTab = 'overview' | 'notifications' | 'courses' | 'timetable' | 'campus-signin' | 'credits'
 
 export default function StudentDashboardClient({
   studentInfo,
   hasSubmission,
   enrolledCourses = [],
   totalRegisteredCredits = 0,
+  registrationWindow,
 }: StudentDashboardClientProps) {
   useBfcacheGuard()
   const router = useRouter()
+  const [activeTab, setActiveTab] = useState<StudentTab>('overview')
   const [loggingOut, setLoggingOut] = useState(false)
+  const [timetableEntries, setTimetableEntries] = useState<any[]>([])
+  const [loadingTimetable, setLoadingTimetable] = useState(false)
+
+  // Fetch timetable entries when switching to timetable tab
+  useEffect(() => {
+    if (activeTab === 'timetable' && timetableEntries.length === 0 && studentInfo) {
+      async function loadTimetable() {
+        setLoadingTimetable(true)
+        try {
+          const ay = registrationWindow?.academicYear || '2026-27'
+          const sem = studentInfo.current_semester || 1
+          const res = await fetch(`/api/timetable/entries?academicYear=${encodeURIComponent(ay)}&semester=${sem}`)
+          if (res.ok) {
+            const data = await res.json()
+            setTimetableEntries(data.entries || [])
+          }
+        } catch (err) {
+          console.error('Failed to load timetable entries:', err)
+        } finally {
+          setLoadingTimetable(false)
+        }
+      }
+      loadTimetable()
+    }
+  }, [activeTab, timetableEntries.length, studentInfo, registrationWindow?.academicYear])
 
   async function handleLogout() {
     setLoggingOut(true)
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('fyimp_student_summary')
+    }
     await fetch('/api/auth/logout', { method: 'POST' })
     window.location.href = '/login'
   }
 
+  // Set of enrolled course IDs & codes for timetable filtering
+  const enrolledCourseIds = new Set(enrolledCourses.map((c) => c.id))
+  const enrolledCodes = new Set(enrolledCourses.map((c) => (c.courseCode || '').trim().toUpperCase()))
+
+  const deadlineFormatted = registrationWindow?.deadline
+    ? new Date(registrationWindow.deadline).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null
+
   return (
     <div className={styles.pageWrapper}>
-
-      {/* Top Bar */}
-      <div className={styles.topBar}>
+      {/* ── UNIFIED EXECUTIVE TOP BAR (Matched to Director & HOD) ── */}
+      <header className={styles.topBar}>
         <div className={styles.topBarLeft}>
-          <div className={styles.logoSmall}>
-            <Image src="/knrunilogo.png" alt="KU" width={28} height={28} />
+          {/* 1. Portal Branding Block */}
+          <div className={styles.topBarBranding}>
+            <div className={styles.logoSmall}>
+              <Image src="/knrunilogo.png" alt="KU" width={30} height={30} priority />
+            </div>
+            <div className={styles.topBarTitles}>
+              <p className={styles.topBarTitle}>FYIMP Portal</p>
+              <p className={styles.topBarSubtitle}>Student Portal</p>
+            </div>
           </div>
-          <div>
-            <p className={styles.topBarTitle}>FYIMP Portal</p>
-            <p className={styles.topBarSubtitle}>Student Dashboard</p>
-          </div>
-        </div>
-        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
-          {loggingOut ? 'Logging out...' : 'Logout'}
-        </button>
-      </div>
 
-      {/* Full-width Profile Section */}
-      <div className={styles.profileSection}>
-        {studentInfo ? (
-          <>
-            {/* Avatar + Name */}
-            <div className={styles.profileTop}>
-              <div className={styles.profileAvatar}>
-                {studentInfo.full_name.charAt(0).toUpperCase()}
-              </div>
-              <div className={styles.profileMeta}>
-                <h1 className={styles.profileName}>{studentInfo.full_name}</h1>
-                <p className={styles.profileRole}>FYIMP Student</p>
-              </div>
-            </div>
+          {/* Vertical Separator */}
+          <div className={styles.topBarDivider} />
 
-            {/* Detail Grid */}
-            <div className={styles.profileGrid}>
-              <div className={styles.profileField}>
-                <span className={styles.profileFieldLabel}>Department</span>
-                <span className={styles.profileFieldValue}>{studentInfo.department_name}</span>
+          {/* 2. Student Details Block */}
+          {studentInfo && (
+            <div className={styles.studentIdentity}>
+              <p className={styles.studentNameHeader}>{studentInfo.full_name}</p>
+              <div className={styles.studentBadges}>
+                <span className={styles.roleBadge}>FYIMP Student</span>
+                {studentInfo.campus_name && (
+                  <span className={styles.campusBadge} title={studentInfo.campus_name}>
+                    {studentInfo.campus_name}
+                  </span>
+                )}
+                {studentInfo.department_name && (
+                  <span className={styles.deptBadge} title={studentInfo.department_name}>
+                    {studentInfo.department_name}
+                  </span>
+                )}
+                <span className={styles.semBadgeTop}>Semester {studentInfo.current_semester ?? 1}</span>
               </div>
-              <div className={styles.profileField}>
-                <span className={styles.profileFieldLabel}>Campus</span>
-                <span className={styles.profileFieldValue}>{studentInfo.campus_name}</span>
-              </div>
-              <div className={styles.profileField}>
-                <span className={styles.profileFieldLabel}>Current Semester</span>
-                <span className={styles.profileFieldValue}>
-                  <span className={styles.semBadge}>Semester {studentInfo.current_semester}</span>
-                </span>
-              </div>
-              <div className={styles.profileField}>
-                <span className={styles.profileFieldLabel}>Academic Year Joined</span>
-                <span className={styles.profileFieldValue}>{studentInfo.academic_year_joined}</span>
-              </div>
-            </div>
-
-            {/* Register / Update Button */}
-            <div className={styles.profileAction}>
-              <Link
-                href="/dashboard/student/register"
-                className={styles.registerLink}
-              >
-                {hasSubmission ? 'View Course Details & Update Preferences →' : 'View Course Details & Register Electives →'}
-              </Link>
-              <Link
-                href="/dashboard/student/credits"
-                className={styles.registerLink}
-                style={{
-                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                  marginTop: '0.75rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                }}
-              >
-                📊 View Degree Credit Ledger (Exit Milestones) →
-              </Link>
-              <p className={styles.registerHint}>
-                {hasSubmission
-                  ? 'Track your credit accumulation across categories, level bands, and degree exit points.'
-                  : 'First select your academic track, then choose your paper preferences for this semester.'}
-              </p>
-            </div>
-
-            {/* Resource Hub Ad-Style Premium Card */}
-            <div className={styles.resourceAdCard}>
-              <div className={styles.adBadge}>STUDENT RESOURCE</div>
-              <div className={styles.adContent}>
-                <div className={styles.adTextGroup}>
-                  <h3 className={styles.adTitle}>FYIMP HUB</h3>
-                  <p className={styles.adDescription}>
-                    Unlock free access to study materials, syllabus copies, notes, and semester-wise question pools curated by KUC MANGATTUPARAMBA FYIMP students
-                  </p>
-                </div>
-                <a
-                  href="https://fyimphub.vercel.app"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.adButton}
-                >
-                  Explore Hub →
-                </a>
-              </div>
-            </div>
-          </>
-        ) : (
-          <p className={styles.profileError}>Unable to load profile. Please refresh.</p>
-        )}
-      </div>
-      
-      {/* Campus GPS Physical Presence Sign-In */}
-      <div style={{ maxWidth: '1200px', width: '100%', margin: '1.25rem auto 0', padding: '0 1rem', boxSizing: 'border-box' }}>
-        <CampusSignInCard
-          studentId={studentInfo?.id}
-          campusName={studentInfo?.campus_name || 'Campus'}
-        />
-      </div>
-
-      {/* Enrolled Courses & Academic Schedule Section */}
-      <div className={styles.enrolledSection}>
-        <div className={styles.enrolledHeader}>
-          <div className={styles.enrolledTitleGroup}>
-            <h2 className={styles.enrolledTitle}>
-              <span>📚</span> My Enrolled Courses — Semester {studentInfo?.current_semester ?? 1}
-            </h2>
-            <p className={styles.enrolledSubtitle}>
-              Official papers registered and allocated for your current semester
-            </p>
-          </div>
-          {totalRegisteredCredits > 0 && (
-            <div className={styles.creditsTotalBadge}>
-              {totalRegisteredCredits} Total Credits Enrolled
             </div>
           )}
         </div>
 
-        {enrolledCourses && enrolledCourses.length > 0 ? (
-          <div className={styles.courseGrid}>
-            {enrolledCourses.map((c) => {
-              const catUpper = (c.category || '').toUpperCase()
-              let catClass = styles.catGeneral
-              if (catUpper.includes('DSC') || catUpper.includes('DSE')) catClass = styles.catDsc
-              else if (catUpper.includes('AEC')) catClass = styles.catAec
-              else if (catUpper.includes('SEC')) catClass = styles.catSec
-              else if (catUpper.includes('VAC')) catClass = styles.catVac
-              else if (catUpper.includes('MDC')) catClass = styles.catMdc
+        {/* 3. Action Controls */}
+        <div className={styles.topBarRight}>
+          <button
+            type="button"
+            className={styles.logoutBtn}
+            onClick={handleLogout}
+            disabled={loggingOut}
+            title="Log out of portal"
+          >
+            <LogOut size={14} />
+            <span className={styles.logoutText}>{loggingOut ? 'Logging out...' : 'Logout'}</span>
+          </button>
+        </div>
+      </header>
 
-              return (
-                <div key={c.id || c.courseCode} className={styles.courseCard}>
-                  <div className={styles.cardTopRow}>
-                    <span className={styles.slotBadge}>Slot {c.slotNumber}</span>
-                    <span className={`${styles.categoryBadge} ${catClass}`}>
-                      {c.category}
-                    </span>
+      {/* ── FULL VIEWPORT WIDTH TAB BAR (Matched to Director & HOD) ── */}
+      <nav className={styles.tabBar}>
+        <button
+          type="button"
+          className={`${styles.tabBtn} ${activeTab === 'overview' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('overview')}
+        >
+          Overview
+        </button>
+
+        <button
+          type="button"
+          className={`${styles.tabBtn} ${activeTab === 'notifications' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('notifications')}
+        >
+          Notifications
+          {registrationWindow?.isOpen && (
+            <span
+              className={`${styles.tabBadge} ${
+                registrationWindow.isClosingSoon ? styles.tabBadgeAlert : styles.tabBadgeOpen
+              }`}
+            >
+              {registrationWindow.isClosingSoon ? 'Closing Soon' : 'Open'}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className={`${styles.tabBtn} ${activeTab === 'courses' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('courses')}
+        >
+          Enrolled Courses
+          {enrolledCourses.length > 0 && (
+            <span className={`${styles.tabBadge} ${styles.tabBadgeOpen}`}>
+              {enrolledCourses.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className={`${styles.tabBtn} ${activeTab === 'timetable' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('timetable')}
+        >
+          Timetable
+        </button>
+
+        <button
+          type="button"
+          className={`${styles.tabBtn} ${activeTab === 'campus-signin' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('campus-signin')}
+        >
+          Campus Sign-In
+        </button>
+
+        <button
+          type="button"
+          className={`${styles.tabBtn} ${activeTab === 'credits' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('credits')}
+        >
+          Credit Ledger
+        </button>
+      </nav>
+
+      {/* ── TAB CONTENT PANES ── */}
+      <main className={styles.tabContentWrapper}>
+
+        {/* ── TAB 1: OVERVIEW (Student Academic Profile & Course Registration CTA) ── */}
+        {activeTab === 'overview' && (
+          <>
+            {studentInfo ? (
+              <>
+                {/* 1. Hero Profile Card */}
+                <div className={styles.heroProfileCard}>
+                  <div className={styles.heroAvatar}>
+                    {studentInfo.full_name.charAt(0).toUpperCase()}
                   </div>
-
-                  <div className={styles.cardMainBody}>
-                    <span className={styles.cardCourseCode}>{c.courseCode}</span>
-                    <h3 className={styles.cardCourseTitle}>{c.title}</h3>
-                  </div>
-
-                  <div className={styles.cardFooter}>
-                    <span className={styles.cardDeptName} title={c.departmentName}>
-                      {c.departmentName}
-                    </span>
-                    <span className={styles.cardCreditPill}>
-                      {c.credits} cr
-                    </span>
-                  </div>
-
-                  <div>
-                    {c.isConfirmed ? (
-                      <span className={styles.statusPillConfirmed}>
-                        ✓ {c.status}
-                      </span>
-                    ) : (
-                      <span className={styles.statusPillPending}>
-                        ⏳ {c.status}
-                      </span>
-                    )}
+                  <div className={styles.heroMeta}>
+                    <h1 className={styles.heroName}>{studentInfo.full_name}</h1>
+                    <p className={styles.heroRole}>Five-Year Integrated Master&apos;s Programme (FYIMP)</p>
+                    <div className={styles.heroChips}>
+                      <span className={styles.heroChipSem}>Semester {studentInfo.current_semester}</span>
+                      {studentInfo.department_name && (
+                        <span className={styles.heroChip}>{studentInfo.department_name}</span>
+                      )}
+                      {studentInfo.campus_name && (
+                        <span className={styles.heroChip}>{studentInfo.campus_name}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className={styles.emptyCoursesCard}>
-            <div className={styles.emptyCoursesIcon}>📝</div>
-            <h3 className={styles.emptyCoursesTitle}>
-              {hasSubmission
-                ? 'Preferences Submitted — Allocation in Progress'
-                : 'No Courses Registered Yet'}
-            </h3>
-            <p className={styles.emptyCoursesText}>
-              {hasSubmission
-                ? `Your course preferences for Semester ${studentInfo?.current_semester ?? 1} have been received. Official course allocations will appear here once finalized by the administration.`
-                : `You have not submitted course preferences for Semester ${studentInfo?.current_semester ?? 1}. Please select your academic track and submit your ranked choices.`}
-            </p>
-            <Link
-              href="/dashboard/student/register"
-              className={styles.registerLink}
-              style={{ display: 'inline-flex', padding: '0.65rem 1.25rem', marginTop: '0.25rem' }}
-            >
-              {hasSubmission ? 'Review / Update Preferences →' : 'Select Track & Register Courses →'}
-            </Link>
+
+                {/* 2. Responsive 2-Column Dashboard Grid */}
+                <div className={styles.dashboardGrid}>
+                  {/* Left Main Column: Primary Actions & Academic Profile */}
+                  <div className={styles.mainCol}>
+                    {/* Course Registration Action Card */}
+                    <div className={styles.registrationCard}>
+                      <div className={styles.regCardHeader}>
+                        <h2 className={styles.regCardTitle}>Course Registration</h2>
+                        <span
+                          className={`${styles.regStatusBadge} ${
+                            hasSubmission ? styles.regStatusSubmitted : styles.regStatusPending
+                          }`}
+                        >
+                          {hasSubmission ? '✓ Preferences Submitted' : '● Action Required'}
+                        </span>
+                      </div>
+
+                      <p className={styles.regDescription}>
+                        {hasSubmission
+                          ? 'Your course preferences for this semester are recorded. You can review or modify your elective rankings anytime while the registration window remains open.'
+                          : 'Review your semester blueprint, curriculum pathway, and select your ranked elective course choices for this semester.'}
+                      </p>
+
+                      <Link
+                        href="/dashboard/student/register"
+                        className={styles.regCtaBtn}
+                      >
+                        {hasSubmission
+                          ? 'Review & Update Course Preferences →'
+                          : 'Enter Course Registration →'}
+                      </Link>
+
+                      <p className={styles.regHintText}>
+                        {registrationWindow?.isOpen
+                          ? 'Registration window is currently open. Ensure your final preferences are saved before the deadline.'
+                          : 'Please monitor the Notifications tab for official window dates and registration guidelines.'}
+                      </p>
+                    </div>
+
+                    {/* Academic Information Card */}
+                    <div className={styles.academicCard}>
+                      <h3 className={styles.academicCardTitle}>Academic Information</h3>
+                      <div className={styles.detailGrid}>
+                        <div className={styles.detailBox}>
+                          <span className={styles.detailBoxLabel}>Department</span>
+                          <span className={styles.detailBoxValue}>{studentInfo.department_name || '—'}</span>
+                        </div>
+                        <div className={styles.detailBox}>
+                          <span className={styles.detailBoxLabel}>Campus</span>
+                          <span className={styles.detailBoxValue}>{studentInfo.campus_name || '—'}</span>
+                        </div>
+                        <div className={styles.detailBox}>
+                          <span className={styles.detailBoxLabel}>Current Semester</span>
+                          <span className={styles.detailBoxValue}>Semester {studentInfo.current_semester}</span>
+                        </div>
+                        <div className={styles.detailBox}>
+                          <span className={styles.detailBoxLabel}>Academic Year Joined</span>
+                          <span className={styles.detailBoxValue}>{studentInfo.academic_year_joined || '—'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Sidebar Column: Navigation Shortcuts & Study Hub */}
+                  <div className={styles.sidebarCol}>
+                    {/* Quick Navigation Card */}
+                    <div className={styles.quickNavCard}>
+                      <h3 className={styles.quickNavTitle}>Quick Navigation</h3>
+                      <div className={styles.quickNavList}>
+                        <button
+                          type="button"
+                          className={styles.quickNavItem}
+                          onClick={() => setActiveTab('courses')}
+                        >
+                          <span>📚 Enrolled Courses</span>
+                          <span className={styles.quickNavPill}>{enrolledCourses.length}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.quickNavItem}
+                          onClick={() => setActiveTab('timetable')}
+                        >
+                          <span>🗓️ Weekly Timetable</span>
+                          <span>→</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.quickNavItem}
+                          onClick={() => setActiveTab('campus-signin')}
+                        >
+                          <span>📍 Campus Sign-In</span>
+                          <span>→</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.quickNavItem}
+                          onClick={() => setActiveTab('credits')}
+                        >
+                          <span>📊 Degree Credit Ledger</span>
+                          <span>→</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.quickNavItem}
+                          onClick={() => setActiveTab('notifications')}
+                        >
+                          <span>🔔 Notifications & Deadlines</span>
+                          <span>→</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* FYIMP Study Hub Card (Clean institutional style, no gold) */}
+                    <div className={styles.studyCard}>
+                      <div className={styles.studyCardHeader}>
+                        <span className={styles.studyBadge}>Academic Resource</span>
+                      </div>
+                      <h3 className={styles.studyTitle}>FYIMP Study Hub</h3>
+                      <p className={styles.studyDesc}>
+                        Access syllabus copies, learning materials, notes, and semester-wise question pools curated by KUC Mangattuparamba FYIMP students.
+                      </p>
+                      <a
+                        href="https://fyimphub.vercel.app"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.studyBtn}
+                      >
+                        Visit Study Hub ↗
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className={styles.profileError}>Unable to load student profile. Please refresh the page.</p>
+            )}
+          </>
+        )}
+
+        {/* ── TAB 2: NOTIFICATIONS (Window Status & Academic Deadlines) ── */}
+        {activeTab === 'notifications' && (
+          <div className={styles.notificationSection}>
+            {/* Main Window Status Banner */}
+            {registrationWindow && (
+              <div
+                className={`${styles.windowBanner} ${
+                  !registrationWindow.isOpen
+                    ? styles.closed
+                    : registrationWindow.isClosingSoon
+                    ? styles.closingSoon
+                    : styles.open
+                }`}
+                style={{ borderRadius: '0.75rem', padding: '1rem 1.25rem' }}
+              >
+                <div className={styles.windowDot} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <span>
+                    {!registrationWindow.isOpen ? (
+                      <>🔒 <strong>Registration Window Closed:</strong> Course registration is currently closed for Semester {studentInfo?.current_semester ?? 1}.</>
+                    ) : registrationWindow.isClosingSoon ? (
+                      <>⚠️ <strong>Closing Soon:</strong> Course registration closes in <strong>{registrationWindow.hoursRemaining ?? 0} hour{registrationWindow.hoursRemaining === 1 ? '' : 's'}</strong>!</>
+                    ) : (
+                      <>✓ <strong>Registration Open:</strong> You can submit or adjust course preferences for Semester {studentInfo?.current_semester ?? 1}.</>
+                    )}
+                  </span>
+                  {registrationWindow.isOpen && (
+                    <Link
+                      href="/dashboard/student/register"
+                      style={{
+                        background: registrationWindow.isClosingSoon ? '#e11d48' : '#002147',
+                        color: '#ffffff',
+                        padding: '0.4rem 0.85rem',
+                        borderRadius: '0.4rem',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        textDecoration: 'none',
+                        display: 'inline-block',
+                      }}
+                    >
+                      {hasSubmission ? 'Update Preferences →' : 'Register Electives Now →'}
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Registration Window Parameters Card */}
+            <div className={styles.notificationCard}>
+              <div className={styles.notificationCardHeader}>
+                <h3 className={styles.notificationCardTitle}>
+                  <span>📅</span> Registration Window & Deadline Settings
+                </h3>
+                <span
+                  style={{
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    padding: '0.2rem 0.6rem',
+                    borderRadius: '9999px',
+                    background: registrationWindow?.isOpen ? '#dcfce7' : '#fee2e2',
+                    color: registrationWindow?.isOpen ? '#15803d' : '#b91c1c',
+                  }}
+                >
+                  {registrationWindow?.isOpen ? 'WINDOW OPEN' : 'WINDOW CLOSED'}
+                </span>
+              </div>
+
+              <div className={styles.notificationGrid}>
+                <div className={styles.notificationItem}>
+                  <span className={styles.notificationItemLabel}>Scheduled Deadline</span>
+                  <span className={styles.notificationItemValue}>{deadlineFormatted || 'Not Scheduled'}</span>
+                </div>
+
+                <div className={styles.notificationItem}>
+                  <span className={styles.notificationItemLabel}>Credit Requirement</span>
+                  <span className={styles.notificationItemValue}>
+                    {registrationWindow?.minCredits ?? 20} to {registrationWindow?.maxCredits ?? 24} Credits
+                  </span>
+                </div>
+
+                <div className={styles.notificationItem}>
+                  <span className={styles.notificationItemLabel}>Academic Year</span>
+                  <span className={styles.notificationItemValue}>
+                    {registrationWindow?.academicYear || '2026-27'}
+                  </span>
+                </div>
+
+                <div className={styles.notificationItem}>
+                  <span className={styles.notificationItemLabel}>Your Current Status</span>
+                  <span className={styles.notificationItemValue} style={{ color: hasSubmission ? '#16a34a' : '#ea580c' }}>
+                    {hasSubmission ? '✓ Preferences Submitted' : '⏳ Pending Submission'}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
-      </div>
 
+        {/* ── TAB 3: ENROLLED COURSES ── */}
+        {activeTab === 'courses' && (
+          <div className={styles.enrolledSection} style={{ marginTop: 0 }}>
+            <div className={styles.enrolledHeader}>
+              <div className={styles.enrolledTitleGroup}>
+                <h2 className={styles.enrolledTitle}>
+                  <span>📚</span> My Enrolled Courses — Semester {studentInfo?.current_semester ?? 1}
+                </h2>
+                <p className={styles.enrolledSubtitle}>
+                  Official papers registered and allocated for your current semester
+                </p>
+              </div>
+              {totalRegisteredCredits > 0 && (
+                <div className={styles.creditsTotalBadge}>
+                  {totalRegisteredCredits} Total Credits Enrolled
+                </div>
+              )}
+            </div>
+
+            {enrolledCourses && enrolledCourses.length > 0 ? (
+              <div className={styles.courseGrid}>
+                {enrolledCourses.map((c) => {
+                  const catUpper = (c.category || '').toUpperCase()
+                  let catClass = styles.catGeneral
+                  if (catUpper.includes('DSC') || catUpper.includes('DSE')) catClass = styles.catDsc
+                  else if (catUpper.includes('AEC')) catClass = styles.catAec
+                  else if (catUpper.includes('SEC')) catClass = styles.catSec
+                  else if (catUpper.includes('VAC')) catClass = styles.catVac
+                  else if (catUpper.includes('MDC')) catClass = styles.catMdc
+
+                  return (
+                    <div key={c.id || c.courseCode} className={styles.courseCard}>
+                      <div className={styles.cardTopRow}>
+                        <span className={styles.slotBadge}>Slot {c.slotNumber}</span>
+                        <span className={`${styles.categoryBadge} ${catClass}`}>
+                          {c.category}
+                        </span>
+                      </div>
+
+                      <div className={styles.cardMainBody}>
+                        <span className={styles.cardCourseCode}>{c.courseCode}</span>
+                        <h3 className={styles.cardCourseTitle}>{c.title}</h3>
+                      </div>
+
+                      <div className={styles.cardFooter}>
+                        <span className={styles.cardDeptName} title={c.departmentName}>
+                          {c.departmentName}
+                        </span>
+                        <span className={styles.cardCreditPill}>
+                          {c.credits} cr
+                        </span>
+                      </div>
+
+                      <div>
+                        {c.isConfirmed ? (
+                          <span className={styles.statusPillConfirmed}>
+                            ✓ {c.status}
+                          </span>
+                        ) : (
+                          <span className={styles.statusPillPending}>
+                            ⏳ {c.status}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className={styles.emptyCoursesCard}>
+                <div className={styles.emptyCoursesIcon}>📝</div>
+                <h3 className={styles.emptyCoursesTitle}>
+                  {hasSubmission
+                    ? 'Preferences Submitted — Allocation in Progress'
+                    : 'No Courses Registered Yet'}
+                </h3>
+                <p className={styles.emptyCoursesText}>
+                  {hasSubmission
+                    ? `Your course preferences for Semester ${studentInfo?.current_semester ?? 1} have been received. Official course allocations will appear here once finalized by the administration.`
+                    : `You have not submitted course preferences for Semester ${studentInfo?.current_semester ?? 1}. Please select your academic track and submit your ranked choices.`}
+                </p>
+                <Link
+                  href="/dashboard/student/register"
+                  className={styles.registerLink}
+                  style={{ display: 'inline-flex', padding: '0.65rem 1.25rem', marginTop: '0.25rem' }}
+                >
+                  {hasSubmission ? 'Review / Update Preferences →' : 'Select Track & Register Courses →'}
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── TAB 4: TIMETABLE ── */}
+        {activeTab === 'timetable' && (
+          <div className={styles.enrolledSection} style={{ marginTop: 0 }}>
+            <div className={styles.enrolledHeader}>
+              <div className={styles.enrolledTitleGroup}>
+                <h2 className={styles.enrolledTitle}>
+                  <span>🗓️</span> Weekly Academic Schedule — Semester {studentInfo?.current_semester ?? 1}
+                </h2>
+                <p className={styles.enrolledSubtitle}>
+                  Assigned lecture and lab blocks across Periods 1 to 6 (Monday to Friday)
+                </p>
+              </div>
+            </div>
+
+            <div className={styles.timetableContainer}>
+              {loadingTimetable ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
+                  Loading your weekly class schedule...
+                </div>
+              ) : (
+                <table className={styles.timetableTable}>
+                  <thead>
+                    <tr>
+                      <th className={`${styles.timetableTh} ${styles.timetableThDay}`}>Day</th>
+                      {PERIODS.map((p) => (
+                        <th key={p.num} className={styles.timetableTh}>
+                          <div>{p.label}</div>
+                          <div style={{ fontSize: '0.62rem', fontWeight: 500, color: '#64748b' }}>{p.time}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DAYS.map((day) => (
+                      <tr key={day.num}>
+                        <td className={styles.timetableDayCell}>{day.name}</td>
+                        {PERIODS.map((period) => {
+                          const matchingEntry = timetableEntries.find(
+                            (e) =>
+                              e.day === day.num &&
+                              e.period === period.num &&
+                              (enrolledCourseIds.has(e.courseId) ||
+                                enrolledCodes.has((e.courseCode || '').trim().toUpperCase())),
+                          )
+
+                          return (
+                            <td key={period.num} className={styles.timetableTd}>
+                              {matchingEntry ? (
+                                <div
+                                  className={`${styles.timetableSlotFilled} ${
+                                    matchingEntry.isLabBlock ? styles.timetableSlotLab : ''
+                                  }`}
+                                >
+                                  <div>
+                                    <div className={styles.timetableCourseCode}>{matchingEntry.courseCode}</div>
+                                    <div className={styles.timetableCourseTitle} title={matchingEntry.courseName}>
+                                      {matchingEntry.courseName}
+                                    </div>
+                                  </div>
+                                  <div className={styles.timetableMetaRow}>
+                                    <span>{matchingEntry.category || 'Core'}</span>
+                                    {matchingEntry.isLabBlock && (
+                                      <span className={styles.timetableLabBadge}>Lab</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className={styles.timetableSlotEmpty}>—</div>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 5: CAMPUS SIGN-IN ── */}
+        {activeTab === 'campus-signin' && (
+          <div style={{ width: '100%', margin: '0 auto' }}>
+            <CampusSignInCard
+              studentId={studentInfo?.id}
+              campusName={studentInfo?.campus_name || 'Campus'}
+            />
+          </div>
+        )}
+
+        {/* ── TAB 6: CREDIT LEDGER ── */}
+        {activeTab === 'credits' && (
+          <div style={{ width: '100%' }}>
+            <CreditLedgerView studentId="me" />
+          </div>
+        )}
+
+      </main>
     </div>
   )
 }

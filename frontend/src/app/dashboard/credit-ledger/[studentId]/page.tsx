@@ -10,11 +10,5 @@ interface PageProps {
 export default function AdvisorStudentCreditLedgerPage({ params }: PageProps) {
   const resolvedParams = use(params)
 
-  return (
-    <CreditLedgerView
-      studentId={resolvedParams.studentId}
-      backHref="/dashboard/hod"
-      backLabel="Back to Dashboard"
-    />
-  )
+  return <CreditLedgerView studentId={resolvedParams.studentId} />
 }

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
 import styles from '@/app/dashboard/student/credits/credit-ledger.module.css'
 
 interface CategoryItem {
@@ -78,14 +77,27 @@ interface CreditLedgerData {
 
 interface CreditLedgerViewProps {
   studentId?: string
-  backHref?: string
-  backLabel?: string
 }
+
+export const MASTER_FYIMP_CATEGORIES = [
+  { category: 'DSC', title: 'Discipline Specific Core (DSC)', min3Year: 60, min4Year: 80 },
+  { category: 'DSE', title: 'Discipline Specific Elective (DSE)', min3Year: 24, min4Year: 32 },
+  { category: 'DSS', title: 'Discipline Specific Skill (DSS)', min3Year: 6, min4Year: 6 },
+  { category: 'MDC', title: 'Multidisciplinary Course (MDC)', min3Year: 9, min4Year: 9 },
+  { category: 'AEC', title: 'Ability Enhancement Course (AEC)', min3Year: 9, min4Year: 9 },
+  { category: 'SEC', title: 'Skill Enhancement Course (SEC)', min3Year: 9, min4Year: 9 },
+  { category: 'VAC', title: 'Value Addition Course (VAC)', min3Year: 6, min4Year: 6 },
+  { category: 'MOC', title: 'Minor Open Elective (MOC)', min3Year: 8, min4Year: 12 },
+  { category: 'MOOC', title: 'Massive Open Online Course (MOOC)', min3Year: 2, min4Year: 4 },
+  { category: 'INT', title: 'Internship (INT)', min3Year: 4, min4Year: 4 },
+  { category: 'RPH', title: 'Research Project / Honours (RPH)', min3Year: 0, min4Year: 12 },
+  { category: 'FWD', title: 'Field Work / Dissertation (FWD)', min3Year: 0, min4Year: 4 },
+  { category: 'DMP', title: 'Department Major Project (DMP)', min3Year: 0, min4Year: 8 },
+  { category: 'CIP', title: 'Community Interaction (CIP)', min3Year: 2, min4Year: 2 },
+]
 
 export default function CreditLedgerView({
   studentId,
-  backHref = '/dashboard/student',
-  backLabel = 'Back to Dashboard',
 }: CreditLedgerViewProps) {
   const [data, setData] = useState<CreditLedgerData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -95,11 +107,18 @@ export default function CreditLedgerView({
     setLoading(true)
     setError('')
     try {
-      const endpoint = studentId && studentId !== 'me'
+      const baseEndpoint = studentId && studentId !== 'me'
         ? `/api/credit-ledger/${studentId}`
         : '/api/credit-ledger/me'
+      const endpoint = `${baseEndpoint}?_t=${Date.now()}`
 
-      const res = await fetch(endpoint)
+      const res = await fetch(endpoint, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      })
       const json = await res.json()
 
       if (!res.ok) {
@@ -144,35 +163,18 @@ export default function CreditLedgerView({
     )
   }
 
-  const { student, totalCredits, categories, levelBands, byDepartment, exitEligibility, registeredCourses } = data
+  const { totalCredits, categories, levelBands, byDepartment, registeredCourses } = data
 
   return (
     <div className={styles.container}>
-      {/* Top Header Bar */}
-      <header className={styles.topBar}>
-        <div className={styles.topBarLeft}>
-          <Link href={backHref} className={styles.backBtn}>
-            ← {backLabel}
-          </Link>
-          <div className={styles.titleGroup}>
-            <h1>KU-FYIMP Credit Accumulation Ledger</h1>
-            <p>Degree audit view per Calicut University Four-Year Undergraduate Programme Regulation 2024</p>
-          </div>
-        </div>
-      </header>
-
       <main className={styles.contentWrapper}>
-        {/* Section 1: Student Profile Banner */}
-        <section className={styles.studentBanner}>
-          <div className={styles.studentMeta}>
-            <h2>{student.fullName}</h2>
-            <div className={styles.studentDetails}>
-              <span>🎓 CAP ID: <strong>{student.capApplicationNumber || 'N/A'}</strong></span>
-              <span>🏛️ Dept: <strong>{student.departmentName}</strong></span>
-              <span>📍 Campus: <strong>{student.campusName}</strong></span>
-              <span>📅 Current: <strong>Semester {student.currentSemester}</strong></span>
-              <span>🗓️ Cohort: <strong>{student.academicYearJoined}</strong></span>
-            </div>
+        {/* Unified Top Header Card (Merged Top Bar and Overview) */}
+        <section className={styles.ledgerHeaderCard}>
+          <div className={styles.ledgerHeaderLeft}>
+            <h1 className={styles.ledgerHeaderTitle}>KU-FYIMP Credit Accumulation Ledger</h1>
+            <p className={styles.ledgerHeaderSub}>
+              Curricular progress evaluated against Calicut University FYIMP Regulation 2024
+            </p>
           </div>
           <div className={styles.totalCreditsBox}>
             <div className={styles.totalCreditsLabel}>Total Credits Earned</div>
@@ -180,171 +182,95 @@ export default function CreditLedgerView({
           </div>
         </section>
 
-        {/* Section 2: Exit Eligibility Indicators (3-Year / 4-Year / 5-Year) */}
-        <section>
-          <div className={styles.sectionHeader}>
-            <div>
-              <h2 className={styles.sectionTitle}>Exit Point Eligibility Milestones</h2>
-              <p className={styles.sectionSub}>Structured evaluation against regulation credit and band thresholds</p>
-            </div>
-          </div>
-          <div className={styles.exitBadgesGrid}>
-            {/* 3-Year UG Exit */}
-            <div className={`${styles.exitBadgeCard} ${exitEligibility.threeYear.eligible ? styles.eligible : styles.ineligible}`}>
-              <div>
-                <div className={styles.exitHeader}>
-                  <h3 className={styles.exitTitle}>3-Year UG Exit</h3>
-                  <span className={`${styles.exitStatusPill} ${exitEligibility.threeYear.eligible ? styles.eligible : styles.ineligible}`}>
-                    {exitEligibility.threeYear.eligible ? '✓ Eligible' : '✗ Ineligible'}
-                  </span>
-                </div>
-                <p className={styles.exitTargetText}>
-                  Requires <strong>133 Credits</strong> + 100s/200s/300s & Category bounds
-                </p>
-              </div>
-
-              <div className={`${styles.shortfallCallout} ${exitEligibility.threeYear.eligible ? styles.eligible : styles.ineligible}`}>
-                <div>{exitEligibility.threeYear.primaryShortfall}</div>
-                {exitEligibility.threeYear.unmetCategories.length > 0 && (
-                  <ul className={styles.shortfallDetailsList}>
-                    {exitEligibility.threeYear.unmetCategories.map((item, idx) => (
-                      <li key={idx}>Needs {item}</li>
-                    ))}
-                  </ul>
-                )}
-                {exitEligibility.threeYear.unmetBands.length > 0 && (
-                  <ul className={styles.shortfallDetailsList}>
-                    {exitEligibility.threeYear.unmetBands.map((item, idx) => (
-                      <li key={idx}>Level Band {item}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            {/* 4-Year Honours Exit */}
-            <div className={`${styles.exitBadgeCard} ${exitEligibility.fourYear.eligible ? styles.eligible : styles.ineligible}`}>
-              <div>
-                <div className={styles.exitHeader}>
-                  <h3 className={styles.exitTitle}>4-Year Honours Exit</h3>
-                  <span className={`${styles.exitStatusPill} ${exitEligibility.fourYear.eligible ? styles.eligible : styles.ineligible}`}>
-                    {exitEligibility.fourYear.eligible ? '✓ Eligible' : '✗ Ineligible'}
-                  </span>
-                </div>
-                <p className={styles.exitTargetText}>
-                  Requires <strong>177 Credits</strong> + 400s Level & 12cr Research Project
-                </p>
-              </div>
-
-              <div className={`${styles.shortfallCallout} ${exitEligibility.fourYear.eligible ? styles.eligible : styles.ineligible}`}>
-                <div>{exitEligibility.fourYear.primaryShortfall}</div>
-                {exitEligibility.fourYear.unmetCategories.length > 0 && (
-                  <ul className={styles.shortfallDetailsList}>
-                    {exitEligibility.fourYear.unmetCategories.map((item, idx) => (
-                      <li key={idx}>Needs {item}</li>
-                    ))}
-                  </ul>
-                )}
-                {exitEligibility.fourYear.unmetBands.length > 0 && (
-                  <ul className={styles.shortfallDetailsList}>
-                    {exitEligibility.fourYear.unmetBands.map((item, idx) => (
-                      <li key={idx}>Level Band {item}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            {/* 5-Year Integrated PG Exit */}
-            <div className={`${styles.exitBadgeCard} ${exitEligibility.fiveYear.eligible ? styles.eligible : styles.ineligible}`}>
-              <div>
-                <div className={styles.exitHeader}>
-                  <h3 className={styles.exitTitle}>5-Year Integrated PG</h3>
-                  <span className={`${styles.exitStatusPill} ${exitEligibility.fiveYear.eligible ? styles.eligible : styles.ineligible}`}>
-                    {exitEligibility.fiveYear.eligible ? '✓ Eligible' : '✗ Ineligible'}
-                  </span>
-                </div>
-                <p className={styles.exitTargetText}>
-                  Requires <strong>217 Credits</strong> + 500s PG Band ($\ge 40$ cr)
-                </p>
-              </div>
-
-              <div className={`${styles.shortfallCallout} ${exitEligibility.fiveYear.eligible ? styles.eligible : styles.ineligible}`}>
-                <div>{exitEligibility.fiveYear.primaryShortfall}</div>
-                {exitEligibility.fiveYear.unmetBands.length > 0 && (
-                  <ul className={styles.shortfallDetailsList}>
-                    {exitEligibility.fiveYear.unmetBands.map((item, idx) => (
-                      <li key={idx}>Level Band {item}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 3: Category Breakdown Table */}
+        {/* Section 2: Curricular Category Breakdown (Circular Progress Loaders) */}
         <section className={styles.sectionCard}>
           <div className={styles.sectionHeader}>
             <div>
               <h2 className={styles.sectionTitle}>Curricular Category Breakdown</h2>
-              <p className={styles.sectionSub}>Regulation minimums per KU-FYIMP 2024 Annexure</p>
+              <p className={styles.sectionSub}>Credits earned across curricular categories with regulation targets</p>
             </div>
           </div>
 
-          <div className={styles.tableResponsive}>
-            <table className={styles.ledgerTable}>
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Earned Credits</th>
-                  <th>3-Year Min</th>
-                  <th>4-Year Min</th>
-                  <th>3-Year Status</th>
-                  <th>4-Year Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {categories.map((cat) => (
-                  <tr key={cat.category}>
-                    <td>
-                      <strong>{cat.title}</strong>
-                    </td>
-                    <td>
-                      <strong style={{ fontSize: '1rem', color: '#0f172a' }}>{cat.earned}</strong>
-                    </td>
-                    <td>{cat.min3Year > 0 ? cat.min3Year : '—'}</td>
-                    <td>{cat.min4Year > 0 ? cat.min4Year : '—'}</td>
-                    <td>
-                      {cat.min3Year === 0 ? (
-                        <span className={`${styles.statusTag} ${styles.info}`}>Not required</span>
-                      ) : cat.isMet3Year ? (
-                        <span className={`${styles.statusTag} ${styles.met}`}>✓ Met</span>
-                      ) : (
-                        <span className={`${styles.statusTag} ${styles.shortfall}`}>
-                          -{cat.shortfall3Year} cr
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      {cat.min4Year === 0 ? (
-                        <span className={`${styles.statusTag} ${styles.info}`}>Not required</span>
-                      ) : cat.isMet4Year ? (
-                        <span className={`${styles.statusTag} ${styles.met}`}>✓ Met</span>
-                      ) : (
-                        <span className={`${styles.statusTag} ${styles.shortfall}`}>
-                          -{cat.shortfall4Year} cr
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className={styles.circularGrid}>
+            {(() => {
+              const categoryList = MASTER_FYIMP_CATEGORIES.map((master) => {
+                const existing = (categories || []).find((c) => c.category === master.category)
+                if (existing) {
+                  return existing
+                }
+                return {
+                  category: master.category,
+                  title: master.title,
+                  earned: 0,
+                  min3Year: master.min3Year,
+                  min4Year: master.min4Year,
+                  shortfall3Year: master.min3Year,
+                  shortfall4Year: master.min4Year,
+                  isMet3Year: master.min3Year === 0,
+                  isMet4Year: master.min4Year === 0,
+                }
+              })
+
+              // Also include any extra custom categories returned by server that aren't in the standard master list
+              for (const c of (categories || [])) {
+                if (!categoryList.some((cl) => cl.category === c.category)) {
+                  categoryList.push(c)
+                }
+              }
+
+              return categoryList.map((cat) => {
+                const target = cat.min4Year > 0 ? cat.min4Year : cat.min3Year > 0 ? cat.min3Year : Math.max(cat.earned, 1)
+                const percentage = Math.min(100, Math.round((cat.earned / target) * 100))
+                const radius = 38
+                const circumference = 2 * Math.PI * radius
+                const strokeDashoffset = circumference - (percentage / 100) * circumference
+
+                const targetLabel = cat.min4Year > 0
+                  ? `${cat.min4Year} cr (4-Yr)`
+                  : cat.min3Year > 0
+                  ? `${cat.min3Year} cr (3-Yr)`
+                  : 'Core / Honours Track'
+
+                return (
+                  <div key={cat.category} className={styles.circularCard}>
+                    <div className={styles.circleWrapper}>
+                      <svg className={styles.circleSvg} viewBox="0 0 96 96">
+                        <circle
+                          className={styles.circleTrack}
+                          cx="48"
+                          cy="48"
+                          r={radius}
+                        />
+                        <circle
+                          className={styles.circleFill}
+                          cx="48"
+                          cy="48"
+                          r={radius}
+                          strokeDasharray={circumference}
+                          strokeDashoffset={strokeDashoffset}
+                        />
+                      </svg>
+                      <div className={styles.circleCenter}>
+                        <span className={styles.circleCreditNum}>{cat.earned}</span>
+                        <span className={styles.circleCreditUnit}>Credits</span>
+                      </div>
+                    </div>
+
+                    <div className={styles.categoryCardMeta}>
+                      <span className={styles.categoryCardCode}>{cat.category}</span>
+                      <h3 className={styles.categoryCardTitle}>{cat.title}</h3>
+                      <span className={styles.categoryTarget}>
+                        Target: {targetLabel}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })
+            })()}
           </div>
         </section>
 
-        {/* Section 4: Level Band Breakdown Table */}
+        {/* Section 3: Level Band Breakdown Table */}
         <section className={styles.sectionCard}>
           <div className={styles.sectionHeader}>
             <div>
@@ -393,30 +319,44 @@ export default function CreditLedgerView({
           </div>
         </section>
 
-        {/* Section 5: Department Distribution Grid */}
+        {/* Section 4: Department Distribution Bar Graph */}
         <section className={styles.sectionCard}>
           <div className={styles.sectionHeader}>
             <div>
               <h2 className={styles.sectionTitle}>Credits Earned by Academic Department</h2>
-              <p className={styles.sectionSub}>Informational distribution for pathway mapping and advisory tracking</p>
+              <p className={styles.sectionSub}>Departmental credit distribution from registered coursework</p>
             </div>
           </div>
 
-          <div className={styles.deptGrid}>
-            {byDepartment.length > 0 ? (
-              byDepartment.map((dept) => (
-                <div key={dept.departmentId} className={styles.deptCard}>
-                  <div>
-                    <div className={styles.deptName}>{dept.departmentName}</div>
-                    <div className={styles.deptCount}>{dept.count} {dept.count === 1 ? 'course' : 'courses'} registered</div>
-                  </div>
-                  <div className={styles.deptCredits}>{dept.earned} <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>CR</span></div>
-                </div>
-              ))
-            ) : (
-              <p style={{ color: '#64748b' }}>No course registrations recorded.</p>
-            )}
-          </div>
+          {byDepartment.length > 0 ? (
+            <div className={styles.barGraph}>
+              {(() => {
+                const maxCredits = Math.max(...byDepartment.map((d) => d.earned), 1)
+                return byDepartment.map((dept) => {
+                  const widthPercent = Math.max(6, Math.round((dept.earned / maxCredits) * 100))
+                  return (
+                    <div key={dept.departmentId} className={styles.barItem}>
+                      <div className={styles.barHeader}>
+                        <span className={styles.barDeptTitle}>{dept.departmentName}</span>
+                        <span className={styles.barDeptMeta}>
+                          {dept.count} {dept.count === 1 ? 'course' : 'courses'} registered
+                        </span>
+                      </div>
+                      <div className={styles.barTrack}>
+                        <div
+                          className={styles.barFill}
+                          style={{ width: `${widthPercent}%` }}
+                        />
+                        <span className={styles.barBadge}>{dept.earned} Credits</span>
+                      </div>
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+          ) : (
+            <p className={styles.barEmpty}>No departmental course registrations recorded.</p>
+          )}
         </section>
 
         {/* Section 6: Registered Papers Audit Grid */}

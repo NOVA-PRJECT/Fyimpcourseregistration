@@ -1,0 +1,841 @@
+{
+  "timestamp": "2026-09-16T06:39:52.852Z",
+  "total_blueprints": 13,
+  "passed_blueprints": 13,
+  "failed_blueprints": 0,
+  "total_slots_tested": 78,
+  "passed_slots": 78,
+  "failed_slots": 0,
+  "results": [
+    {
+      "deptCode": "PES",
+      "deptName": "Physical Education & Sports",
+      "semester": 1,
+      "min_credits": 21,
+      "max_credits": 21,
+      "simulatedCredits": 21,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "MAJOR",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU01DSCPES101 - Foundations of Human Anatomy",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "MINOR 1",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPSY101 - Foundations of Psychology",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "MINOR 2",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPSY101 - Foundations of Psychology",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MDC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 8,
+          "topChoice": "KU01MDCPSY101 - Psychology of Everyday Life",
+          "credits": 3
+        },
+        {
+          "slot": 5,
+          "name": "AEC 1",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG101 - Practical English Language Skills",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "AEC 2",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG102 - English For Business Communication",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "EVS",
+      "deptName": "Environmental Studies",
+      "semester": 1,
+      "min_credits": 21,
+      "max_credits": 22,
+      "simulatedCredits": 21,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "MAJOR",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU01DSCEVS101 - Fundamentals of Environmental Science",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "MINOR 1",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPSY101 - Foundations of Psychology",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "MINOR 2",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPSY101 - Foundations of Psychology",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MDC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01MDCPSY101 - Psychology of Everyday Life",
+          "credits": 3
+        },
+        {
+          "slot": 5,
+          "name": "AEC 1",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG101 - Practical English Language Skills",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "AEC 2",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG102 - English For Business Communication",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "HIS",
+      "deptName": "History",
+      "semester": 1,
+      "min_credits": 21,
+      "max_credits": 21,
+      "simulatedCredits": 21,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "Major 1",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU01DSCHIS101 - History of Early India",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "Minor 1",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPSY101 - Foundations of Psychology",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "Minor 2",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPSY101 - Foundations of Psychology",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MDC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01MDCPSY101 - Psychology of Everyday Life",
+          "credits": 3
+        },
+        {
+          "slot": 5,
+          "name": "AEC 1",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG101 - Practical English Language Skills",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "AEC 2",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG102 - English For Business Communication",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "ECO",
+      "deptName": "Department of Economics",
+      "semester": 1,
+      "min_credits": 21,
+      "max_credits": 21,
+      "simulatedCredits": 21,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "MAJOR",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU01DSCECO101 - Introduction to Economics",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "Minor 1",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPSY101 - Foundations of Psychology",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "MINOR 2",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPSY101 - Foundations of Psychology",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MDC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 6,
+          "topChoice": "KU01MDCPSY101 - Psychology of Everyday Life",
+          "credits": 3
+        },
+        {
+          "slot": 5,
+          "name": "AEC 1",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG101 - Practical English Language Skills",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "AEC 2",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG102 - English For Business Communication",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "MAT",
+      "deptName": "Mathematical Science",
+      "semester": 1,
+      "min_credits": 21,
+      "max_credits": 21,
+      "simulatedCredits": 21,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "MAJOR ",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU01DSCMAT101 - Logic And Set Theory",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "MINOR 1",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPSY101 - Foundations of Psychology",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "MINOR 2",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPSY101 - Foundations of Psychology",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MDC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 7,
+          "topChoice": "KU01MDCPSY101 - Psychology of Everyday Life",
+          "credits": 3
+        },
+        {
+          "slot": 5,
+          "name": "AEC 1",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG101 - Practical English Language Skills",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "AEC 2",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG102 - English For Business Communication",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "IT",
+      "deptName": "Information Technology",
+      "semester": 1,
+      "min_credits": 21,
+      "max_credits": 21,
+      "simulatedCredits": 21,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "Major 1",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU01DSCCSE101 - Principles of Programming",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "Minor 1",
+          "rule": "DEPT_RESTRICTED",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01DSCMAT101 - Logic And Set Theory",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "Minor 2",
+          "rule": "DEPT_RESTRICTED",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01DSCSTA101 - Descriptive Statistics",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MDC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 8,
+          "topChoice": "KU01MDCPSY101 - Psychology of Everyday Life",
+          "credits": 3
+        },
+        {
+          "slot": 5,
+          "name": "AEC 1",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG101 - Practical English Language Skills",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "AEC 2",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG102 - English For Business Communication",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "SBS",
+      "deptName": "School Of Behavioural Sciences",
+      "semester": 1,
+      "min_credits": 21,
+      "max_credits": 21,
+      "simulatedCredits": 21,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "Major 1",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU01DSCPSY101 - Foundations of Psychology",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "Minor 1",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPES101 - Foundations of Human Anatomy",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "Minor 2",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 9,
+          "topChoice": "KU01DSCPES101 - Foundations of Human Anatomy",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MDC ",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 8,
+          "topChoice": "KU01MDCECO103 - Economics of Natural Resources",
+          "credits": 3
+        },
+        {
+          "slot": 5,
+          "name": "AEC 1",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG101 - Practical English Language Skills",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "AEC 2",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 1,
+          "topChoice": "KU01AECENG102 - English For Business Communication",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "PES",
+      "deptName": "Physical Education & Sports",
+      "semester": 3,
+      "min_credits": 22,
+      "max_credits": 22,
+      "simulatedCredits": 22,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "MAJOR 1",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCPES201 - Science Of Human Movement",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "MAJOR 2",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCPES202 - Tests, Measurements And Evaluation In Physical Education And Sports",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "MAJOR 3",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCPES203 - Health Science Education",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MINOR 1",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCPES204 - Major Game – Kho-Kho/Kabaddi",
+          "credits": 4
+        },
+        {
+          "slot": 5,
+          "name": "MDC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 5,
+          "topChoice": "KU03MDCECO203 - Optimisation Techniques",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "VAC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 5,
+          "topChoice": "KU03VACPES101 - Yoga For Health",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "MAT",
+      "deptName": "Mathematical Science",
+      "semester": 3,
+      "min_credits": 22,
+      "max_credits": 22,
+      "simulatedCredits": 22,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "MAJOR 1",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCMAT201 - Calculus II",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "MAJOR 2",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCMAT202 - Differential Equations",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "MAJOR 3",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCMAT203 - Number Theory",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MAJOR 4",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCMAT204 - Numerical Analysis",
+          "credits": 4
+        },
+        {
+          "slot": 5,
+          "name": "MDC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 5,
+          "topChoice": "KU03MDCECO203 - Optimisation Techniques",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "VAC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 5,
+          "topChoice": "KU03VACPES101 - Yoga For Health",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "EVS",
+      "deptName": "Environmental Studies",
+      "semester": 3,
+      "min_credits": 22,
+      "max_credits": 22,
+      "simulatedCredits": 22,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "MAJOR 1",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCEVS201 - Environmental Geology",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "MAJOR 2",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCEVS202 - Biodiversity Conservation",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "MAJOR 3",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCEVS203 - Fundamentals of Environmental Chemistry",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MINOR 1",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 29,
+          "topChoice": "KU03DSCSTA201 - Theory of Random Variables",
+          "credits": 4
+        },
+        {
+          "slot": 5,
+          "name": "MDC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 5,
+          "topChoice": "KU03MDCECO203 - Optimisation Techniques",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "VAC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 5,
+          "topChoice": "KU03VACPES101 - Yoga For Health",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "ECO",
+      "deptName": "Department of Economics",
+      "semester": 3,
+      "min_credits": 22,
+      "max_credits": 22,
+      "simulatedCredits": 22,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "MAJOR 1",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCECO201 - Introduction to Micro Economics",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "MAJOR 2",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCECO202 - Introduction to Macro Economics",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "MAJOR 3",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCECO203 - Introduction to Indian Economy",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MAJOR 4",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCECO204 - Quantitative Techniques for Data Analysis",
+          "credits": 4
+        },
+        {
+          "slot": 5,
+          "name": "MDC ",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 2,
+          "topChoice": "KU03MDCPSY201 - Psychology of Gender and Sexuality",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "VAC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 5,
+          "topChoice": "KU03VACPES101 - Yoga For Health",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "HIS",
+      "deptName": "History",
+      "semester": 3,
+      "min_credits": 22,
+      "max_credits": 22,
+      "simulatedCredits": 22,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "MAJOR 1 ",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCHIS201 - History of Medieval India",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "MAJOR 2",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCHIS202 - History of Modern India",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "MAJOR 3",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCHIS203 - Aspects of World History",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MINOR",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 30,
+          "topChoice": "KU03DSCSTA201 - Theory of Random Variables",
+          "credits": 4
+        },
+        {
+          "slot": 5,
+          "name": "MDC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 5,
+          "topChoice": "KU03MDCECO203 - Optimisation Techniques",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "VAC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 5,
+          "topChoice": "KU03VACPES101 - Yoga For Health",
+          "credits": 3
+        }
+      ]
+    },
+    {
+      "deptCode": "IT",
+      "deptName": "Information Technology",
+      "semester": 3,
+      "min_credits": 22,
+      "max_credits": 22,
+      "simulatedCredits": 22,
+      "creditsValid": true,
+      "status": "PASSED",
+      "slots": [
+        {
+          "slot": 1,
+          "name": "MAJOR 1 ",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCCSE201 - Introduction to Data Structure",
+          "credits": 4
+        },
+        {
+          "slot": 2,
+          "name": "MAJOR 2",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCCSE202 - Object oriented Programming using C++",
+          "credits": 4
+        },
+        {
+          "slot": 3,
+          "name": "MAJOR 3",
+          "rule": "FIXED",
+          "status": "PASSED",
+          "course": "KU03DSCCSE203 - Engineering Physics",
+          "credits": 4
+        },
+        {
+          "slot": 4,
+          "name": "MINOR 1",
+          "rule": "EXCLUDE_DEPT",
+          "status": "PASSED",
+          "availableOptionsCount": 29,
+          "topChoice": "KU03DSCSTA201 - Theory of Random Variables",
+          "credits": 4
+        },
+        {
+          "slot": 5,
+          "name": "MDC",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 5,
+          "topChoice": "KU03MDCECO203 - Optimisation Techniques",
+          "credits": 3
+        },
+        {
+          "slot": 6,
+          "name": "VAC ",
+          "rule": "GLOBAL_BASKET",
+          "status": "PASSED",
+          "availableOptionsCount": 5,
+          "topChoice": "KU03VACPES101 - Yoga For Health",
+          "credits": 3
+        }
+      ]
+    }
+  ]
+}

@@ -21,6 +21,8 @@ export class StudentService {
     const { data: student, error } = await this.supabase.admin
       .from('students')
       .select(`
+        campus_id,
+        department_id,
         full_name,
         current_semester,
         academic_year_joined,
@@ -35,7 +37,9 @@ export class StudentService {
       throw new NotFoundException('Student record not found')
     }
 
-    const [regRes, prefRes] = await Promise.all([
+    const effectiveCampusId = student.campus_id || user.campus_id
+
+    const [regRes, prefRes, settingsRes] = await Promise.all([
       this.supabase.admin
         .from('student_registrations')
         .select(`
@@ -60,10 +64,35 @@ export class StudentService {
         .eq('student_id', user.userId)
         .eq('semester', student.current_semester)
         .maybeSingle(),
+      effectiveCampusId
+        ? this.supabase.admin
+            .from('campus_settings')
+            .select('deadline, min_credits, max_credits, academic_year')
+            .eq('campus_id', effectiveCampusId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ])
 
     const reg = regRes.data
     const pref = prefRes.data
+    const settings = settingsRes.data
+
+    const deadline = settings?.deadline ? new Date(settings.deadline) : null
+    const now = new Date()
+    const isOpen = deadline ? now < deadline : false
+    const msRemaining = deadline && isOpen ? deadline.getTime() - now.getTime() : null
+    const hoursRemaining = msRemaining !== null ? Math.max(0, Math.floor(msRemaining / (1000 * 60 * 60))) : null
+    const isClosingSoon = isOpen && hoursRemaining !== null && hoursRemaining <= 24
+
+    const registrationWindow = {
+      isOpen,
+      deadline: settings?.deadline || null,
+      isClosingSoon,
+      hoursRemaining,
+      academicYear: settings?.academic_year || null,
+      minCredits: settings?.min_credits ?? 20,
+      maxCredits: settings?.max_credits ?? 24,
+    }
 
     const studentInfo = {
       id: user.userId,
@@ -189,6 +218,7 @@ export class StudentService {
       must_change_password: student.must_change_password,
       enrolledCourses,
       totalRegisteredCredits: totalRegisteredCredits || (reg ? Number(reg.total_credits) || 0 : 0),
+      registrationWindow,
     }
   }
 
