@@ -377,7 +377,7 @@ export class TimetableService {
   }
 
   // ──────────────── Publish ────────────────
-  async publish(academicYear: string, semester: number, user: AuthUser) {
+  async publish(academicYear: string, semester: number, user: AuthUser, force = false) {
     let campusDeptIds: string[] = []
     if (user.campus_id) {
       const { data: depts } = await this.supabase.admin
@@ -389,18 +389,35 @@ export class TimetableService {
 
     let conflictQuery = this.supabase.admin
       .from('timetable_conflicts')
-      .select('id, course_id, reason, conflicting_student_count, courses(id, title, department_id)')
+      .select(`
+        id,
+        course_id,
+        blocking_course_id,
+        reason,
+        conflicting_student_count,
+        courses:course_id (
+          id,
+          title,
+          department_id
+        )
+      `)
       .eq('academic_year', academicYear)
       .eq('semester', semester)
       .eq('resolved', false)
 
-    if (user.campus_id && campusDeptIds.length > 0) {
-      conflictQuery = conflictQuery.in('courses.department_id', campusDeptIds)
+    const { data: rawConflicts, error: conflictErr } = await conflictQuery
+    if (conflictErr) {
+      this.serverLogger.error(`[publish] Conflict query error: ${conflictErr.message}`, 'TimetableService')
     }
 
-    const { data: conflicts } = await conflictQuery
+    let conflicts = rawConflicts || []
+    if (user.campus_id && campusDeptIds.length > 0) {
+      conflicts = conflicts.filter((c: any) =>
+        !c.courses?.department_id || campusDeptIds.includes(c.courses.department_id)
+      )
+    }
 
-    if (conflicts && conflicts.length > 0) {
+    if (!force && conflicts.length > 0) {
       throw new UnprocessableEntityException({
         error: 'Cannot publish timetable while unresolved conflicts exist',
         conflicts: conflicts.map((c: any) => ({
@@ -421,14 +438,17 @@ export class TimetableService {
       })
       .eq('academic_year', academicYear)
       .eq('semester', semester)
-      .eq('status', 'draft')
+      .in('status', ['draft', 'generated'])
 
     if (user.campus_id && campusDeptIds.length > 0) {
       updateQuery = updateQuery.in('department_id', campusDeptIds)
     }
 
-    const { error: updateErr } = await updateQuery
-    if (updateErr) throw new InternalServerErrorException('Failed to publish timetable entries')
+    const { data: updatedData, error: updateErr } = await updateQuery.select('id')
+    if (updateErr) {
+      this.serverLogger.error(`[publish] Failed to publish timetable entries: ${updateErr.message}`, 'TimetableService')
+      throw new InternalServerErrorException('Failed to publish timetable entries')
+    }
 
     await this.auditLogger.log({
       eventType: AuditEvents.TIMETABLE_PUBLISHED,
@@ -437,12 +457,13 @@ export class TimetableService {
       action: `published timetable for ${academicYear} sem ${semester}`,
       resourceType: 'timetable',
       status: 'success',
-      metadata: { academicYear, semester },
+      metadata: { academicYear, semester, publishedCount: updatedData?.length ?? 0, forced: force },
     })
 
     return {
       success: true,
       message: 'Timetable published successfully',
+      publishedCount: updatedData?.length ?? 0,
       publishedAt: nowIso,
     }
   }

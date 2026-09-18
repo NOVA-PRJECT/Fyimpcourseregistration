@@ -20,15 +20,34 @@ async function bootstrap() {
 
   const isProd = process.env.NODE_ENV === 'production'
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
-  const allowedOrigins = isProd
-    ? [process.env.FRONTEND_URL].filter(Boolean) as string[]
-    : [frontendUrl, 'http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001']
+  const rawOrigins = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map((o) => o.trim()).filter(Boolean)
+    : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001']
 
   app.enableCors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : [frontendUrl],
+    origin: (origin, callback) => {
+      // Allow server-to-server proxies, mobile clients, and non-browser callers
+      if (!origin) return callback(null, true)
+      if (!isProd) return callback(null, true)
+
+      try {
+        const url = new URL(origin)
+        const isVercelDomain = url.hostname.endsWith('.vercel.app')
+        const isWhitelisted = rawOrigins.includes(origin) || rawOrigins.includes(url.origin)
+
+        if (isWhitelisted || isVercelDomain) {
+          return callback(null, true)
+        }
+      } catch {
+        // invalid URL origin
+      }
+
+      callback(new Error(`Origin ${origin} not allowed by CORS`))
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+    exposedHeaders: ['Content-Disposition'],
   })
 
   const port = process.env.PORT || 4000

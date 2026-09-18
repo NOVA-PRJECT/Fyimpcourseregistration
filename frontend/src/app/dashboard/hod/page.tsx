@@ -142,7 +142,7 @@ export default function HodDashboard() {
         if (rows.length === 0) {
           alert('No student records found to export.')
         } else {
-          downloadStudentsExcel(rows, targetSem === 'all' ? 'All_Semesters' : `Sem_${targetSem}`)
+          await downloadStudentsExcel(rows, targetSem === 'all' ? 'All_Semesters' : `Sem_${targetSem}`)
         }
       }
     } catch {

@@ -1827,7 +1827,7 @@
 }
 
 .creditsTotalBadge {
-  background: linear-gradient(135deg, #002147 0%, #0369a1 100%);
+  background: #002147;
   color: #ffffff;
   padding: 0.4rem 0.85rem;
   border-radius: 9999px;

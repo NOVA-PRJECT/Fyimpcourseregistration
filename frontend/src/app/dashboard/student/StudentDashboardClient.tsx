@@ -557,7 +557,7 @@ export default function StudentDashboardClient({
             <div className={styles.enrolledHeader}>
               <div className={styles.enrolledTitleGroup}>
                 <h2 className={styles.enrolledTitle}>
-                  <span>📚</span> My Enrolled Courses — Semester {studentInfo?.current_semester ?? 1}
+                   My Enrolled Courses — Semester {studentInfo?.current_semester ?? 1}
                 </h2>
                 <p className={styles.enrolledSubtitle}>
                   Official papers registered and allocated for your current semester
@@ -584,7 +584,7 @@ export default function StudentDashboardClient({
                   return (
                     <div key={c.id || c.courseCode} className={styles.courseCard}>
                       <div className={styles.cardTopRow}>
-                        <span className={styles.slotBadge}>Slot {c.slotNumber}</span>
+                        <span className={styles.slotBadge}>Paper {c.slotNumber}</span>
                         <span className={`${styles.categoryBadge} ${catClass}`}>
                           {c.category}
                         </span>

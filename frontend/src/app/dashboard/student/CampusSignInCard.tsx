@@ -87,7 +87,7 @@ export default function CampusSignInCard({ studentId, campusName }: CampusSignIn
           if (res.ok && data.success) {
             setFeedback({
               type: 'success',
-              message: `✓ Signed in successfully for ${data.session_type.toUpperCase()} session at ${data.campus_name}! (Distance: ${Math.round(data.distance_meters)}m from campus center).`,
+              message: `✓ Signed in successfully for ${data.session_type.toUpperCase()} session at ${data.campus_name || campusName}! (Distance: ${Math.round(data.distance_meters)}m from campus center).`,
             })
             await fetchStatus()
           } else {

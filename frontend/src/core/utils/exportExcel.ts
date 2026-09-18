@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { downloadBlob } from './downloadFile'
 
 export interface StudentExcelRow {
   name: string
@@ -11,7 +12,7 @@ export interface StudentExcelRow {
   paper_6?: string
 }
 
-export function downloadStudentsExcel(rows: StudentExcelRow[], semesterLabel: string = 'All_Semesters') {
+export async function downloadStudentsExcel(rows: StudentExcelRow[], semesterLabel: string = 'All_Semesters'): Promise<void> {
   const formattedData = rows.map((r, index) => ({
     'Sl. No.': index + 1,
     'Name': r.name,
@@ -44,5 +45,11 @@ export function downloadStudentsExcel(rows: StudentExcelRow[], semesterLabel: st
 
   const sanitizedSem = semesterLabel.replace(/\s+/g, '_')
   const dateStr = new Date().toISOString().slice(0, 10)
-  XLSX.writeFile(workbook, `Student_Papers_${sanitizedSem}_${dateStr}.xlsx`)
+  const fileName = `Student_Papers_${sanitizedSem}_${dateStr}.xlsx`
+
+  const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([excelBuffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  await downloadBlob(blob, fileName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 }

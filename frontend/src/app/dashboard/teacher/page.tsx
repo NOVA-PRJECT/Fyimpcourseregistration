@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { LogOut } from 'lucide-react'
 import styles from './teacher-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
@@ -26,6 +27,7 @@ interface Student {
   full_name: string
   department: string
   department_code: string
+  cap_application_number?: string
 }
 
 interface RosterData {
@@ -42,12 +44,78 @@ interface DeptOption {
   count: number
 }
 
+interface PeriodSlot {
+  timetable_slot_id: string
+  course_id: string
+  course_code: string
+  course_title: string
+  course_category?: string
+  course_semester?: number
+  period_number: number
+  start_time: string
+  end_time: string
+  is_marked: boolean
+  total_enrolled: number
+  present_count: number
+  absent_count: number
+}
+
+interface WeeklyTimetableEntry {
+  timetable_slot_id: string
+  course_id: string
+  course_code: string
+  course_title: string
+  course_category?: string
+  course_semester?: number
+  credits?: number
+  is_lab_block?: boolean
+  day_of_week: number
+  period_number: number
+  start_time: string
+  end_time: string
+}
+
+interface TeacherScheduleResponse {
+  teacherName: string
+  departmentName: string
+  campusName: string
+  date: string
+  dayOfWeek: number
+  assignedCourses: Course[]
+  periods: PeriodSlot[]
+  weeklySchedule?: WeeklyTimetableEntry[]
+  message?: string
+}
+
+const DAYS = [
+  { num: 1, name: 'Monday', short: 'Mon' },
+  { num: 2, name: 'Tuesday', short: 'Tue' },
+  { num: 3, name: 'Wednesday', short: 'Wed' },
+  { num: 4, name: 'Thursday', short: 'Thu' },
+  { num: 5, name: 'Friday', short: 'Fri' },
+]
+
+const PERIODS = [
+  { num: 1, label: 'Period 1', time: '09:30 - 10:30' },
+  { num: 2, label: 'Period 2', time: '10:30 - 11:30' },
+  { num: 3, label: 'Period 3', time: '11:30 - 12:30' },
+  { num: 4, label: 'Period 4', time: '01:30 - 02:30' },
+  { num: 5, label: 'Period 5', time: '02:30 - 03:30' },
+  { num: 6, label: 'Period 6', time: '03:30 - 04:30' },
+]
+
+function getCurrentUserDay(): number {
+  const day = new Date().getDay()
+  if (day >= 1 && day <= 5) return day
+  return 1
+}
+
 function CustomPaperSelect({
   courses,
   selectedCourseId,
   onSelect,
   disabled = false,
-  placeholder = "— Select a Paper / Course —"
+  placeholder = "— Select an Assigned Paper —"
 }: {
   courses: Course[]
   selectedCourseId: string
@@ -95,7 +163,7 @@ function CustomPaperSelect({
       {isOpen && (
         <div className={styles.customSelectDropdown}>
           {courses.length === 0 ? (
-            <div className={styles.customOptionNoData}>No papers available for selected filters</div>
+            <div className={styles.customOptionNoData}>No assigned papers found</div>
           ) : (
             <>
               {placeholder && (
@@ -143,22 +211,45 @@ function CustomPaperSelect({
 export default function TeacherDashboard() {
   useBfcacheGuard()
   const router = useRouter()
-  const [teacherName, setTeacherName] = useState('')
-  const [userRole, setUserRole] = useState('')
-  const [isIndividualTeacher, setIsIndividualTeacher] = useState(false)
-  const [loadingTeacher, setLoadingTeacher] = useState(true)
-  const [departments, setDepartments] = useState<Department[]>([])
-  const [courses, setCourses] = useState<Course[]>([])
-  
-  // Filter States (Order: 1. Semester, 2. Department)
-  const [selectedSemester, setSelectedSemester] = useState('all')
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState('all')
-  const [selectedCourseId, setSelectedCourseId] = useState('')
 
-  const [loading, setLoading] = useState(false)
-  const [rosterData, setRosterData] = useState<RosterData | null>(null)
-  const [error, setError] = useState('')
+  // Tab State
+  const [activeTab, setActiveTab] = useState<'schedule' | 'timetable' | 'rosters'>('schedule')
+
+  // Teacher Profile State
+  const [teacherName, setTeacherName] = useState('')
+  const [departmentName, setDepartmentName] = useState('')
+  const [campusName, setCampusName] = useState('')
+  const [loadingProfile, setLoadingProfile] = useState(true)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [globalError, setGlobalError] = useState('')
+  const [globalSuccess, setGlobalSuccess] = useState('')
+
+  // Tab 1: Schedule & Attendance State
+  const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [loadingSchedule, setLoadingSchedule] = useState(false)
+  const [schedulePeriods, setSchedulePeriods] = useState<PeriodSlot[]>([])
+  const [scheduleMessage, setScheduleMessage] = useState('')
+
+  // Tab 2: Weekly Timetable State
+  const [weeklySchedule, setWeeklySchedule] = useState<WeeklyTimetableEntry[]>([])
+  const [selectedTimetableDay, setSelectedTimetableDay] = useState<number | 'all'>('all')
+  const [selectedTimetableSemester, setSelectedTimetableSemester] = useState<string>('all')
+
+  // Attendance Marking Modal State
+  const [activeSlotForMarking, setActiveSlotForMarking] = useState<PeriodSlot | null>(null)
+  const [markingRoster, setMarkingRoster] = useState<Student[]>([])
+  const [loadingMarkingRoster, setLoadingMarkingRoster] = useState(false)
+  const [absentStudentIds, setAbsentStudentIds] = useState<Set<string>>(new Set())
+  const [submittingAttendance, setSubmittingAttendance] = useState(false)
+  const [markingError, setMarkingError] = useState('')
+
+  // Tab 2: Assigned Papers & Rosters State
+  const [assignedCourses, setAssignedCourses] = useState<Course[]>([])
+  const [selectedSemester, setSelectedSemester] = useState('all')
+  const [selectedCourseId, setSelectedCourseId] = useState('')
+  const [loadingRoster, setLoadingRoster] = useState(false)
+  const [rosterData, setRosterData] = useState<RosterData | null>(null)
+  const [tableDeptFilter, setTableDeptFilter] = useState('all')
 
   // PDF Export Modal State
   const [showPdfModal, setShowPdfModal] = useState(false)
@@ -166,56 +257,187 @@ export default function TeacherDashboard() {
   const [selectedPdfDepts, setSelectedPdfDepts] = useState<string[]>([])
   const [generatingPdf, setGeneratingPdf] = useState(false)
 
-  // Table Department Filter State
-  const [tableDeptFilter, setTableDeptFilter] = useState('all')
-
-  useEffect(() => {
-    async function loadData() {
-      const response = await fetch('/api/faculty/courses')
-      const data = await response.json()
-      if (!response.ok) {
+  // 1. Fetch Teacher Assigned Papers
+  const fetchTeacherCourses = useCallback(async () => {
+    try {
+      const res = await fetch('/api/faculty/courses')
+      const data = await res.json()
+      if (!res.ok) {
         router.push('/login')
         return
       }
-
-      setTeacherName(data.teacherName)
-      setUserRole(data.role || '')
-      setIsIndividualTeacher(Boolean(data.isIndividualTeacher || data.role === 'teacher'))
-      setDepartments(data.departments ?? [])
-      setCourses(data.courses ?? [])
-      setLoadingTeacher(false)
+      setTeacherName(data.teacherName || '')
+      setAssignedCourses(data.courses || [])
+    } catch {
+      setGlobalError('Failed to load assigned courses.')
+    } finally {
+      setLoadingProfile(false)
     }
-    loadData()
+  }, [router])
+
+  // 2. Fetch Teacher Schedule for target date
+  const fetchTeacherSchedule = useCallback(async (dateToFetch: string) => {
+    setLoadingSchedule(true)
+    setGlobalError('')
+    try {
+      const res = await fetch(`/api/attendance/period/teacher-schedule?date=${dateToFetch}`)
+      const data: TeacherScheduleResponse = await res.json()
+      if (res.ok) {
+        if (data.teacherName) setTeacherName(data.teacherName)
+        if (data.departmentName) setDepartmentName(data.departmentName)
+        if (data.campusName) setCampusName(data.campusName)
+        setSchedulePeriods(data.periods || [])
+        setWeeklySchedule(data.weeklySchedule || [])
+        setScheduleMessage(data.message || '')
+      } else {
+        setGlobalError((data as any).message || 'Failed to fetch schedule for the selected date.')
+      }
+    } catch {
+      setGlobalError('Network error while fetching teacher schedule.')
+    } finally {
+      setLoadingSchedule(false)
+    }
   }, [])
 
-  // Derive unique semesters present in fetched courses
+  useEffect(() => {
+    fetchTeacherCourses()
+    fetchTeacherSchedule(scheduleDate)
+  }, [fetchTeacherCourses, fetchTeacherSchedule, scheduleDate])
+
+  // Available semesters from assigned courses
   const availableSemesters = useMemo(() => {
     const sems = new Set<number>()
-    courses.forEach(c => {
+    assignedCourses.forEach(c => {
       if (c.semester) sems.add(c.semester)
     })
-    if (sems.size === 0) return [1, 2, 3, 4, 5, 6, 7, 8]
     return Array.from(sems).sort((a, b) => a - b)
-  }, [courses])
+  }, [assignedCourses])
 
-  // Filter courses by selected semester first, then department
-  const filteredCourses = useMemo(() => {
-    return courses.filter(c => {
-      const matchSem = selectedSemester === 'all' || (c.semester !== undefined && c.semester.toString() === selectedSemester)
-      const matchDept = selectedDepartmentId === 'all' || c.department_id === selectedDepartmentId
-      return matchSem && matchDept
+  const filteredAssignedCourses = useMemo(() => {
+    return assignedCourses.filter(c => {
+      if (selectedSemester === 'all') return true
+      return c.semester !== undefined && c.semester.toString() === selectedSemester
     })
-  }, [courses, selectedSemester, selectedDepartmentId])
+  }, [assignedCourses, selectedSemester])
 
-  // Reset selected paper if it is no longer valid under new filters
+  // Reset selected course if filter changed
   useEffect(() => {
-    if (selectedCourseId && !filteredCourses.some(c => c.id === selectedCourseId)) {
+    if (selectedCourseId && !filteredAssignedCourses.some(c => c.id === selectedCourseId)) {
       setSelectedCourseId('')
       setRosterData(null)
     }
-  }, [filteredCourses, selectedCourseId])
+  }, [filteredAssignedCourses, selectedCourseId])
 
-  // Derive unique departments from roster data
+  // Memoized Weekly Timetable filtered by semester
+  const filteredWeeklySchedule = useMemo(() => {
+    return weeklySchedule.filter(slot => {
+      if (selectedTimetableSemester === 'all') return true
+      return slot.course_semester !== undefined && slot.course_semester.toString() === selectedTimetableSemester
+    })
+  }, [weeklySchedule, selectedTimetableSemester])
+
+  // Fetch Class Roster for Tab 3
+  async function handleFetchRoster(courseId: string) {
+    if (!courseId) {
+      setRosterData(null)
+      return
+    }
+    setLoadingRoster(true)
+    setGlobalError('')
+    setTableDeptFilter('all')
+    try {
+      const res = await fetch(`/api/faculty/attendance?course_id=${courseId}`)
+      const data = await res.json()
+      if (res.ok) {
+        setRosterData(data)
+      } else {
+        setGlobalError(data.error || 'Failed to fetch class roster.')
+      }
+    } catch {
+      setGlobalError('Network error while fetching class roster.')
+    } finally {
+      setLoadingRoster(false)
+    }
+  }
+
+  // Open Marking Modal for a slot
+  async function handleOpenMarkingModal(slot: PeriodSlot) {
+    setActiveSlotForMarking(slot)
+    setMarkingError('')
+    setLoadingMarkingRoster(true)
+    setAbsentStudentIds(new Set())
+
+    try {
+      const res = await fetch(`/api/faculty/attendance?course_id=${slot.course_id}`)
+      const data = await res.json()
+      if (res.ok && data.students) {
+        setMarkingRoster(data.students)
+      } else {
+        setMarkingError(data.error || 'Failed to load enrolled students.')
+      }
+    } catch {
+      setMarkingError('Network error while loading roster.')
+    } finally {
+      setLoadingMarkingRoster(false)
+    }
+  }
+
+  // Toggle student Present vs Absent
+  function handleToggleStudentStatus(studentId: string) {
+    setAbsentStudentIds(prev => {
+      const next = new Set(prev)
+      if (next.has(studentId)) {
+        next.delete(studentId) // Becomes Present
+      } else {
+        next.add(studentId) // Becomes Absent
+      }
+      return next
+    })
+  }
+
+  function handleMarkAllPresent() {
+    setAbsentStudentIds(new Set())
+  }
+
+  function handleMarkAllAbsent() {
+    setAbsentStudentIds(new Set(markingRoster.map(s => s.id)))
+  }
+
+  // Submit Period Attendance
+  async function handleSubmitAttendance() {
+    if (!activeSlotForMarking) return
+    setSubmittingAttendance(true)
+    setMarkingError('')
+
+    try {
+      const res = await fetch('/api/attendance/period/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timetable_slot_id: activeSlotForMarking.timetable_slot_id,
+          absent_student_ids: Array.from(absentStudentIds),
+          client_timestamp: new Date().toISOString(),
+        }),
+      })
+
+      const result = await res.json()
+      if (res.ok) {
+        setGlobalSuccess(`✓ Period ${activeSlotForMarking.period_number} attendance submitted successfully!`)
+        setActiveSlotForMarking(null)
+        // Refresh schedule to update marked badge and counts
+        await fetchTeacherSchedule(scheduleDate)
+        setTimeout(() => setGlobalSuccess(''), 4000)
+      } else {
+        setMarkingError(result.message || 'Failed to submit period attendance.')
+      }
+    } catch {
+      setMarkingError('Network error while submitting attendance.')
+    } finally {
+      setSubmittingAttendance(false)
+    }
+  }
+
+  // Department options for Tab 2
   const deptOptions: DeptOption[] = useMemo(() => {
     if (!rosterData || !rosterData.students) return []
     const map = new Map<string, DeptOption>()
@@ -234,55 +456,23 @@ export default function TeacherDashboard() {
     return Array.from(map.values())
   }, [rosterData])
 
-  // Compute filtered students list for PDF export
-  const pdfStudents = useMemo(() => {
-    if (!rosterData) return []
-    if (pdfDeptMode === 'all') return rosterData.students
-    return rosterData.students.filter(s => {
-      const key = s.department || s.department_code || 'Unknown'
-      return (
-        selectedPdfDepts.includes(key) ||
-        selectedPdfDepts.includes(s.department) ||
-        selectedPdfDepts.includes(s.department_code)
-      )
-    })
-  }, [rosterData, pdfDeptMode, selectedPdfDepts])
-
-  // Compute displayed students for table view on screen
   const displayedStudents = useMemo(() => {
     if (!rosterData) return []
     if (tableDeptFilter === 'all') return rosterData.students
     return rosterData.students.filter(s => {
       const key = s.department || s.department_code || 'Unknown'
-      return (
-        key === tableDeptFilter ||
-        s.department === tableDeptFilter ||
-        s.department_code === tableDeptFilter
-      )
+      return key === tableDeptFilter || s.department === tableDeptFilter || s.department_code === tableDeptFilter
     })
   }, [rosterData, tableDeptFilter])
 
-  async function handleFetchCourse(targetCourseId?: string) {
-    const courseIdToFetch = targetCourseId ?? selectedCourseId
-    if (!courseIdToFetch) { setError('Please select a paper first'); return }
-
-    setLoading(true)
-    setError('')
-    setRosterData(null)
-    setTableDeptFilter('all')
-
-    const response = await fetch(`/api/faculty/attendance?course_id=${courseIdToFetch}`)
-    const result = await response.json()
-
-    if (!response.ok) {
-      setError(result.error ?? 'Failed to fetch roster. Please try again.')
-      setLoading(false)
-      return
-    }
-
-    setRosterData(result)
-    setLoading(false)
-  }
+  const pdfStudents = useMemo(() => {
+    if (!rosterData) return []
+    if (pdfDeptMode === 'all') return rosterData.students
+    return rosterData.students.filter(s => {
+      const key = s.department || s.department_code || 'Unknown'
+      return selectedPdfDepts.includes(key) || selectedPdfDepts.includes(s.department) || selectedPdfDepts.includes(s.department_code)
+    })
+  }, [rosterData, pdfDeptMode, selectedPdfDepts])
 
   function handleOpenPdfModal() {
     if (!rosterData || rosterData.students.length === 0) return
@@ -308,7 +498,7 @@ export default function TeacherDashboard() {
       setShowPdfModal(false)
     } catch (err) {
       console.error('Failed to generate PDF:', err)
-      setError('Failed to generate PDF. Please try again.')
+      setGlobalError('Failed to generate PDF. Please try again.')
     } finally {
       setGeneratingPdf(false)
     }
@@ -322,259 +512,764 @@ export default function TeacherDashboard() {
 
   return (
     <div className={styles.pageWrapper}>
-
-      {/* Top Bar */}
-      <div className={styles.topBar}>
+      {/* ── UNIFIED EXECUTIVE TOP BAR ── */}
+      <header className={styles.topBar}>
         <div className={styles.topBarLeft}>
-          <div className={styles.logoSmall}>
-            <Image src="/knrunilogo.png" alt="KU" width={28} height={28} />
-          </div>
-          <div>
-            <p className={styles.topBarTitle}>FYIMP Portal</p>
-            <p className={styles.topBarSubtitle}>Teacher Dashboard</p>
-          </div>
-        </div>
-        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
-          {loggingOut ? 'Logging out...' : 'Logout'}
-        </button>
-      </div>
-
-      {/* Teacher Info Card */}
-      <div className={styles.infoCard}>
-        {loadingTeacher ? (
-          <div style={{ height: '2.5rem' }} />
-        ) : (
-          <>
-            <p className={styles.teacherName}>{teacherName || 'Faculty Member'}</p>
-            <div className={styles.teacherDetails}>
-              <span className={`${styles.detailBadge} ${styles.roleBadge}`}>
-                {isIndividualTeacher ? 'Course Teacher' : 'Teaching Staff'}
-              </span>
-              {isIndividualTeacher && (
-                <span style={{ fontSize: '0.78rem', color: '#64748b', marginLeft: '0.5rem', fontWeight: 500 }}>
-                  • {courses.length} Assigned {courses.length === 1 ? 'Course' : 'Courses'}
-                </span>
-              )}
+          {/* 1. Portal Branding Block */}
+          <div className={styles.topBarBranding}>
+            <div className={styles.logoSmall}>
+              <Image src="/knrunilogo.png" alt="KU" width={30} height={30} priority />
             </div>
-          </>
-        )}
-      </div>
+            <div className={styles.topBarTitles}>
+              <p className={styles.topBarTitle}>FYIMP Portal</p>
+              <p className={styles.topBarSubtitle}>Teacher Dashboard</p>
+            </div>
+          </div>
+
+          {/* Vertical Separator */}
+          <div className={styles.topBarDivider} />
+
+          {/* 2. Integrated Teacher Identity Block */}
+          {loadingProfile ? (
+            <div className={styles.topBarSkeleton} />
+          ) : (
+            <div className={styles.teacherIdentity}>
+              <p className={styles.teacherNameHeader}>{teacherName || 'Course Teacher'}</p>
+              <div className={styles.teacherBadges}>
+                <span className={styles.roleBadge}>Course Teacher</span>
+                <span className={styles.metaBadge}>
+                  {assignedCourses.length} Assigned {assignedCourses.length === 1 ? 'Paper' : 'Papers'}
+                </span>
+                {departmentName && (
+                  <span className={styles.metaBadge} title={departmentName}>
+                    {departmentName}
+                  </span>
+                )}
+                {campusName && (
+                  <span className={styles.metaBadge} title={campusName}>
+                    {campusName}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. Action Controls */}
+        <div className={styles.topBarRight}>
+          <button
+            type="button"
+            className={styles.logoutBtn}
+            onClick={handleLogout}
+            disabled={loggingOut}
+            title="Log out of portal"
+          >
+            <LogOut size={14} />
+            <span className={styles.logoutText}>{loggingOut ? 'Logging out...' : 'Logout'}</span>
+          </button>
+        </div>
+      </header>
+
+      {/* ── FULL VIEWPORT WIDTH TAB BAR (Matched to HOD & Director) ── */}
+      <nav className={styles.tabBar} aria-label="Teacher Navigation">
+        <button
+          type="button"
+          className={`${styles.tabBtn} ${activeTab === 'schedule' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('schedule')}
+        >
+          <span>📅 Today&apos;s Schedule & Attendance</span>
+          <span className={styles.tabCountBadge}>{schedulePeriods.length}</span>
+        </button>
+        <button
+          type="button"
+          className={`${styles.tabBtn} ${activeTab === 'timetable' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('timetable')}
+        >
+          <span>🗓️ Weekly Timetable</span>
+          <span className={styles.tabCountBadge}>{weeklySchedule.length}</span>
+        </button>
+        <button
+          type="button"
+          className={`${styles.tabBtn} ${activeTab === 'rosters' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('rosters')}
+        >
+          <span>📚 My Assigned Papers & Class Rosters</span>
+          <span className={styles.tabCountBadge}>{assignedCourses.length}</span>
+        </button>
+      </nav>
 
       {/* Main Content */}
       <div className={styles.mainContent}>
-
-        {error && <div className={styles.errorBanner}>{error}</div>}
-
-        {/* Empty state note for individual teachers without assigned courses */}
-        {isIndividualTeacher && courses.length === 0 && !loadingTeacher && (
+        {globalError && <div className={styles.errorBanner}>{globalError}</div>}
+        {globalSuccess && (
           <div
             style={{
-              background: '#ffffff',
-              border: '1.5px dashed #cbd5e1',
-              borderRadius: '12px',
-              padding: '2.5rem 1.5rem',
-              textAlign: 'center',
-              color: '#475569',
-              marginBottom: '1rem',
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              color: '#15803d',
+              padding: '0.75rem 1rem',
+              borderRadius: '0.5rem',
+              fontSize: '0.84rem',
+              marginBottom: '1.25rem',
+              fontWeight: 600,
             }}
           >
-            <div style={{ fontSize: '2.25rem', marginBottom: '0.5rem' }}>📚</div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#002147', margin: '0 0 0.5rem' }}>
-              No Courses Currently Assigned
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '480px', margin: '0 auto', lineHeight: 1.5 }}>
-              Your Head of Department (HOD) has not assigned you to any courses yet. Once assigned in the Course Assignment tab, your courses, enrolled students, and class rosters will appear here automatically.
-            </p>
+            {globalSuccess}
           </div>
         )}
 
-        {/* Paper Filter & Custom Select Card */}
-        <div className={styles.filterCard}>
-          <div className={styles.filterCardHeader}>
-            <p className={styles.filterCardTitle}>🔍 Paper Selection & Filters</p>
-          </div>
-
-          <div className={styles.filterControlsGrid}>
-            {/* 1. Semester Filter FIRST */}
-            <div className={styles.filterGroup}>
-              <label className={styles.filterLabel}>1. Semester</label>
-              <select
-                className={styles.filterSelect}
-                value={selectedSemester}
-                onChange={e => {
-                  setSelectedSemester(e.target.value)
-                  setError('')
-                }}
-              >
-                <option value="all">All Semesters</option>
-                {availableSemesters.map(sem => (
-                  <option key={sem} value={sem.toString()}>
-                    Semester {sem}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 2. Department Filter SECOND */}
-            <div className={styles.filterGroup}>
-              <label className={styles.filterLabel}>2. Department</label>
-              <select
-                className={styles.filterSelect}
-                value={selectedDepartmentId}
-                onChange={e => {
-                  setSelectedDepartmentId(e.target.value)
-                  setError('')
-                }}
-              >
-                <option value="all">All Departments</option>
-                {departments.map(dept => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name} ({dept.code})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* 3. Paper / Course Custom Dropdown */}
-          <div className={styles.paperSelectGroup}>
-            <label className={styles.filterLabel}>
-              3. Paper / Course ({filteredCourses.length} available)
-            </label>
-            <CustomPaperSelect
-              courses={filteredCourses}
-              selectedCourseId={selectedCourseId}
-              onSelect={courseId => {
-                setSelectedCourseId(courseId)
-                setError('')
-                if (courseId) {
-                  handleFetchCourse(courseId)
-                } else {
-                  setRosterData(null)
-                }
-              }}
-              disabled={loading}
-            />
-          </div>
-        </div>
-
-        {/* Loading */}
-        {loading && (
-          <div className={styles.loadingState}>
-            <div className={styles.spinner} />
-            <p className={styles.loadingText}>Fetching class roster...</p>
-          </div>
-        )}
-
-        {/* Section Divider & Detailing Area */}
-        {!loading && rosterData && (
-          <>
-            <div className={styles.sectionDivider}>
-              <span className={styles.sectionDividerLine} />
-              <span className={styles.sectionDividerBadge}>
-                📊 Course & Class Roster Details
-              </span>
-              <span className={styles.sectionDividerLine} />
-            </div>
-
-            <div className={styles.detailsContainer}>
-              {/* Course Info Banner */}
-              <div className={styles.courseInfoBanner}>
-                <div>
-                  <p className={styles.courseInfoName}>{rosterData.course.title}</p>
-                  <p className={styles.courseInfoCode}>{rosterData.course.course_code}</p>
+        {/* TAB 1: SCHEDULE & ATTENDANCE */}
+        {activeTab === 'schedule' && (
+          <div>
+            <div className={styles.scheduleHeaderCard}>
+              <div className={styles.scheduleHeaderTop}>
+                <h3 className={styles.scheduleTitle}>
+                  <span>🕒 Lecture Timetable & Marking</span>
+                </h3>
+                <div className={styles.scheduleDateControls}>
+                  <input
+                    type="date"
+                    className={styles.scheduleDateInput}
+                    value={scheduleDate}
+                    onChange={e => {
+                      setScheduleDate(e.target.value)
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className={styles.todayQuickBtn}
+                    onClick={() => {
+                      const today = new Date().toISOString().split('T')[0]
+                      setScheduleDate(today)
+                    }}
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.refreshScheduleBtn}
+                    onClick={() => fetchTeacherSchedule(scheduleDate)}
+                    disabled={loadingSchedule}
+                    title="Refresh schedule"
+                  >
+                    🔄
+                  </button>
                 </div>
               </div>
 
-              <div className={styles.statsRow}>
-                <div className={styles.statCard}>
-                  <p className={styles.statValue}>{rosterData.total_students}</p>
-                  <p className={styles.statLabel}>Enrolled Students</p>
-                </div>
-                <div className={styles.statCard}>
-                  <p className={styles.statValue}>{Object.keys(rosterData.department_breakdown).length}</p>
-                  <p className={styles.statLabel}>Departments</p>
-                </div>
+              <div className={styles.scheduleMetaSummary}>
+                <span>Selected Date: <strong>{scheduleDate}</strong></span>
+                <span>• Scheduled Lectures: <strong>{schedulePeriods.length}</strong></span>
+                <span>
+                  • Marked:{' '}
+                  <strong style={{ color: '#16a34a' }}>
+                    {schedulePeriods.filter(p => p.is_marked).length}
+                  </strong>{' '}
+                  /{' '}
+                  Pending:{' '}
+                  <strong style={{ color: '#b45309' }}>
+                    {schedulePeriods.filter(p => !p.is_marked).length}
+                  </strong>
+                </span>
               </div>
+            </div>
 
-              {Object.keys(rosterData.department_breakdown).length > 0 && (
-                <div className={styles.breakdownCard}>
-                  <p className={styles.breakdownTitle}>Department Breakdown</p>
-                  {Object.entries(rosterData.department_breakdown).map(([dept, count]) => (
-                    <div key={dept} className={styles.breakdownRow}>
-                      <span className={styles.breakdownDept}>{dept}</span>
-                      <span className={styles.breakdownCount}>{count} students</span>
+            {loadingSchedule ? (
+              <div className={styles.loadingState}>
+                <div className={styles.spinner} />
+                <p className={styles.loadingText}>Loading scheduled periods...</p>
+              </div>
+            ) : schedulePeriods.length === 0 ? (
+              <div className={styles.emptyPeriodBanner}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>☕</div>
+                <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#002147', margin: '0 0 0.35rem' }}>
+                  No Lectures Scheduled For This Day
+                </h4>
+                <p style={{ fontSize: '0.82rem', margin: 0 }}>
+                  {scheduleMessage || 'No timetable entries were found for your assigned courses on this date.'}
+                </p>
+              </div>
+            ) : (
+              <div className={styles.periodGrid}>
+                {schedulePeriods.map(period => {
+                  return (
+                    <div
+                      key={period.timetable_slot_id}
+                      className={`${styles.periodCard} ${
+                        period.is_marked ? styles.periodCardMarked : styles.periodCardPending
+                      }`}
+                    >
+                      <div>
+                        <div className={styles.periodCardHeader}>
+                          <span className={styles.periodTag}>PERIOD {period.period_number}</span>
+                          <span className={styles.periodTimeBadge}>
+                            ⏱️ {period.start_time.slice(0, 5)} - {period.end_time.slice(0, 5)}
+                          </span>
+                        </div>
+
+                        <h4 className={styles.periodCourseTitle}>{period.course_title}</h4>
+                        <p className={styles.periodCourseCode}>
+                          {period.course_code}{' '}
+                          {period.course_semester ? `• Semester ${period.course_semester}` : ''}
+                        </p>
+
+                        <div className={styles.periodStatusRow}>
+                          {period.is_marked ? (
+                            <>
+                              <span className={styles.statusMarkedText}>✓ Attendance Marked</span>
+                              <span className={styles.statusStatsText}>
+                                Present: {period.present_count} | Absent: {period.absent_count}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className={styles.statusPendingText}>⏳ Attendance Pending</span>
+                              <span className={styles.statusStatsText}>
+                                {period.total_enrolled} Enrolled
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className={`${styles.markAttendanceBtn} ${
+                          period.is_marked
+                            ? styles.markAttendanceBtnMarked
+                            : styles.markAttendanceBtnPending
+                        }`}
+                        onClick={() => handleOpenMarkingModal(period)}
+                      >
+                        {period.is_marked ? '✏️ Update Attendance' : '📝 Mark Attendance Now'}
+                      </button>
                     </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: WEEKLY TIMETABLE */}
+        {activeTab === 'timetable' && (
+          <div className={styles.timetableContainer}>
+            {/* Header & Controls */}
+            <div className={styles.timetableHeaderRow}>
+              <h2 className={styles.timetableTitle}>
+                <span>🗓️</span> Weekly Teaching Schedule (Periods 1 to 6)
+              </h2>
+
+              <div className={styles.timetableControlsGroup}>
+                {/* Day Filter Pills */}
+                <div className={styles.dayFilterGroup}>
+                  <button
+                    type="button"
+                    className={`${styles.dayFilterBtn} ${selectedTimetableDay === 'all' ? styles.dayFilterBtnActive : ''}`}
+                    onClick={() => setSelectedTimetableDay('all')}
+                  >
+                    All Days
+                  </button>
+                  {DAYS.map(d => (
+                    <button
+                      key={d.num}
+                      type="button"
+                      className={`${styles.dayFilterBtn} ${selectedTimetableDay === d.num ? styles.dayFilterBtnActive : ''}`}
+                      onClick={() => setSelectedTimetableDay(d.num)}
+                    >
+                      {d.short}
+                    </button>
                   ))}
                 </div>
-              )}
 
-              <div className={styles.sectionHeader}>
-                <div className={styles.sectionHeaderLeft}>
-                  <p className={styles.sectionTitle}>
-                    Class Roster ({tableDeptFilter === 'all' ? rosterData.total_students : displayedStudents.length})
-                  </p>
-                  {deptOptions.length > 1 && (
-                    <select
-                      className={styles.tableFilterSelect}
-                      value={tableDeptFilter}
-                      onChange={e => setTableDeptFilter(e.target.value)}
-                      title="Filter table display by department"
-                    >
-                      <option value="all">All Departments ({rosterData.total_students})</option>
-                      {deptOptions.map(d => (
-                        <option key={d.key} value={d.key}>
-                          {d.name} ({d.count})
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                {rosterData.total_students > 0 && (
-                  <button className={styles.downloadBtn} onClick={handleOpenPdfModal}>
-                    📄 Download Attendance Sheet
-                  </button>
+                {/* Semester Filter if multiple available */}
+                {availableSemesters.length > 1 && (
+                  <select
+                    className={styles.tableFilterSelect}
+                    value={selectedTimetableSemester}
+                    onChange={e => setSelectedTimetableSemester(e.target.value)}
+                  >
+                    <option value="all">All Semesters</option>
+                    {availableSemesters.map(sem => (
+                      <option key={sem} value={sem.toString()}>
+                        Semester {sem}
+                      </option>
+                    ))}
+                  </select>
                 )}
-              </div>
 
-              <div className={styles.tableWrapper}>
-                {rosterData.total_students === 0 ? (
-                  <div className={styles.emptyState}>
-                    <div className={styles.emptyIcon}>📭</div>
-                    <p className={styles.emptyTitle}>No students enrolled</p>
-                    <p className={styles.emptySubtitle}>No students have selected this course yet.</p>
-                  </div>
-                ) : displayedStudents.length === 0 ? (
-                  <div className={styles.emptyState}>
-                    <div className={styles.emptyIcon}>🔍</div>
-                    <p className={styles.emptyTitle}>No matching students</p>
-                    <p className={styles.emptySubtitle}>No students enrolled from the selected department.</p>
-                  </div>
-                ) : (
-                  <table className={styles.table}>
-                    <thead className={styles.tableHead}>
-                      <tr><th>#</th><th>Name</th><th>Department</th></tr>
+                {/* Total Teaching Hours / Periods Badge */}
+                <span className={styles.timetableMetaPill}>
+                  {filteredWeeklySchedule.length} Weekly {filteredWeeklySchedule.length === 1 ? 'Period' : 'Periods'}
+                </span>
+              </div>
+            </div>
+
+            {weeklySchedule.length === 0 && !loadingSchedule ? (
+              <div
+                style={{
+                  background: '#ffffff',
+                  border: '1.5px dashed #cbd5e1',
+                  borderRadius: '12px',
+                  padding: '2.5rem 1.5rem',
+                  textAlign: 'center',
+                  color: '#475569',
+                }}
+              >
+                <div style={{ fontSize: '2.25rem', marginBottom: '0.5rem' }}>🗓️</div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#002147', margin: '0 0 0.5rem' }}>
+                  No Timetable Entries Published Yet
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '480px', margin: '0 auto', lineHeight: 1.5 }}>
+                  Timetable entries for your assigned courses have not been scheduled or published yet by your department. Once published, your weekly class grid will appear here.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Desktop Grid View */}
+                <div className={styles.timetableDesktop}>
+                  <table className={styles.timetableTable}>
+                    <thead>
+                      <tr>
+                        <th className={`${styles.timetableTh} ${styles.timetableThDay}`}>Day</th>
+                        {PERIODS.map(p => (
+                          <th key={p.num} className={styles.timetableTh}>
+                            <div>{p.label}</div>
+                            <div style={{ fontSize: '0.65rem', fontWeight: 500, color: '#64748b' }}>{p.time}</div>
+                          </th>
+                        ))}
+                      </tr>
                     </thead>
                     <tbody>
-                      {displayedStudents.map((student, index) => (
-                        <tr key={student.id} className={styles.tableRow}>
-                          <td>{index + 1}</td>
-                          <td>{student.full_name}</td>
-                          <td><span className={styles.deptBadge}>{student.department_code || student.department}</span></td>
+                      {(selectedTimetableDay === 'all'
+                        ? DAYS
+                        : DAYS.filter(d => d.num === selectedTimetableDay)
+                      ).map(day => (
+                        <tr key={day.num}>
+                          <td className={styles.timetableDayCell}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <span>{day.name}</span>
+                              {day.num === getCurrentUserDay() && (
+                                <span className={styles.todayBadge}>Today</span>
+                              )}
+                            </div>
+                          </td>
+                          {PERIODS.map(period => {
+                            const matchingEntry = filteredWeeklySchedule.find(
+                              e => e.day_of_week === day.num && e.period_number === period.num
+                            )
+
+                            return (
+                              <td key={period.num} className={styles.timetableTd}>
+                                {matchingEntry ? (
+                                  <div
+                                    className={`${styles.timetableSlotFilled} ${
+                                      matchingEntry.is_lab_block ? styles.timetableSlotLab : ''
+                                    }`}
+                                  >
+                                    <div>
+                                      <div className={styles.timetableCourseCode}>
+                                        {matchingEntry.course_code}
+                                      </div>
+                                      <div
+                                        className={styles.timetableCourseTitle}
+                                        title={matchingEntry.course_title}
+                                      >
+                                        {matchingEntry.course_title}
+                                      </div>
+                                    </div>
+                                    <div className={styles.timetableMetaRow}>
+                                      <span className={styles.timetableCategoryBadge}>
+                                        {matchingEntry.course_category || (matchingEntry.course_semester ? `Sem ${matchingEntry.course_semester}` : 'Core')}
+                                      </span>
+                                      {matchingEntry.is_lab_block && (
+                                        <span className={styles.timetableLabBadge}>Lab</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className={styles.timetableSlotEmpty}>—</div>
+                                )}
+                              </td>
+                            )
+                          })}
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                )}
-              </div>
-            </div>
-          </>
+                </div>
+
+                {/* Mobile Vertical Period View */}
+                {(() => {
+                  const activeMobileDayNum =
+                    selectedTimetableDay === 'all' ? getCurrentUserDay() : selectedTimetableDay
+                  const activeDayObj = DAYS.find(d => d.num === activeMobileDayNum) || DAYS[0]
+                  const isToday = activeDayObj.num === getCurrentUserDay()
+
+                  return (
+                    <div className={styles.timetableMobile}>
+                      <div className={styles.mobileDayHeader}>
+                        <div className={styles.mobileDayTitle}>
+                          <span>{activeDayObj.name}</span>
+                          {isToday && <span className={styles.todayBadge}>Today</span>}
+                        </div>
+                        <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
+                          6 Scheduled Periods
+                        </span>
+                      </div>
+
+                      <div className={styles.verticalPeriodList}>
+                        {PERIODS.map(period => {
+                          const matchingEntry = filteredWeeklySchedule.find(
+                            e => e.day_of_week === activeDayObj.num && e.period_number === period.num
+                          )
+
+                          return (
+                            <div key={period.num} className={styles.verticalPeriodCard}>
+                              <div className={styles.verticalPeriodTimeCol}>
+                                <span className={styles.verticalPeriodNum}>{period.label}</span>
+                                <span className={styles.verticalPeriodTime}>{period.time}</span>
+                              </div>
+
+                              <div className={styles.verticalPeriodContent}>
+                                {matchingEntry ? (
+                                  <div className={styles.verticalPeriodFilled}>
+                                    <div className={styles.verticalPeriodHeader}>
+                                      <span className={styles.verticalCourseCode}>
+                                        {matchingEntry.course_code}
+                                      </span>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                        <span className={styles.timetableCategoryBadge}>
+                                          {matchingEntry.course_category || (matchingEntry.course_semester ? `Sem ${matchingEntry.course_semester}` : 'Core')}
+                                        </span>
+                                        {matchingEntry.is_lab_block && (
+                                          <span className={styles.timetableLabBadge}>Lab</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className={styles.verticalCourseTitle}>
+                                      {matchingEntry.course_title}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className={styles.verticalPeriodEmpty}>
+                                    <span>— Free Period / No Class —</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
+              </>
+            )}
+          </div>
         )}
 
+        {/* TAB 3: MY ASSIGNED PAPERS & CLASS ROSTERS */}
+        {activeTab === 'rosters' && (
+          <div>
+            {assignedCourses.length === 0 && !loadingProfile && (
+              <div
+                style={{
+                  background: '#ffffff',
+                  border: '1.5px dashed #cbd5e1',
+                  borderRadius: '12px',
+                  padding: '2.5rem 1.5rem',
+                  textAlign: 'center',
+                  color: '#475569',
+                  marginBottom: '1rem',
+                }}
+              >
+                <div style={{ fontSize: '2.25rem', marginBottom: '0.5rem' }}>📚</div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#002147', margin: '0 0 0.5rem' }}>
+                  No Courses Currently Assigned
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '480px', margin: '0 auto', lineHeight: 1.5 }}>
+                  Your Head of Department (HOD) has not assigned you to any courses yet. Once assigned, your papers, enrolled student lists, and downloadable attendance sheets will appear here.
+                </p>
+              </div>
+            )}
+
+            {/* Paper Selection Card */}
+            <div className={styles.filterCard}>
+              <div className={styles.filterCardHeader}>
+                <p className={styles.filterCardTitle}>🔍 Assigned Papers & Course Selection</p>
+              </div>
+
+              <div className={styles.filterControlsGrid}>
+                <div className={styles.filterGroup}>
+                  <label className={styles.filterLabel}>Filter By Semester</label>
+                  <select
+                    className={styles.filterSelect}
+                    value={selectedSemester}
+                    onChange={e => setSelectedSemester(e.target.value)}
+                  >
+                    <option value="all">All Semesters</option>
+                    {availableSemesters.map(sem => (
+                      <option key={sem} value={sem.toString()}>
+                        Semester {sem}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className={styles.paperSelectGroup}>
+                  <label className={styles.filterLabel}>
+                    Select Assigned Paper ({filteredAssignedCourses.length} available)
+                  </label>
+                  <CustomPaperSelect
+                    courses={filteredAssignedCourses}
+                    selectedCourseId={selectedCourseId}
+                    onSelect={courseId => {
+                      setSelectedCourseId(courseId)
+                      handleFetchRoster(courseId)
+                    }}
+                    disabled={loadingRoster}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {loadingRoster && (
+              <div className={styles.loadingState}>
+                <div className={styles.spinner} />
+                <p className={styles.loadingText}>Fetching enrolled student roster...</p>
+              </div>
+            )}
+
+            {!loadingRoster && rosterData && (
+              <div className={styles.detailsContainer}>
+                <div className={styles.courseInfoBanner}>
+                  <div>
+                    <p className={styles.courseInfoName}>{rosterData.course.title}</p>
+                    <p className={styles.courseInfoCode}>{rosterData.course.course_code}</p>
+                  </div>
+                </div>
+
+                <div className={styles.statsRow}>
+                  <div className={styles.statCard}>
+                    <p className={styles.statValue}>{rosterData.total_students}</p>
+                    <p className={styles.statLabel}>Enrolled Students</p>
+                  </div>
+                  <div className={styles.statCard}>
+                    <p className={styles.statValue}>{Object.keys(rosterData.department_breakdown).length}</p>
+                    <p className={styles.statLabel}>Departments</p>
+                  </div>
+                </div>
+
+                {Object.keys(rosterData.department_breakdown).length > 0 && (
+                  <div className={styles.breakdownCard}>
+                    <p className={styles.breakdownTitle}>Department Breakdown</p>
+                    {Object.entries(rosterData.department_breakdown).map(([dept, count]) => (
+                      <div key={dept} className={styles.breakdownRow}>
+                        <span className={styles.breakdownDept}>{dept}</span>
+                        <span className={styles.breakdownCount}>{count} students</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className={styles.sectionHeader}>
+                  <div className={styles.sectionHeaderLeft}>
+                    <p className={styles.sectionTitle}>
+                      Class Roster ({tableDeptFilter === 'all' ? rosterData.total_students : displayedStudents.length})
+                    </p>
+                    {deptOptions.length > 1 && (
+                      <select
+                        className={styles.tableFilterSelect}
+                        value={tableDeptFilter}
+                        onChange={e => setTableDeptFilter(e.target.value)}
+                        title="Filter roster by student department"
+                      >
+                        <option value="all">All Departments ({rosterData.total_students})</option>
+                        {deptOptions.map(d => (
+                          <option key={d.key} value={d.key}>
+                            {d.name} ({d.count})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {rosterData.total_students > 0 && (
+                    <button className={styles.downloadBtn} onClick={handleOpenPdfModal}>
+                      📄 Download Attendance Sheet (PDF)
+                    </button>
+                  )}
+                </div>
+
+                <div className={styles.tableWrapper}>
+                  {rosterData.total_students === 0 ? (
+                    <div className={styles.emptyState}>
+                      <div className={styles.emptyIcon}>📭</div>
+                      <p className={styles.emptyTitle}>No students enrolled</p>
+                      <p className={styles.emptySubtitle}>No students have registered for this assigned paper yet.</p>
+                    </div>
+                  ) : displayedStudents.length === 0 ? (
+                    <div className={styles.emptyState}>
+                      <div className={styles.emptyIcon}>🔍</div>
+                      <p className={styles.emptyTitle}>No matching students</p>
+                      <p className={styles.emptySubtitle}>No students enrolled from the selected department.</p>
+                    </div>
+                  ) : (
+                    <table className={styles.table}>
+                      <thead className={styles.tableHead}>
+                        <tr>
+                          <th>#</th>
+                          <th>Student Name</th>
+                          <th>Department</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {displayedStudents.map((student, index) => (
+                          <tr key={student.id} className={styles.tableRow}>
+                            <td>{index + 1}</td>
+                            <td>{student.full_name}</td>
+                            <td>
+                              <span className={styles.deptBadge}>
+                                {student.department_code || student.department}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* PDF Export Modal */}
+      {/* ATTENDANCE MARKING MODAL */}
+      {activeSlotForMarking && (
+        <div className={styles.modalOverlay} onClick={() => setActiveSlotForMarking(null)}>
+          <div className={styles.attendanceModal} onClick={e => e.stopPropagation()}>
+            <div className={styles.attendanceModalHeader}>
+              <div>
+                <h3 className={styles.modalPeriodTitle}>
+                  📝 Period {activeSlotForMarking.period_number} Attendance
+                </h3>
+                <p className={styles.modalPeriodSub}>
+                  {activeSlotForMarking.course_title} ({activeSlotForMarking.course_code}) •{' '}
+                  {activeSlotForMarking.start_time.slice(0, 5)} - {activeSlotForMarking.end_time.slice(0, 5)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalCloseWhiteBtn}
+                onClick={() => setActiveSlotForMarking(null)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {markingError && <div className={styles.errorBanner} style={{ margin: '0.75rem 1.25rem 0' }}>{markingError}</div>}
+
+            <div className={styles.attendanceModalControls}>
+              <div className={styles.attendanceStatsLive}>
+                <span>Total: <strong>{markingRoster.length}</strong></span>
+                <span className={styles.statLivePresent}>
+                  ✓ Present: <strong>{markingRoster.length - absentStudentIds.size}</strong>
+                </span>
+                <span className={styles.statLiveAbsent}>
+                  ✗ Absent: <strong>{absentStudentIds.size}</strong>
+                </span>
+              </div>
+              <div className={styles.quickActionGroup}>
+                <button
+                  type="button"
+                  className={styles.quickBtn}
+                  onClick={handleMarkAllPresent}
+                >
+                  All Present
+                </button>
+                <button
+                  type="button"
+                  className={styles.quickBtn}
+                  onClick={handleMarkAllAbsent}
+                >
+                  All Absent
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.attendanceStudentList}>
+              {loadingMarkingRoster ? (
+                <div className={styles.loadingState}>
+                  <div className={styles.spinner} />
+                  <p className={styles.loadingText}>Loading enrolled student roster...</p>
+                </div>
+              ) : markingRoster.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                  No students registered for this course.
+                </div>
+              ) : (
+                markingRoster.map((student, idx) => {
+                  const isAbsent = absentStudentIds.has(student.id)
+                  return (
+                    <div
+                      key={student.id}
+                      className={`${styles.studentAttendanceRow} ${
+                        isAbsent ? styles.studentAttendanceRowAbsent : styles.studentAttendanceRowPresent
+                      }`}
+                    >
+                      <div className={styles.studentInfoBlock}>
+                        <span className={styles.studentRowName}>
+                          {idx + 1}. {student.full_name}
+                        </span>
+                        <span className={styles.studentRowMeta}>
+                          {student.department_code || student.department}
+                          {student.cap_application_number ? ` • CAP: ${student.cap_application_number}` : ''}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        className={`${styles.toggleStatusBtn} ${
+                          isAbsent ? styles.toggleStatusAbsent : styles.toggleStatusPresent
+                        }`}
+                        onClick={() => handleToggleStudentStatus(student.id)}
+                      >
+                        {isAbsent ? '✗ ABSENT' : '✓ PRESENT'}
+                      </button>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <div className={styles.attendanceModalFooter}>
+              <button
+                type="button"
+                className={styles.modalCancelBtn}
+                onClick={() => setActiveSlotForMarking(null)}
+                disabled={submittingAttendance}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.submitAttendanceBtn}
+                onClick={handleSubmitAttendance}
+                disabled={submittingAttendance || loadingMarkingRoster}
+              >
+                {submittingAttendance
+                  ? 'Submitting...'
+                  : `Save & Submit (${markingRoster.length - absentStudentIds.size} Present, ${absentStudentIds.size} Absent)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PDF EXPORT MODAL */}
       {showPdfModal && rosterData && (
         <div className={styles.modalOverlay} onClick={() => setShowPdfModal(false)}>
           <div className={styles.modal} onClick={e => e.stopPropagation()}>
@@ -591,10 +1286,10 @@ export default function TeacherDashboard() {
             </div>
 
             <p className={styles.modalSubtitle}>
-              Select department(s) to include in the generated attendance sheet for <strong>{rosterData.course.title}</strong> ({rosterData.course.course_code}).
+              Select department(s) to include in the generated attendance sheet for{' '}
+              <strong>{rosterData.course.title}</strong> ({rosterData.course.course_code}).
             </p>
 
-            {/* Selection Mode Radios */}
             <div className={styles.pdfOptionBlock}>
               <label className={`${styles.radioOption} ${pdfDeptMode === 'all' ? styles.radioOptionActive : ''}`}>
                 <input
@@ -630,7 +1325,6 @@ export default function TeacherDashboard() {
               </label>
             </div>
 
-            {/* Custom Department Selection Checklist */}
             {pdfDeptMode === 'custom' && (
               <div className={styles.customDeptContainer}>
                 <div className={styles.deptQuickHeader}>
@@ -689,14 +1383,12 @@ export default function TeacherDashboard() {
               </div>
             )}
 
-            {/* Warning when no department is checked */}
             {pdfDeptMode === 'custom' && selectedPdfDepts.length === 0 && (
               <div className={styles.pdfWarningBanner}>
                 ⚠️ Please select at least one department to export.
               </div>
             )}
 
-            {/* Live Summary */}
             <div className={styles.pdfSummaryBox}>
               <span>Students included in PDF:</span>
               <strong className={styles.pdfSummaryCount}>
@@ -704,7 +1396,6 @@ export default function TeacherDashboard() {
               </strong>
             </div>
 
-            {/* Modal Actions */}
             <div className={styles.modalActions}>
               <button
                 type="button"
@@ -723,12 +1414,9 @@ export default function TeacherDashboard() {
                 {generatingPdf ? 'Generating PDF...' : `Download PDF (${pdfStudents.length})`}
               </button>
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   )
 }
-

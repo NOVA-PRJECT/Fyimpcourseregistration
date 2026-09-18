@@ -335,7 +335,8 @@ export class AttendanceExportService {
     // Generate buffer
     const arrayBuffer = await workbook.xlsx.writeBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const sanitizedDept = department.code.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const deptCode = department.code || department.name || 'DEPT';
+    const sanitizedDept = deptCode.replace(/[^a-zA-Z0-9_-]/g, '_');
     const filename = `Attendance_Statement_${sanitizedDept}_Sem_${semester}.xlsx`;
 
     return { buffer, filename };

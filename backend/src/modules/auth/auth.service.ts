@@ -16,7 +16,7 @@ export const ROLE_DASHBOARD_MAP: Record<Role, string> = {
   superadmin: '/dashboard/superadmin',
   campus_director: '/dashboard/director',
   hod: '/dashboard/hod',
-  teaching_staff: '/dashboard/teacher',
+  teaching_staff: '/dashboard/teaching_staff',
   teacher: '/dashboard/teacher',
   student: '/dashboard/student',
 }

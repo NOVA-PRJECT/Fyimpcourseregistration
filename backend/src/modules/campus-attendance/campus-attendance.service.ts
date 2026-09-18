@@ -228,6 +228,7 @@ export class CampusAttendanceService {
     return {
       success: true,
       session_type: sessionType,
+      campus_name: campus.name,
       status: status,
       distance_meters: Math.round(distanceMeters),
       signed_in_at: inserted.signed_in_at,

@@ -18,6 +18,7 @@ export class DataSeedService implements OnApplicationBootstrap {
     await this.seedCoursesAndBlueprints()
     this.logger.log('Running automated blueprint resolution verification...')
     await this.verifyBlueprints()
+    await this.seedTeachingStaffUsers()
   }
 
   async seedCoursesAndBlueprints(force = false) {
@@ -1717,6 +1718,112 @@ export class DataSeedService implements OnApplicationBootstrap {
       total_courses: totalCourses,
       total_blueprints: totalBlueprints,
       latest_seed_log: latestLog,
+    }
+  }
+
+  /**
+   * Ensures test accounts for the teaching_staff role exist with known credentials.
+   */
+  async seedTeachingStaffUsers() {
+    this.logger.log('Checking and ensuring Teaching Staff test accounts...')
+
+    // Clean up deprecated redundant placeholder account if exists so each campus has strictly 1 teaching_staff
+    try {
+      const { data: oldFaculty } = await this.supabase.admin
+        .from('faculty')
+        .select('id')
+        .eq('email', 'teachingstaff@mangat.internal')
+        .maybeSingle()
+
+      if (oldFaculty?.id) {
+        await this.supabase.admin.from('faculty').delete().eq('id', oldFaculty.id)
+        await this.supabase.admin.auth.admin.deleteUser(oldFaculty.id).catch(() => {})
+        this.logger.log('Cleaned up deprecated teachingstaff@mangat.internal account.')
+      }
+    } catch (cleanupErr: any) {
+      this.logger.warn(`Could not clean up deprecated staff account: ${cleanupErr?.message || cleanupErr}`)
+    }
+
+    const staffAccounts = [
+      {
+        email: 'teachingstaff@ku.ac.in',
+        password: 'TeachingStaff@123',
+        full_name: 'Dr. K. Raman (Teaching Staff)',
+        role: 'teaching_staff',
+        department_id: null, // Campus-level general staff across all departments
+        campus_id: '5b5289d5-17eb-43ba-832e-19883e9eaada', // Mangat Campus
+      },
+      {
+        email: 'teachingstaff@thalas.internal',
+        password: 'TeachingStaff@123',
+        full_name: 'Teaching Staff Thalas',
+        role: 'teaching_staff',
+        department_id: null, // Campus-level general staff across all departments
+        campus_id: 'feed55c6-deea-46b7-9fa1-a97cfabf0838', // Thalas Campus
+      },
+    ]
+
+    for (const acc of staffAccounts) {
+      try {
+        // 1. Check if auth user exists
+        const { data: authList } = await this.supabase.admin.auth.admin.listUsers()
+        let authUser = (authList?.users || []).find((u) => u.email?.toLowerCase() === acc.email.toLowerCase())
+
+        if (!authUser) {
+          const { data: created, error: createErr } = await this.supabase.admin.auth.admin.createUser({
+            email: acc.email,
+            password: acc.password,
+            email_confirm: true,
+            user_metadata: { role: acc.role },
+            app_metadata: {
+              role: acc.role,
+              campus_id: acc.campus_id,
+              department_id: acc.department_id,
+            },
+          })
+          if (createErr) {
+            this.logger.warn(`Could not create auth account for ${acc.email}: ${createErr.message}`)
+            continue
+          }
+          authUser = created.user
+        } else {
+          // Update password & metadata to ensure credentials work
+          await this.supabase.admin.auth.admin.updateUserById(authUser.id, {
+            password: acc.password,
+            user_metadata: { role: acc.role },
+            app_metadata: {
+              role: acc.role,
+              campus_id: acc.campus_id,
+              department_id: acc.department_id,
+            },
+          })
+        }
+
+        if (authUser) {
+          // 2. Ensure faculty table record exists and has role 'teaching_staff'
+          const { error: upsertErr } = await this.supabase.admin
+            .from('faculty')
+            .upsert(
+              {
+                id: authUser.id,
+                full_name: acc.full_name,
+                email: acc.email,
+                role: acc.role,
+                department_id: acc.department_id,
+                campus_id: acc.campus_id,
+              },
+              { onConflict: 'id' }
+            )
+
+          if (upsertErr) {
+            this.logger.warn(`Could not upsert faculty row for ${acc.email}: ${upsertErr.message}`)
+          } else {
+            this.logger.log(`Teaching staff account verified: ${acc.email} (${acc.full_name})`)
+          }
+        }
+      } catch (err: any) {
+        this.logger.error(`Error provisioning teaching staff ${acc.email}: ${err?.message || err}`)
+      }
     }
   }
 }

@@ -34,6 +34,15 @@ export class PeriodAttendanceController {
     return this.periodService.getCurrentPeriod(user);
   }
 
+  @Get('teacher-schedule')
+  @Roles('teacher', 'teaching_staff', 'hod')
+  async getTeacherSchedule(
+    @CurrentUser() user: AuthUser,
+    @Query('date') date?: string
+  ) {
+    return this.periodService.getTeacherSchedule(user, date);
+  }
+
   @Post('submit')
   @Roles('teacher', 'teaching_staff', 'hod')
   async submitAttendance(

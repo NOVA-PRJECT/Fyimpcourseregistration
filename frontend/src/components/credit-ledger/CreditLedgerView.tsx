@@ -324,11 +324,13 @@ export default function CreditLedgerView({
                           {dept.count} {dept.count === 1 ? 'course' : 'courses'} registered
                         </span>
                       </div>
-                      <div className={styles.barTrack}>
-                        <div
-                          className={styles.barFill}
-                          style={{ width: `${widthPercent}%` }}
-                        />
+                      <div className={styles.barTrackWrapper}>
+                        <div className={styles.barTrack}>
+                          <div
+                            className={styles.barFill}
+                            style={{ width: `${widthPercent}%` }}
+                          />
+                        </div>
                         <span className={styles.barBadge}>{dept.earned} Credits</span>
                       </div>
                     </div>

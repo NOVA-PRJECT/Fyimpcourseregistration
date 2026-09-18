@@ -7,7 +7,7 @@
 .contentWrapper {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 1rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -18,7 +18,7 @@
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 0.875rem;
-  padding: 1.5rem 1.75rem;
+  padding:1.5rem 1.75rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -220,15 +220,20 @@
   font-weight: 500;
 }
 
+.barTrackWrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
 .barTrack {
+  flex: 1;
   position: relative;
-  height: 1.6rem;
+  height: 1.5rem;
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
   border-radius: 0.5rem;
   overflow: hidden;
-  display: flex;
-  align-items: center;
 }
 
 .barFill {
@@ -239,12 +244,14 @@
 }
 
 .barBadge {
-  position: absolute;
-  right: 0.75rem;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 800;
   color: #002147;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  min-width: 72px;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 .barEmpty {
@@ -509,6 +516,15 @@
 
   .barDeptTitle {
     font-size: 0.78rem !important;
+  }
+
+  .barTrackWrapper {
+    gap: 0.5rem !important;
+  }
+
+  .barBadge {
+    font-size: 0.74rem !important;
+    min-width: 60px !important;
   }
 }
 

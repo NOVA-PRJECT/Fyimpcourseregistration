@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   FileSpreadsheet,
 } from 'lucide-react'
+import { downloadBlob } from '@/core/utils/downloadFile'
 import styles from './hod-dashboard.module.css'
 
 interface DepartmentSlot {
@@ -97,10 +98,24 @@ export default function PeriodMarkingTab() {
     setExporting(true)
     setError('')
     try {
-      const res = await fetch(`/api/attendance/export/statement?semesterId=${sem}`)
+      const res = await fetch(`/api/attendance/export/statement?semesterId=${sem}`, {
+        credentials: 'include',
+      })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         setError(err.message || 'Failed to export attendance statement.')
+        return
+      }
+
+      // Guard: if the server returned HTML or JSON instead of XLSX, it's an error
+      const contentType = res.headers.get('content-type') || ''
+      if (
+        !contentType.includes('spreadsheetml') &&
+        !contentType.includes('octet-stream') &&
+        !contentType.includes('openxmlformats')
+      ) {
+        const text = await res.text()
+        setError(`Export failed: server returned unexpected content (${contentType || 'no type'}). ${text.slice(0, 200)}`)
         return
       }
 
@@ -113,15 +128,11 @@ export default function PeriodMarkingTab() {
           filename = match[1]
         }
       }
+      if (!filename.toLowerCase().endsWith('.xlsx')) {
+        filename += '.xlsx'
+      }
 
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      window.URL.revokeObjectURL(url)
+      await downloadBlob(blob, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     } catch (err: any) {
       setError(err.message || 'Network error exporting attendance statement.')
     } finally {

@@ -75,9 +75,9 @@ export class TimetableController {
   @Post('publish')
   @Roles('superadmin', 'campus_director')
   async publish(
-    @Body() body: { academicYear: string; semester: number },
+    @Body() body: { academicYear: string; semester: number; force?: boolean },
     @CurrentUser() user: AuthUser,
   ) {
-    return this.timetableService.publish(body.academicYear, body.semester, user)
+    return this.timetableService.publish(body.academicYear, Number(body.semester), user, body.force)
   }
 }

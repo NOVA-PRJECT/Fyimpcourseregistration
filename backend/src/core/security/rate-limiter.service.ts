@@ -26,7 +26,7 @@ export class RateLimiterService {
 
     this.loginLimiter = new Ratelimit({
       redis: this.redis,
-      limiter: Ratelimit.slidingWindow(5, '15 m'),
+      limiter: Ratelimit.slidingWindow(10, '15 m'),
       prefix: 'ratelimit:login',
     })
 

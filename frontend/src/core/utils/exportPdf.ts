@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf'
+import { downloadBlob } from './downloadFile'
 
 interface Student {
   full_name: string
@@ -236,6 +237,11 @@ export async function generateAttendanceSheet({
   }
 
   // ── SAVE ─────────────────────────────────────
-  const fileName = `Attendance_${courseCode}_${new Date().toISOString().slice(0, 7)}.pdf`
-  doc.save(fileName)
+  const cleanCode = (courseCode || 'COURSE').replace(/[^a-zA-Z0-9_-]/g, '_')
+  const fileName = `Attendance_${cleanCode}_${new Date().toISOString().slice(0, 7)}.pdf`
+  // Use arraybuffer (not 'blob') to bypass jsPDF's SAFE wrapper which can silently
+  // return undefined on errors. We then wrap it in a Blob ourselves.
+  const pdfArrayBuffer = doc.output('arraybuffer')
+  const pdfBlob = new Blob([pdfArrayBuffer], { type: 'application/pdf' })
+  await downloadBlob(pdfBlob, fileName, 'application/pdf')
 }

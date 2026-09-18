@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
+import { downloadBlob } from '@/core/utils/downloadFile';
 import styles from './timetable.module.css';
 
 interface TimetableEntry {
@@ -134,6 +135,8 @@ export default function CampusDirectorTimetablePage() {
   // Publish state
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [publishModalError, setPublishModalError] = useState<string | null>(null);
+  const [publishConflicts, setPublishConflicts] = useState<any[] | null>(null);
 
   // Feedback banners
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -610,29 +613,45 @@ export default function CampusDirectorTimetablePage() {
     }
   }
 
-  async function handlePublish() {
+  async function handlePublish(force = false) {
     setPublishing(true);
+    setPublishModalError(null);
+    setPublishConflicts(null);
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
       const res = await fetch('/api/timetable/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ academicYear, semester }),
+        body: JSON.stringify({ academicYear, semester, force }),
       });
       const data = await res.json();
       if (!res.ok) {
         const msg = typeof data.message === 'string' 
           ? data.message 
           : data.message?.error || data.error || 'Failed to publish timetable';
-        setErrorMsg(msg);
+
+        if (data.conflicts && Array.isArray(data.conflicts) && data.conflicts.length > 0) {
+          setPublishConflicts(data.conflicts);
+          setPublishModalError(msg);
+        } else {
+          setPublishModalError(msg);
+          setErrorMsg(msg);
+        }
       } else {
-        setSuccessMsg(data.message || 'Timetable published successfully');
+        const countMsg = data.publishedCount ? ` (${data.publishedCount} active sessions)` : '';
+        setSuccessMsg((data.message || 'Timetable published successfully') + countMsg);
         setShowPublishModal(false);
+        setPublishModalError(null);
+        setPublishConflicts(null);
+        // Instantly update entries locally to show "published" status
+        setAllEntries((prev) => prev.map((e) => ({ ...e, status: 'published' })));
         invalidateCache();
       }
-    } catch (err) {
-      setErrorMsg('Network error while publishing timetable');
+    } catch {
+      const netErr = 'Network error while publishing timetable. Please check your connection.';
+      setPublishModalError(netErr);
+      setErrorMsg(netErr);
     } finally {
       setPublishing(false);
     }
@@ -761,7 +780,11 @@ export default function CampusDirectorTimetablePage() {
       const selectedDeptObj = deptMap.get(targetDept);
       const fileTag = targetDept === 'all' ? 'All_Departments' : (selectedDeptObj?.code || selectedDeptObj?.name || 'Department');
       const filename = `FYIMP_Timetable_${fileTag}_${academicYear}_Sem${semester}.xlsx`;
-      XLSX.writeFile(wb, filename);
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      await downloadBlob(blob, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     } else {
       setPrintTargetDept(targetDept);
       setTimeout(() => {
@@ -917,7 +940,11 @@ export default function CampusDirectorTimetablePage() {
 
                   <button
                     className={styles.exportExcelBtn}
-                    onClick={() => setShowPublishModal(true)}
+                    onClick={() => {
+                      setPublishModalError(null);
+                      setPublishConflicts(null);
+                      setShowPublishModal(true);
+                    }}
                     title="Publish timetable for students and faculty"
                     style={{ background: '#059669' }}
                   >
@@ -2051,45 +2078,142 @@ export default function CampusDirectorTimetablePage() {
 
       {/* Publish Modal */}
       {showPublishModal && (
-        <div className={styles.overlay}>
-          <div className={styles.modalCard} style={{ maxWidth: '400px' }}>
-            <h3 style={{ margin: '0 0 1rem 0', color: '#1e293b' }}>Confirm Publish</h3>
-            <p style={{ margin: '0 0 1.5rem 0', color: '#475569', fontSize: '0.9rem', lineHeight: '1.4' }}>
-              Are you sure you want to publish the timetable for Semester {semester} ({academicYear})? This will make it visible to all students and faculty.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal} style={{ maxWidth: '480px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <h3 className={styles.modalTitle} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>🚀</span> Confirm Timetable Publication
+              </h3>
               <button
+                type="button"
+                onClick={() => {
+                  setShowPublishModal(false);
+                  setPublishModalError(null);
+                  setPublishConflicts(null);
+                }}
+                disabled={publishing}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '1.1rem',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '0.25rem',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className={styles.modalSubtitle} style={{ marginBottom: '1rem', lineHeight: 1.5 }}>
+              Are you sure you want to publish the timetable for <strong>Semester {semester} ({academicYear})</strong>? Once published, the schedule will instantly be activated and visible to all faculty members and enrolled students.
+            </p>
+
+            {publishModalError && (
+              <div
+                style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '0.5rem',
+                  padding: '0.75rem 1rem',
+                  marginBottom: '1rem',
+                  fontSize: '0.85rem',
+                  color: '#991b1b',
+                }}
+              >
+                <strong>⚠️ Note:</strong> {publishModalError}
+              </div>
+            )}
+
+            {publishConflicts && publishConflicts.length > 0 && (
+              <div
+                style={{
+                  background: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  borderRadius: '0.5rem',
+                  padding: '0.75rem 1rem',
+                  marginBottom: '1rem',
+                  maxHeight: '160px',
+                  overflowY: 'auto',
+                  fontSize: '0.8rem',
+                  color: '#92400e',
+                }}
+              >
+                <div style={{ fontWeight: 700, marginBottom: '0.35rem' }}>
+                  {publishConflicts.length} Conflict{publishConflicts.length > 1 ? 's' : ''} Detected:
+                </div>
+                <ul style={{ margin: 0, paddingLeft: '1.25rem', lineHeight: 1.4 }}>
+                  {publishConflicts.map((c, idx) => (
+                    <li key={idx} style={{ marginBottom: '0.25rem' }}>
+                      <strong>{c.courseName}:</strong> {c.reason} ({c.conflictingStudentCount} student{c.conflictingStudentCount === 1 ? '' : 's'})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
+              <button
+                type="button"
                 style={{
                   background: 'transparent',
                   border: '1px solid #cbd5e1',
-                  padding: '0.5rem 1rem',
+                  padding: '0.55rem 1rem',
                   borderRadius: '0.375rem',
                   fontWeight: 600,
                   fontSize: '0.85rem',
                   cursor: 'pointer',
+                  color: '#475569',
                 }}
-                onClick={() => setShowPublishModal(false)}
+                onClick={() => {
+                  setShowPublishModal(false);
+                  setPublishModalError(null);
+                  setPublishConflicts(null);
+                }}
                 disabled={publishing}
               >
                 Cancel
               </button>
-              <button
-                style={{
-                  background: '#059669',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '0.5rem 1.25rem',
-                  borderRadius: '0.375rem',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  cursor: publishing ? 'not-allowed' : 'pointer',
-                  opacity: publishing ? 0.7 : 1,
-                }}
-                onClick={handlePublish}
-                disabled={publishing}
-              >
-                {publishing ? 'Publishing...' : 'Yes, Publish'}
-              </button>
+
+              {publishConflicts && publishConflicts.length > 0 ? (
+                <button
+                  type="button"
+                  style={{
+                    background: '#d97706',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '0.55rem 1.25rem',
+                    borderRadius: '0.375rem',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    cursor: publishing ? 'not-allowed' : 'pointer',
+                    opacity: publishing ? 0.7 : 1,
+                  }}
+                  onClick={() => handlePublish(true)}
+                  disabled={publishing}
+                >
+                  {publishing ? 'Publishing...' : 'Publish Anyway with Conflicts ⚠️'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  style={{
+                    background: '#059669',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '0.55rem 1.25rem',
+                    borderRadius: '0.375rem',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    cursor: publishing ? 'not-allowed' : 'pointer',
+                    opacity: publishing ? 0.7 : 1,
+                  }}
+                  onClick={() => handlePublish(false)}
+                  disabled={publishing}
+                >
+                  {publishing ? 'Publishing...' : 'Yes, Publish Timetable 🚀'}
+                </button>
+              )}
             </div>
           </div>
         </div>

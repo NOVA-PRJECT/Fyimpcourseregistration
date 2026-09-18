@@ -682,6 +682,12 @@ export class HodService {
       email,
       password,
       email_confirm: true,
+      user_metadata: { role: 'teacher' },
+      app_metadata: {
+        role: 'teacher',
+        department_id: departmentId,
+        campus_id: campusId,
+      },
     })
 
     if (authError || !authData?.user) {
@@ -712,6 +718,7 @@ export class HodService {
 
     // 3. Set app_metadata
     await this.supabase.admin.auth.admin.updateUserById(teacherId, {
+      user_metadata: { role: 'teacher' },
       app_metadata: {
         role: 'teacher',
         department_id: departmentId,

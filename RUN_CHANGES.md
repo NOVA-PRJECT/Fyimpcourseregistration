@@ -1,5 +1,51 @@
 # Run Changes
 
+Date: 2026-09-18
+
+### Fix File Downloads & File Names for Teacher Dashboard (PDF) & HOD Dashboard (Excel)
+- **Request**: `"we have a problem in teahcer dahbsoard that is the sheet is getting downloaded but not aas pdf and its name i think is coming as uuid / same for hod excel export / both cant even open after download"`
+- **Files**:
+  - `frontend/src/core/utils/downloadFile.ts` (NEW)
+  - `frontend/src/core/utils/exportPdf.ts`
+  - `frontend/src/app/dashboard/hod/PeriodMarkingTab.tsx`
+  - `frontend/src/core/utils/exportExcel.ts`
+  - `frontend/src/app/dashboard/director/timetable/page.tsx`
+  - `backend/src/main.ts`
+  - `backend/src/modules/period-attendance/attendance-export.service.ts`
+- **Changes**:
+  - **Download Helper**: Created `downloadBlob()` in `downloadFile.ts` which appends the `<a>` element to `document.body` before dispatching `.click()`, sets explicit MIME types, and delays `URL.revokeObjectURL()` by 60 seconds to ensure the browser download stream completes.
+  - **Teacher PDF**: Replaced `doc.save()` with `doc.output('blob')` and `downloadBlob()`, resolving Chromium's detached DOM node bug that dropped the `download` filename and defaulted to an extension-less blob UUID.
+  - **HOD Attendance Statement**: Replaced immediate synchronous `URL.revokeObjectURL(url)` (which corrupted the download stream mid-transfer) with `downloadBlob()`, and enforced `.xlsx` extension.
+  - **HOD Student Papers Roster & Director Timetable**: Replaced `XLSX.writeFile()` with `XLSX.write()` buffer wrapped in explicit XLSX MIME `Blob` and downloaded through `downloadBlob()`.
+  - **Backend CORS**: Added `exposedHeaders: ['Content-Disposition']` in `main.ts` so frontend can read server-provided filenames.
+  - **Defensive Department Code**: Guarded `department.code` with fallback before `.replace()` in `attendance-export.service.ts`.
+- **Reason**: Guarantees all PDF and Excel downloads save with their full filenames, correct extensions (`.pdf`, `.xlsx`), and uncorrupted file contents that open immediately in viewer applications.
+
+### Fix TS2345 Type Error in TimetableService Logger
+- **Request**: Fix `TS2345: Argument of type 'PostgrestError' is not assignable to parameter of type 'string'` in `timetable.service.ts`
+- **Files**:
+  - `backend/src/modules/timetable/timetable.service.ts`
+- **Changes**:
+  - Passed `'TimetableService'` context string as the second parameter to `this.serverLogger.error()` calls on lines 410 and 449 instead of passing `PostgrestError` objects directly.
+- **Reason**: `ServerLoggerService.prototype.error` signature expects `(message: string, context?: string)`.
+
+Date: 2026-09-17
+
+### Publish Timetable Button & Publishing Flow Fix
+- **Request**: `"publish timetable button not workinhg"`
+- **Files**:
+  - `frontend/src/app/dashboard/director/timetable/page.tsx`
+  - `backend/src/modules/timetable/timetable.controller.ts`
+  - `backend/src/modules/timetable/timetable.service.ts`
+- **Changes**:
+  - **Frontend Modal UI**: Fixed CSS Module class names from undefined `styles.overlay` / `styles.modalCard` to `styles.modalOverlay` / `styles.modal` (with `styles.modalTitle` and `styles.modalSubtitle`), resolving the issue where the modal rendered unstyled and invisible at the bottom of the page.
+  - **In-Modal Conflicts & Errors**: Added in-modal error and conflict list displays with a secondary `Publish Anyway with Conflicts ⚠️` action that passes `force: true`.
+  - **Optimistic State & Cache Invalidation**: Updated timetable entries to `published` immediately in local state upon successful response and called `invalidateCache()`.
+  - **Backend PostgREST Query**: Replaced ambiguous relation query on `timetable_conflicts` with explicit foreign key alias `courses:course_id(id, title, department_id)` to resolve `PGRST201` error.
+  - **Force Publish Support**: Added `force = false` flag in `timetableService.publish()` and `timetable.controller.ts` to allow publishing even if soft conflict warnings exist.
+  - **Batch Entry Updates**: Ensured entries matching `status IN ('draft', 'generated')` for the campus departments transition to `'published'` with audit logging.
+- **Reason**: Made the confirmation modal visible and interactive, and resolved backend PostgREST relation ambiguity and hard unhandled 422 blocks.
+
 Date: 2026-09-10 (Branch: ui-works)
 
 ### 1. Full UI Integration: 5 Portal Screens
@@ -1273,3 +1319,157 @@ Date: 2026-09-09
      - Dissolved the standalone `/dashboard/student/credits` URL route so that the credit ledger exists exclusively as Tab 6 within the student dashboard.
 - **Verification**:
   - Confirmed directory removal and zero broken stylesheet/component imports.
+
+---
+
+### 40. Fix Undefined Campus Name in Campus Sign-In Message
+- **Files Created**:
+  - `CHANGES_RUN_CAMPUS_SIGN_IN_NAME_FIX.md`
+- **Files Modified**:
+  - `backend/src/modules/campus-attendance/campus-attendance.service.ts`
+  - `frontend/src/app/dashboard/student/CampusSignInCard.tsx`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Backend Payload**: Added `campus_name: campus.name` to the returned success object in `recordCampusSignIn`.
+  2. **Frontend Fallback**: Updated `CampusSignInCard.tsx` to read `${data.campus_name || campusName}`, eliminating the `at undefined!` bug in the sign-in notification banner.
+
+---
+
+### 41. Fix Hidden Credit Count on Department Bar Graph
+- **Files Created**:
+  - `CHANGES_RUN_DEPARTMENT_BAR_BADGE_FIX.md`
+- **Files Modified**:
+  - `frontend/src/components/credit-ledger/CreditLedgerView.tsx`
+  - `frontend/src/components/credit-ledger/credit-ledger.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Flex Row Wrapper**: Wrapped `.barTrack` and `.barBadge` into a `.barTrackWrapper` flex container.
+  2. **Decoupled Badge Positioning**: Removed absolute positioning from `.barBadge`, positioning it cleanly to the right of the bar track with `min-width: 72px` and right alignment.
+  3. **Visual Fix**: Ensured that 100% full-width bars (such as the top department with max credits) can never cover or blend into the credit count text.
+
+---
+
+### 42. Separate Teacher and Teaching Staff Dashboards and Roles
+- **Files Created**:
+  - `CHANGES_RUN_TEACHER_AND_TEACHING_STAFF_SEPARATION.md`
+  - `frontend/src/app/dashboard/teaching_staff/layout.tsx`
+  - `frontend/src/app/dashboard/teaching_staff/page.tsx`
+  - `frontend/src/app/dashboard/teaching_staff/teaching-staff.module.css`
+- **Files Modified**:
+  - `backend/src/modules/auth/auth.service.ts`
+  - `backend/src/modules/period-attendance/period-attendance.service.ts`
+  - `backend/src/modules/period-attendance/period-attendance.controller.ts`
+  - `frontend/src/core/security/routeConfig.ts`
+  - `frontend/middleware.ts`
+  - `frontend/src/app/dashboard/teacher/layout.tsx`
+  - `frontend/src/app/dashboard/teacher/page.tsx`
+  - `frontend/src/app/dashboard/teacher/teacher-dashboard.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Backend Role Mapping**:
+     - Updated `auth.service.ts` to redirect `teaching_staff` to `/dashboard/teaching_staff` and `teacher` to `/dashboard/teacher`.
+     - Added `getTeacherSchedule(user, queryDate)` in `period-attendance.service.ts` and route `GET /api/attendance/period/teacher-schedule`.
+     - Relaxed `isPastGrace` during `NODE_ENV === 'development'` to allow testing period marking at any hour.
+  2. **Frontend Route Configuration**:
+     - Updated `routeConfig.ts` with distinct entries in `ROLE_DASHBOARD_MAP` and `DASHBOARD_ROLE_MAP`.
+     - Updated `middleware.ts` to sort routes by length descending and check boundaries to prevent route prefix collisions.
+  3. **Teaching Staff Portal (`/dashboard/teaching_staff`)**:
+     - Created dedicated layout and page for departmental course catalog and student roster browsing.
+     - Removed attendance roster PDF generation per user instructions.
+  4. **Course Teacher Portal (`/dashboard/teacher`)**:
+     - Restructured into two functional tabs:
+       - **Tab 1: Today's Schedule & Attendance**: Timetable period cards with times, status badges, and interactive Present/Absent toggle marking modal submitting to `POST /api/attendance/period/submit`.
+       - **Tab 2: My Assigned Papers & Class Rosters**: Assigned courses list, student roster table with department filtering, and official PDF Attendance Sheet download (`generateAttendanceSheet`).
+
+---
+
+### 43. Unify Teacher and Teaching Staff Top Bar with Executive Standard
+- **Files Created**:
+  - `CHANGES_RUN_UNIFIED_TEACHER_TOP_BAR.md`
+- **Files Modified**:
+  - `frontend/src/app/dashboard/teacher/page.tsx`
+  - `frontend/src/app/dashboard/teacher/teacher-dashboard.module.css`
+  - `frontend/src/app/dashboard/teaching_staff/page.tsx`
+  - `frontend/src/app/dashboard/teaching_staff/teaching-staff.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Executive Top Bar Architecture**:
+     - Converted the legacy dark navy top bar into the crisp white executive top bar (`#ffffff`, subtle border `1px solid rgba(0, 0, 0, 0.08)`, flex gap `1.25rem`) matching Student, HOD, and Director dashboards.
+  2. **Integrated User Identity**:
+     - Embedded teacher/faculty branding, vertical separator, and teacher name/badges directly inside the top bar.
+     - Retired the detached, redundant `infoCard` box, maximizing screen vertical space for timetable cards and class rosters.
+  3. **Standardized Logout Action**:
+     - Updated logout button to institutional navy styling with `LogOut` door exit icon from `lucide-react`.
+  4. **Responsive Adaptations**:
+     - Added mobile media queries hiding the vertical divider and scaling logos/names smoothly on smaller viewports.
+
+---
+
+### 44. Unify Teacher Dashboard Tab Bar with HOD, Director & Student Standard
+- **Files Created**:
+  - `CHANGES_RUN_UNIFIED_TEACHER_TAB_BAR.md`
+- **Files Modified**:
+  - `frontend/src/app/dashboard/teacher/page.tsx`
+  - `frontend/src/app/dashboard/teacher/teacher-dashboard.module.css`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Full-Viewport-Width Navigation Bar**:
+     - Moved the `<nav className={styles.tabBar}>` out of `mainContent` and placed it directly below the executive `<header className={styles.topBar}>`.
+  2. **Executive Tab Styling**:
+     - Replaced the legacy segmented pill container with an edge-to-edge white bar (`#ffffff`, `border-bottom: 1px solid #e2e5ea`, sticky at `3.15rem`, z-index 99).
+     - Configured equal-span tabs (`flex: 1`) with active border indicator (`border-bottom: 2.5px solid #002147`), soft active tint (`#f0f4f8`), and dynamic count badges.
+
+---
+
+### 45. Add Weekly Timetable Tab to Course Teacher Dashboard
+- **Files Created**:
+  - `CHANGES_RUN_TEACHER_WEEKLY_TIMETABLE_TAB.md`
+- **Files Modified**:
+  - `backend/src/modules/period-attendance/period-attendance.service.ts`
+  - `frontend/src/app/dashboard/teacher/teacher-dashboard.module.css`
+  - `frontend/src/app/dashboard/teacher/page.tsx`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Backend Service (`period-attendance.service.ts`)**:
+     - Added `weeklySchedule` mapping all published timetable entries for the teacher's assigned courses across Monday through Friday (Periods 1 to 6).
+     - Returned `weeklySchedule` in both empty-assignment and active-assignment paths of `getTeacherSchedule`.
+  2. **Frontend Styling (`teacher-dashboard.module.css`)**:
+     - Added desktop timetable table styles with sticky day headers, category tags, lab block highlights, and period time subtitles.
+     - Added mobile vertical period list styles (`@media (max-width: 768px)`).
+     - Added interactive day filter pills and period count pills.
+  3. **Teacher Page (`page.tsx`)**:
+     - Added 3rd navigation tab: `🗓️ Weekly Timetable` with total weekly periods badge.
+     - Implemented full 5-day grid and mobile stacked period view with day filtering, semester filtering, and today highlight.
+
+---
+
+### 46. Connect Supabase MCP with Project API Key
+- **Files Created**:
+  - `CHANGES_RUN_SUPABASE_MCP_API_KEY_CONFIG.md`
+- **Files Modified**:
+  - `C:\Users\windows\.gemini\config\mcp_config.json`
+  - `backend/src/modules/timetable/timetable.service.ts`
+  - `backend/src/modules/timetable/timetable.controller.ts`
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Global MCP Server Configuration (`mcp_config.json`)**:
+     - Replaced remote URL stub with official Stdio `@supabase/mcp-server-postgrest@latest`.
+     - Injected `--apiUrl` pointing to project REST endpoint, `--apiKey` with `SUPABASE_SERVICE_ROLE_KEY`, and `--schema public`.
+  2. **Database Diagnostic Utility (`timetable.service.ts` & `timetable.controller.ts`)**:
+     - Added `inspectDatabase()` method and `@Get('inspect-db')` endpoint checking `time_slots`, `timetable_entries` (draft/published), `courses`, `departments`, and `timetable_conflicts`.
+
+---
+
+### 47. Timetable Database Tables Standalone Creation Script
+- **Files Created**:
+  - `supabase/migrations/CREATE_TIMETABLE_TABLES.sql`
+  - `CHANGES_RUN_TIMETABLE_TABLE_CREATION_SQL.md`
+- **Files Modified**:
+  - `backend/src/modules/timetable/timetable.controller.ts` (reverted diagnostic endpoint)
+  - `backend/src/modules/timetable/timetable.service.ts` (reverted diagnostic helper)
+  - `RUN_CHANGES.md`
+- **Changes**:
+  1. **Cleaned Codebase**: Removed extraneous endpoint and service methods.
+  2. **Standalone DDL Script**: Packaged full `time_slots`, `timetable_entries`, `timetable_conflicts`, `timetable_generation_jobs`, RLS policies, indexes, and standard 30-period seed loop into `CREATE_TIMETABLE_TABLES.sql`.
+
+

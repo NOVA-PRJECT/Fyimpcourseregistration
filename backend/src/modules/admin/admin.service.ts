@@ -249,10 +249,31 @@ export class AdminService {
       throw new BadRequestException('Campus Director cannot be assigned to a department')
     }
 
+    if (role === 'teaching_staff') {
+      const { data: existingStaff } = await this.supabase.admin
+        .from('faculty')
+        .select('id')
+        .eq('campus_id', campus_id)
+        .eq('role', 'teaching_staff')
+        .maybeSingle()
+
+      if (existingStaff) {
+        throw new BadRequestException('This campus already has an assigned Teaching Staff account. Only one Teaching Staff account is permitted per campus.')
+      }
+    }
+
+    const assignedDeptId = (role === 'campus_director' || role === 'teaching_staff') ? null : (department_id ?? null)
+
     const { data: authData, error: authError } = await this.supabase.admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
+      user_metadata: { role },
+      app_metadata: {
+        role,
+        campus_id,
+        department_id: assignedDeptId,
+      },
     })
 
     if (authError || !authData?.user) {
@@ -269,7 +290,7 @@ export class AdminService {
         full_name,
         email,
         role,
-        department_id: department_id ?? null,
+        department_id: assignedDeptId,
         campus_id,
       })
 
@@ -280,10 +301,11 @@ export class AdminService {
 
     // Sync app_metadata
     await this.supabase.admin.auth.admin.updateUserById(authUserId, {
+      user_metadata: { role },
       app_metadata: {
         role,
         campus_id,
-        department_id: department_id ?? null,
+        department_id: assignedDeptId,
       },
     })
 
@@ -301,7 +323,7 @@ export class AdminService {
     return {
       success: true,
       id: authUserId,
-      message: `${role === 'hod' ? 'HOD' : role === 'campus_director' ? 'Campus Director' : 'Teacher'} account created successfully`,
+      message: `${role === 'hod' ? 'HOD' : role === 'campus_director' ? 'Campus Director' : role === 'teaching_staff' ? 'Teaching Staff' : 'Teacher'} account created successfully`,
     }
   }
 
@@ -313,12 +335,28 @@ export class AdminService {
   }, user: AuthUser) {
     const { full_name, role, department_id, campus_id } = body
 
+    if (role === 'teaching_staff') {
+      const { data: existingStaff } = await this.supabase.admin
+        .from('faculty')
+        .select('id')
+        .eq('campus_id', campus_id)
+        .eq('role', 'teaching_staff')
+        .neq('id', id)
+        .maybeSingle()
+
+      if (existingStaff) {
+        throw new BadRequestException('This campus already has an assigned Teaching Staff account. Only one Teaching Staff account is permitted per campus.')
+      }
+    }
+
+    const assignedDeptId = (role === 'campus_director' || role === 'teaching_staff') ? null : (department_id ?? null)
+
     const { error } = await this.supabase.admin
       .from('faculty')
       .update({
         full_name,
         role,
-        department_id: department_id ?? null,
+        department_id: assignedDeptId,
         campus_id,
       })
       .eq('id', id)
@@ -329,7 +367,7 @@ export class AdminService {
       app_metadata: {
         role,
         campus_id,
-        department_id: department_id ?? null,
+        department_id: assignedDeptId,
       },
     })
 

@@ -313,7 +313,7 @@ export default function SuperAdminDashboard() {
   function openEditFaculty(f: Faculty) {
     setEditFaculty(f)
     setEditFacultyName(f.full_name)
-    setEditFacultyRole(f.role as 'hod' | 'campus_director')
+    setEditFacultyRole(f.role as 'hod' | 'campus_director' | 'teaching_staff')
     // L6 fix: Use campus_id directly instead of reverse-lookup by name
     setEditFacultyCampusId(f.campus_id ?? '')
     // Find the dept_id from departments list by matching dept name
@@ -339,6 +339,7 @@ export default function SuperAdminDashboard() {
         full_name: editFacultyName,
         role: editFacultyRole,
         department_id: editFacultyRole === 'hod' ? editFacultyDeptId : null,
+        campus_id: editFacultyCampusId || editFaculty.campus_id,
       }),
     })
     const data = await res.json()
@@ -1111,7 +1112,7 @@ export default function SuperAdminDashboard() {
                   onChange={e => {
                     setEditFacultyRole(e.target.value as 'hod' | 'campus_director' | 'teaching_staff')
                     // Clear dept if switching away from HOD
-                    if (e.target.value === 'campus_director') setEditFacultyDeptId('')
+                    if (e.target.value !== 'hod') setEditFacultyDeptId('')
                   }}
                 >
                   <option value="hod">HOD</option>

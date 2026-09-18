@@ -82,9 +82,9 @@ export async function middleware(request: NextRequest) {
 
   // Guarding dashboard routes based on authoritative user role
   if (isDashboardRoute) {
-    const matchedRoute = Object.keys(DASHBOARD_ROLE_MAP).find((route) =>
-      pathname.startsWith(route)
-    )
+    const matchedRoute = Object.keys(DASHBOARD_ROLE_MAP)
+      .sort((a, b) => b.length - a.length)
+      .find((route) => pathname === route || pathname.startsWith(route + '/'))
 
     if (!matchedRoute) {
       return NextResponse.redirect(new URL('/login', request.url))
