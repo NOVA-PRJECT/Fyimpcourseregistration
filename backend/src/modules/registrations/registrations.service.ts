@@ -268,7 +268,7 @@ export class RegistrationsService {
     }
     if (!blueprintRes.data) {
       throw new NotFoundException(
-        `No curriculum blueprint configured for ${studentDeptName} (Semester ${semester}). Please contact your Head of Department (HOD) to configure the semester blueprint.`,
+        `No curriculum structure configured for ${studentDeptName} (Semester ${semester}). Please contact your Head of Department (HOD) to configure the semester structure.`,
       )
     }
 

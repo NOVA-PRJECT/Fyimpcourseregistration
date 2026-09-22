@@ -233,17 +233,7 @@ export default function RegisterPage() {
           }
         }
 
-        // Auto-select sole course options (slots with exactly 1 eligible course)
-        if (rawBp.slots && rawBp.slots.length > 0) {
-          rawBp.slots.forEach((s: BlueprintSlot) => {
-            if (s.options && s.options.length === 1 && !initialPrefs[s.slot]?.rank1) {
-              if (!initialPrefs[s.slot]) {
-                initialPrefs[s.slot] = { rank1: '', rank2: '', rank3: '' }
-              }
-              initialPrefs[s.slot].rank1 = s.options[0].id
-            }
-          })
-        }
+        // No auto-selection: students must manually choose all elective papers
 
         setRankedPreferences(initialPrefs)
 
@@ -298,19 +288,7 @@ export default function RegisterPage() {
     const slots = data.data.slots as BlueprintSlot[]
     setResolvedSlots(slots)
 
-    // Auto-select sole course options on pathway change
-    setRankedPreferences((prev) => {
-      const updated = { ...prev }
-      slots.forEach((s) => {
-        if (s.options && s.options.length === 1 && !updated[s.slot]?.rank1) {
-          updated[s.slot] = {
-            ...(updated[s.slot] || { rank1: '', rank2: '', rank3: '' }),
-            rank1: s.options[0].id,
-          }
-        }
-      })
-      return updated
-    })
+    // Preserve existing preferences on pathway change — no auto-selection
 
     setPageState('ready')
   }
@@ -511,7 +489,6 @@ export default function RegisterPage() {
       </header>
 
       <div className={styles.mainContent}>
-        <ResourceBanner />
 
         {/* Loading Blueprint */}
         {pageState === 'loading_blueprint' && (
@@ -767,30 +744,22 @@ export default function RegisterPage() {
                     >
                       <div className={styles.slotHeader}>
                         <span className={styles.slotLabel}>{slot.name}</span>
-                        {isFixed && (
-                          <span
-                            style={{
-                              fontSize: '0.7rem',
-                              padding: '0.15rem 0.5rem',
-                              borderRadius: '4px',
-                              background: 'rgba(56, 189, 248, 0.15)',
-                              color: '#38bdf8',
-                              fontWeight: 600,
-                            }}
-                          >
-                            🔒 Fixed Paper
-                          </span>
-                        )}
+
                       </div>
 
                       {/* Case 1: Fixed Course */}
                       {isFixed && slot.course && (
-                        <div className={styles.fixedCourse}>
-                          <div>
-                            <p className={styles.fixedCourseTitle}>{slot.course.title}</p>
-                            <p className={styles.fixedCourseCode}>{slot.course.course_code}</p>
+                        <div
+                          className={styles.customSelectTrigger}
+                          style={{ cursor: 'default', pointerEvents: 'none' }}
+                        >
+                          <div className={styles.triggerContent}>
+                            <span className={styles.triggerTitle}>{slot.course.title}</span>
+                            <span className={styles.triggerMeta}>
+                              {slot.course.course_code ? `${slot.course.course_code} • ` : ''}
+                              {slot.course.department_name || 'General'} • {slot.course.credits} cr
+                            </span>
                           </div>
-                          <span className={styles.creditPill}>{slot.course.credits} cr</span>
                         </div>
                       )}
 
@@ -886,13 +855,11 @@ export default function RegisterPage() {
                       {!isFixed && windowIsOpen && !isAllocated && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                           <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>
-                            {(slot.options?.length ?? 0) === 1
-                              ? 'Prescribed elective paper for your department track. Auto-selected as your primary paper.'
-                              : 'Rank up to 3 preferences for this paper. The algorithm allocates round-by-round based on capacity and prerequisites.'}
+                            Rank your preferences for this paper. The algorithm allocates round-by-round based on capacity and prerequisites.
                           </p>
 
                           <div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div>
                               <label
                                 style={{
                                   fontSize: '0.72rem',
@@ -903,11 +870,8 @@ export default function RegisterPage() {
                                   marginBottom: '0.25rem',
                                 }}
                               >
-                                {(slot.options?.length ?? 0) === 1 ? 'Prescribed Paper *' : '1st Choice (Primary) *'}
+                                1st Choice
                               </label>
-                              {(slot.options?.length ?? 0) === 1 && (
-                                <span className={styles.soleChoiceBadge}>✓ Auto-Selected Paper</span>
-                              )}
                             </div>
                             <CustomSelect
                               options={slot.options ?? []}
@@ -931,7 +895,7 @@ export default function RegisterPage() {
                                   marginBottom: '0.25rem',
                                 }}
                               >
-                                2nd Choice (Backup Round 2)
+                                2nd Choice
                               </label>
                               <CustomSelect
                                 options={(slot.options ?? []).filter(
@@ -958,7 +922,7 @@ export default function RegisterPage() {
                                   marginBottom: '0.25rem',
                                 }}
                               >
-                                3rd Choice (Backup Round 3)
+                                3rd Choice
                               </label>
                               <CustomSelect
                                 options={(slot.options ?? []).filter(

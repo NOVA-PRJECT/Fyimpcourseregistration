@@ -84,7 +84,7 @@ export default function StudentDashboardClient({
   useBfcacheGuard()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<StudentTab>('overview')
-  const [selectedDay, setSelectedDay] = useState<number | 'all'>(() => getCurrentUserDay())
+  const [selectedDay, setSelectedDay] = useState<number | 'all'>('all')
   const [loggingOut, setLoggingOut] = useState(false)
   const [timetableEntries, setTimetableEntries] = useState<any[]>([])
   const [loadingTimetable, setLoadingTimetable] = useState(false)
