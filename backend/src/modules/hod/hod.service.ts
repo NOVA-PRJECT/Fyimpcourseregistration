@@ -338,7 +338,7 @@ export class HodService {
 
     const { data, error } = await query.order('full_name')
     if (error) {
-      console.error('[HOD getStudents error]', error)
+      this.serverLogger.error('Failed to fetch students in HOD getStudents', error.message)
       throw new InternalServerErrorException('Failed to fetch students')
     }
     return data ?? []
@@ -356,7 +356,10 @@ export class HodService {
     user: AuthUser,
   ) {
     const { full_name, cap_application_number, email, current_semester, academic_year_joined } = body
-    const password = body.password || 'Welcome@123'
+    if (!body.password || body.password.trim().length < 8) {
+      throw new BadRequestException('A password of at least 8 characters is required to create a student account')
+    }
+    const password = body.password.trim()
 
     const { data: authData, error: authError } = await this.supabase.admin.auth.admin.createUser({
       email,
@@ -454,6 +457,17 @@ export class HodService {
       throw new InternalServerErrorException('Failed to update student')
     }
 
+    await this.auditLogger.log({
+      eventType: 'student_updated',
+      userId: user.userId,
+      userRole: user.role,
+      action: `updated student record: ${full_name}`,
+      resourceType: 'student',
+      resourceId: id,
+      status: 'success',
+      metadata: { updates },
+    })
+
     return { success: true, message: 'Student updated successfully' }
   }
 
@@ -471,6 +485,16 @@ export class HodService {
 
     await this.supabase.admin.auth.admin.deleteUser(studentId)
 
+    await this.auditLogger.log({
+      eventType: 'student_deleted',
+      userId: user.userId,
+      userRole: user.role,
+      action: `deleted student: ${studentId}`,
+      resourceType: 'student',
+      resourceId: studentId,
+      status: 'success',
+    })
+
     return { success: true, message: 'Student removed successfully' }
   }
 
@@ -479,7 +503,10 @@ export class HodService {
       throw new BadRequestException('No student data provided')
     }
 
-    const defaultPassword = batchPassword || 'Student@123'
+    if (!batchPassword || batchPassword.trim().length < 8) {
+      throw new BadRequestException('A batch default password of at least 8 characters is required for bulk creation')
+    }
+    const defaultPassword = batchPassword.trim()
     const results: any[] = []
 
     for (let i = 0; i < rows.length; i++) {
@@ -687,6 +714,7 @@ export class HodService {
         role: 'teacher',
         department_id: departmentId,
         campus_id: campusId,
+        must_change_password: true,
       },
     })
 

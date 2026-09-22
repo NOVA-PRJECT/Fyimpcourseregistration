@@ -1,25 +1,17 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import { SupabaseService } from '../../core/database/supabase.service'
 import { RegistrationsService } from '../registrations/registrations.service'
 import * as fs from 'fs'
 import * as path from 'path'
 
 @Injectable()
-export class DataSeedService implements OnApplicationBootstrap {
+export class DataSeedService {
   private readonly logger = new Logger(DataSeedService.name)
 
   constructor(
     private readonly supabase: SupabaseService,
     private readonly registrationsService: RegistrationsService,
   ) {}
-
-  async onApplicationBootstrap() {
-    this.logger.log('Starting seed ingestion for Courses and Semester Blueprints...')
-    await this.seedCoursesAndBlueprints()
-    this.logger.log('Running automated blueprint resolution verification...')
-    await this.verifyBlueprints()
-    await this.seedTeachingStaffUsers()
-  }
 
   async seedCoursesAndBlueprints(force = false) {
     try {
@@ -1787,9 +1779,8 @@ export class DataSeedService implements OnApplicationBootstrap {
           }
           authUser = created.user
         } else {
-          // Update password & metadata to ensure credentials work
+          // Do NOT overwrite existing user passwords in production
           await this.supabase.admin.auth.admin.updateUserById(authUser.id, {
-            password: acc.password,
             user_metadata: { role: acc.role },
             app_metadata: {
               role: acc.role,

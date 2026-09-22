@@ -122,9 +122,16 @@ export class CreditLedgerService {
       if (user.userId !== targetStudentId) {
         throw new ForbiddenException('Students are only authorized to view their own credit ledger')
       }
-    } else if (user.role === 'teaching_staff' || user.role === 'hod') {
+    } else if (user.role === 'teacher' || user.role === 'hod') {
       if (user.department_id && student.department_id !== user.department_id) {
-        throw new ForbiddenException('Faculty members and HODs may only access students within their department')
+        throw new ForbiddenException('Teachers and HODs may only access students within their department')
+      }
+      if (user.campus_id && student.campus_id !== user.campus_id) {
+        throw new ForbiddenException('Teachers and HODs may only access students within their campus')
+      }
+    } else if (user.role === 'teaching_staff') {
+      if (user.campus_id && student.campus_id !== user.campus_id) {
+        throw new ForbiddenException('Teaching staff may only access students affiliated with their campus')
       }
     } else if (user.role === 'campus_director') {
       if (user.campus_id && student.campus_id !== user.campus_id) {

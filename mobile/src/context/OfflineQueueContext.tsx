@@ -5,12 +5,12 @@ import React, {
   useState,
   useCallback,
 } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { STORAGE_KEYS } from '../config/constants';
 import { apiClient } from '../api/client';
 import { API_ENDPOINTS } from '../api/endpoints';
 import { queryClient, queryKeys } from '../lib/query-client';
+import { secureStorage } from '../lib/secure-store';
 
 export type OfflineActionType = 'CAMPUS_SIGN_IN' | 'PERIOD_MARKING';
 
@@ -49,9 +49,9 @@ export const OfflineQueueProvider: React.FC<{ children: React.ReactNode }> = ({
     PERIOD_MARKING: null,
   });
 
-  // Load queued actions from AsyncStorage on mount
+  // Load queued actions from encrypted SecureStore on mount
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE).then((raw) => {
+    secureStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE).then((raw) => {
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
@@ -67,7 +67,7 @@ export const OfflineQueueProvider: React.FC<{ children: React.ReactNode }> = ({
     newQueue: Record<OfflineActionType, PendingAction | null>
   ) => {
     setPendingActions(newQueue);
-    await AsyncStorage.setItem(
+    await secureStorage.setItem(
       STORAGE_KEYS.OFFLINE_QUEUE,
       JSON.stringify(newQueue)
     );
@@ -85,7 +85,7 @@ export const OfflineQueueProvider: React.FC<{ children: React.ReactNode }> = ({
 
       setPendingActions((prev) => {
         const updated = { ...prev, [type]: action };
-        AsyncStorage.setItem(
+        secureStorage.setItem(
           STORAGE_KEYS.OFFLINE_QUEUE,
           JSON.stringify(updated)
         ).catch((err) =>
@@ -100,7 +100,7 @@ export const OfflineQueueProvider: React.FC<{ children: React.ReactNode }> = ({
   const clearAction = useCallback(async (type: OfflineActionType) => {
     setPendingActions((prev) => {
       const updated = { ...prev, [type]: null };
-      AsyncStorage.setItem(
+      secureStorage.setItem(
         STORAGE_KEYS.OFFLINE_QUEUE,
         JSON.stringify(updated)
       ).catch((err) =>
@@ -111,7 +111,7 @@ export const OfflineQueueProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const syncPendingActions = useCallback(async () => {
-    const raw = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE);
+    const raw = await secureStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE);
     if (!raw) return;
 
     let currentQueue: Record<OfflineActionType, PendingAction | null>;

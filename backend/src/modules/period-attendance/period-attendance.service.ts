@@ -1,5 +1,6 @@
 import {
   Injectable,
+  BadRequestException,
   ForbiddenException,
   NotFoundException,
   InternalServerErrorException,
@@ -8,6 +9,7 @@ import { SupabaseService } from '../../core/database/supabase.service';
 import { AuditLoggerService } from '../../core/logging/audit-logger.service';
 import { AuthUser } from '../../core/auth/types';
 import { PERIOD_GRACE_MINUTES } from './period-attendance.constants';
+import { getISTDateTime } from '../../core/utils/date-time.util';
 
 @Injectable()
 export class PeriodAttendanceService {
@@ -49,12 +51,10 @@ export class PeriodAttendanceService {
 
     const assignedCourseIds = assignments.map((a) => a.course_id);
 
-    // 2. Determine today's day of week (1=Monday ... 6=Saturday)
-    const now = new Date();
-    let dayOfWeek = now.getDay(); // 0 is Sunday
-    if (dayOfWeek === 0) dayOfWeek = 7; // Treat Sunday as 7
-
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    // 2. Determine today's day of week (1=Monday ... 6=Saturday) in IST
+    const ist = getISTDateTime();
+    const dayOfWeek = ist.dayOfWeek;
+    const currentMinutes = ist.totalMinutes;
 
     // 3. Fetch timetable entries for teacher's courses
     const { data: entries, error: entriesError } = await this.supabase.admin
@@ -79,7 +79,7 @@ export class PeriodAttendanceService {
     );
 
     // 4. Find slots that are currently active or ended within grace window (15 minutes)
-    const activeSlots: any[] = [];
+    const candidateActiveEntries: { entry: any; slot: any }[] = [];
     let nextUpcomingSlot: any = null;
     let minUpcomingDiff = Infinity;
 
@@ -93,32 +93,7 @@ export class PeriodAttendanceService {
 
       // Check if slot is running or within 15-min post-period window
       if (currentMinutes >= startMin && currentMinutes <= allowedUntilMin) {
-        // Fetch roster for this course
-        const roster = await this.getEnrolledRoster(entry.course_id);
-
-        // Check if already marked
-        const { data: existingMarks } = await this.supabase.admin
-          .from('period_attendance')
-          .select('student_id, status, marked_at')
-          .eq('timetable_slot_id', entry.id);
-
-        const markedMap = new Map((existingMarks || []).map((m) => [m.student_id, m.status]));
-        const isMarked = (existingMarks || []).length > 0;
-
-        activeSlots.push({
-          timetable_slot_id: entry.id,
-          course_id: entry.course_id,
-          course_code: (entry as any).courses?.course_code,
-          course_title: (entry as any).courses?.title,
-          period_number: slot.period_number,
-          start_time: slot.start_time,
-          end_time: slot.end_time,
-          is_marked: isMarked,
-          roster: roster.map((s) => ({
-            ...s,
-            status: markedMap.get(s.id) || 'present', // Default to present
-          })),
-        });
+        candidateActiveEntries.push({ entry, slot });
       } else if (startMin > currentMinutes) {
         const diff = startMin - currentMinutes;
         if (diff < minUpcomingDiff) {
@@ -133,6 +108,37 @@ export class PeriodAttendanceService {
         }
       }
     }
+
+    // Batch fetch rosters and marking records concurrently for all active slots (L4)
+    const activeSlots = await Promise.all(
+      candidateActiveEntries.map(async ({ entry, slot }) => {
+        const [roster, { data: existingMarks }] = await Promise.all([
+          this.getEnrolledRoster(entry.course_id),
+          this.supabase.admin
+            .from('period_attendance')
+            .select('student_id, status, marked_at')
+            .eq('timetable_slot_id', entry.id),
+        ]);
+
+        const markedMap = new Map((existingMarks || []).map((m) => [m.student_id, m.status]));
+        const isMarked = (existingMarks || []).length > 0;
+
+        return {
+          timetable_slot_id: entry.id,
+          course_id: entry.course_id,
+          course_code: (entry as any).courses?.course_code,
+          course_title: (entry as any).courses?.title,
+          period_number: slot.period_number,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          is_marked: isMarked,
+          roster: roster.map((s) => ({
+            ...s,
+            status: markedMap.get(s.id) || 'present', // Default to present
+          })),
+        };
+      })
+    );
 
     return {
       active_slots: activeSlots,
@@ -356,8 +362,8 @@ export class PeriodAttendanceService {
     let unlockedBy: string | null = null;
 
     if (slot) {
-      const now = new Date();
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const ist = getISTDateTime();
+      const currentMinutes = ist.totalMinutes;
       const endMin = this.timeToMinutes(slot.end_time);
       const graceLimitMin = endMin + PERIOD_GRACE_MINUTES;
 
@@ -384,7 +390,7 @@ export class PeriodAttendanceService {
         }
 
         isLateEntry = true;
-        unlockedBy = unlockRecord.unlocked_by;
+        unlockedBy = unlockRecord?.unlocked_by ?? null;
       }
     }
 
@@ -392,6 +398,14 @@ export class PeriodAttendanceService {
     const roster = await this.getEnrolledRoster(courseId);
     if (roster.length === 0) {
       throw new NotFoundException('No enrolled students found for this course.');
+    }
+
+    // Validate that all submitted absentStudentIds are actually enrolled (M3)
+    const validStudentIds = new Set(roster.map((s) => s.id));
+    for (const absentId of absentStudentIds) {
+      if (!validStudentIds.has(absentId)) {
+        throw new BadRequestException(`Student ID ${absentId} is not enrolled in this course.`);
+      }
     }
 
     const absentSet = new Set(absentStudentIds);

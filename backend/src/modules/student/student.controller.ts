@@ -22,6 +22,7 @@ import { z } from 'zod'
 
 const ChangePasswordSchema = z
   .object({
+    current_password: z.string().min(1, 'Current password is required'),
     new_password: z
       .string()
       .min(10, 'Password must be at least 10 characters')
@@ -60,7 +61,11 @@ export class StudentController {
       throw new BadRequestException(parsed.error.issues[0].message)
     }
 
-    const result = await this.studentService.changePassword(parsed.data.new_password, user)
+    const result = await this.studentService.changePassword(
+      parsed.data.current_password,
+      parsed.data.new_password,
+      user,
+    )
 
     if (result.token) {
       res.cookie('auth_token', result.token, {

@@ -7,7 +7,7 @@ services:
     buildCommand: npm install && npm run build
     startCommand: npm run start:prod
     autoDeploy: true
-    healthCheckPath: /api/admin/seed-status
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production

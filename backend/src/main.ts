@@ -32,10 +32,9 @@ async function bootstrap() {
 
       try {
         const url = new URL(origin)
-        const isVercelDomain = url.hostname.endsWith('.vercel.app')
         const isWhitelisted = rawOrigins.includes(origin) || rawOrigins.includes(url.origin)
 
-        if (isWhitelisted || isVercelDomain) {
+        if (isWhitelisted) {
           return callback(null, true)
         }
       } catch {

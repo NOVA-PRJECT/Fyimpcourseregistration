@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Post,
   Put,
@@ -34,6 +35,9 @@ export class AdminController {
   @Post('run-seed')
   @Roles('superadmin')
   async runSeed() {
+    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PROD_SEED !== 'true') {
+      throw new ForbiddenException('Database re-seeding is disabled in production.')
+    }
     await this.dataSeedService.seedCoursesAndBlueprints()
     return this.dataSeedService.getStatus()
   }

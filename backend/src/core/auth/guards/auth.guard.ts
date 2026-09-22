@@ -132,10 +132,6 @@ export class AuthGuard implements CanActivate {
       return request.cookies.auth_token
     }
 
-    if (request.cookies?.['sb-access-token']) {
-      return request.cookies['sb-access-token']
-    }
-
     return null
   }
 }

@@ -1,8 +1,0 @@
-{
-  "timestamp": "2026-09-16T05:55:02.455Z",
-  "success": true,
-  "upserted_courses": 64,
-  "upserted_blueprints": 13,
-  "total_courses_in_db": 64,
-  "total_blueprints_in_db": 13
-}

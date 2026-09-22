@@ -646,10 +646,21 @@ export class RegistrationsService {
     })
 
     if (allElectiveCourseIds.size > 0) {
-      const { data: electiveCourses } = await this.supabase.admin
+      const { data: electiveCourses, error: elecErr } = await this.supabase.admin
         .from('courses')
         .select('id, course_code, title, credits, department_id, category')
         .in('id', Array.from(allElectiveCourseIds))
+
+      if (elecErr || !electiveCourses) {
+        throw new InternalServerErrorException('Failed to validate selected courses')
+      }
+
+      const foundCourseIds = new Set(electiveCourses.map((c) => c.id))
+      for (const id of allElectiveCourseIds) {
+        if (!foundCourseIds.has(id)) {
+          throw new BadRequestException(`Course ID ${id} is invalid or does not exist`)
+        }
+      }
 
       // Compute total credits based on fixed courses + rank 1 electives for credit check
       const rank1ElectiveIds = unifiedPreferences

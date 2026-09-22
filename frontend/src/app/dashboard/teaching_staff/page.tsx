@@ -276,6 +276,10 @@ export default function TeachingStaffDashboard() {
 
   async function handleLogout() {
     setLoggingOut(true)
+    if (typeof window !== 'undefined') {
+      sessionStorage.clear()
+      localStorage.clear()
+    }
     await fetch('/api/auth/logout', { method: 'POST' })
     window.location.href = '/login'
   }

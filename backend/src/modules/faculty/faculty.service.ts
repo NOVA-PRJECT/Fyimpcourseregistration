@@ -283,15 +283,6 @@ export class FacultyService {
       studentsQuery = studentsQuery.eq('current_semester', semester)
     }
 
-    console.log('[DEBUG getDefaulters ENTRY]', {
-      userId: user.userId,
-      email: user.email,
-      role: user.role,
-      campusId,
-      departmentId,
-      semester,
-    })
-
     const [settingsRes, studentsRes] = await Promise.all([
       this.supabase.admin
         .from('campus_settings')
@@ -300,13 +291,6 @@ export class FacultyService {
         .maybeSingle(),
       studentsQuery,
     ])
-
-    console.log('[DEBUG getDefaulters RESULTS]', {
-      settingsData: settingsRes.data,
-      settingsError: settingsRes.error,
-      studentsCount: studentsRes.data?.length,
-      studentsError: studentsRes.error,
-    })
 
     const academicYear = settingsRes.data?.academic_year || '2026-27'
     const students = studentsRes.data ?? []
@@ -332,7 +316,7 @@ export class FacultyService {
     const { data: registrations, error: regError } = await regQuery
 
     if (regError) {
-      console.error('[Defaulters regQuery error]', regError)
+      this.serverLogger.error('Failed to query registrations in getDefaulters', regError.message)
     }
 
     // A registration is valid if submitted_at is set or slot_1 is filled

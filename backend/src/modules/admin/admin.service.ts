@@ -241,6 +241,11 @@ export class AdminService {
   }, user: AuthUser) {
     const { full_name, email, password, role, department_id, campus_id } = body
 
+    const ALLOWED_ROLES = ['superadmin', 'campus_director', 'hod', 'teacher', 'teaching_staff']
+    if (!ALLOWED_ROLES.includes(role)) {
+      throw new BadRequestException(`Invalid role "${role}". Allowed roles are: ${ALLOWED_ROLES.join(', ')}`)
+    }
+
     if (role === 'hod' && !department_id) {
       throw new BadRequestException('HOD must be assigned to a department')
     }
@@ -334,6 +339,11 @@ export class AdminService {
     campus_id: string
   }, user: AuthUser) {
     const { full_name, role, department_id, campus_id } = body
+
+    const ALLOWED_ROLES = ['superadmin', 'campus_director', 'hod', 'teacher', 'teaching_staff']
+    if (!ALLOWED_ROLES.includes(role)) {
+      throw new BadRequestException(`Invalid role "${role}". Allowed roles are: ${ALLOWED_ROLES.join(', ')}`)
+    }
 
     if (role === 'teaching_staff') {
       const { data: existingStaff } = await this.supabase.admin
@@ -507,8 +517,10 @@ export class AdminService {
     }
 
     if (query.search && query.search.trim()) {
-      const term = query.search.trim()
-      dbQuery = dbQuery.or(`action.ilike.%${term}%,event_type.ilike.%${term}%,error_message.ilike.%${term}%`)
+      const sanitized = query.search.trim().replace(/[^a-zA-Z0-9_\-\s@.]/g, '')
+      if (sanitized) {
+        dbQuery = dbQuery.or(`action.ilike.%${sanitized}%,event_type.ilike.%${sanitized}%,error_message.ilike.%${sanitized}%`)
+      }
     }
 
     const { data, count, error } = await dbQuery

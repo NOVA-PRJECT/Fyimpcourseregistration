@@ -219,7 +219,18 @@ export class StudentService {
     }
   }
 
-  async changePassword(newPassword: string, user: AuthUser) {
+  async changePassword(currentPassword: string, newPassword: string, user: AuthUser) {
+    // 1. Verify current password
+    const { error: verifyError } = await this.supabase.admin.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    })
+
+    if (verifyError) {
+      throw new BadRequestException('Current password is incorrect')
+    }
+
+    // 2. Update to new password
     const { error: pwError } = await this.supabase.admin.auth.admin.updateUserById(
       user.userId,
       {

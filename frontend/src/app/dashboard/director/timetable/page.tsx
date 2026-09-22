@@ -665,7 +665,7 @@ export default function CampusDirectorTimetablePage() {
   }
 
   // Confirm Export from Modal
-  function handleConfirmExport() {
+  async function handleConfirmExport() {
     const targetDept = exportTargetDept;
     setShowExportModal(false);
 

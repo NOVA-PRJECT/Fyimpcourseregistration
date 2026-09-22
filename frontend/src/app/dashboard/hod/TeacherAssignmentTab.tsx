@@ -300,7 +300,16 @@ export default function TeacherAssignmentTab() {
   const [showAddTeacherModal, setShowAddTeacherModal] = useState(false)
   const [newTeacherName, setNewTeacherName] = useState('')
   const [newTeacherEmail, setNewTeacherEmail] = useState('')
-  const [newTeacherPassword, setNewTeacherPassword] = useState('Teacher@123')
+  const generateSecurePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*'
+    let pwd = ''
+    for (let i = 0; i < 12; i++) {
+      pwd += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    return pwd
+  }
+
+  const [newTeacherPassword, setNewTeacherPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [teacherModalError, setTeacherModalError] = useState('')
   const [addingTeacher, setAddingTeacher] = useState(false)
@@ -598,7 +607,7 @@ export default function TeacherAssignmentTab() {
       setShowAddTeacherModal(false)
       setNewTeacherName('')
       setNewTeacherEmail('')
-      setNewTeacherPassword('Teacher@123')
+      setNewTeacherPassword('')
       setShowPassword(false)
       setTeacherModalError('')
       await fetchData()
@@ -1302,7 +1311,7 @@ export default function TeacherAssignmentTab() {
                     <label className={styles.label}>Initial Password *</label>
                     <button
                       type="button"
-                      onClick={() => setNewTeacherPassword('Teacher@123')}
+                      onClick={() => setNewTeacherPassword(generateSecurePassword())}
                       style={{
                         background: 'none',
                         border: 'none',
@@ -1313,7 +1322,7 @@ export default function TeacherAssignmentTab() {
                         padding: 0,
                       }}
                     >
-                      Reset default
+                      Generate Strong Password
                     </button>
                   </div>
                   <div className={styles.inputWithIconWrapper}>

@@ -30,8 +30,8 @@ export class TimetableService {
       if (fs.existsSync(CONSTRAINTS_PATH)) {
         return JSON.parse(fs.readFileSync(CONSTRAINTS_PATH, 'utf8'))
       }
-    } catch (err) {
-      console.error('Error reading constraints file:', err)
+    } catch (err: any) {
+      this.serverLogger.error('Error reading constraints file', err?.stack || String(err))
     }
     return {
       schedule: {},
@@ -158,7 +158,7 @@ export class TimetableService {
     const { data: entries, error } = await query
 
     if (error) {
-      console.error('[Timetable getEntries error]', error)
+      this.serverLogger.error('Failed to fetch timetable entries', error.message)
       throw new InternalServerErrorException('Failed to fetch timetable entries')
     }
 
@@ -205,7 +205,7 @@ export class TimetableService {
 
     const { data: rawConflicts, error: conflictErr } = await conflictQuery
     if (conflictErr) {
-      console.error('[Timetable getEntries conflictQuery error]', conflictErr)
+      this.serverLogger.warn(`[Timetable getEntries conflictQuery error]: ${conflictErr.message}`)
     }
 
     let formattedConflicts = (rawConflicts || []).map((c: any) => ({
@@ -306,7 +306,27 @@ export class TimetableService {
       redis,
       user.campus_id ?? undefined,
       dynamicConstraints || [],
-    ).catch((err) => console.error('Background generation job error:', err))
+    ).catch(async (err: any) => {
+      this.serverLogger.error(
+        `Background generation job error for job ${newJob.id}`,
+        err?.stack || String(err),
+      )
+      try {
+        await this.supabase.admin
+          .from('timetable_generation_jobs')
+          .update({
+            status: 'failed',
+            error_message: err?.message || 'Background generation job encountered an unhandled error',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', newJob.id)
+      } catch (updateErr: any) {
+        this.serverLogger.error(
+          `Failed to update failed status for job ${newJob.id}`,
+          updateErr?.stack || String(updateErr),
+        )
+      }
+    })
 
     await this.auditLogger.log({
       eventType: AuditEvents.TIMETABLE_GENERATED,

@@ -10,16 +10,23 @@ import { Eye, EyeOff } from 'lucide-react'
 export default function ChangePasswordPage() {
   useBfcacheGuard()
   const router = useRouter()
+  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [fieldErrors, setFieldErrors] = useState<{ new_password?: string; confirm_password?: string }>({})
+  const [fieldErrors, setFieldErrors] = useState<{
+    current_password?: string
+    new_password?: string
+    confirm_password?: string
+  }>({})
 
   function validate() {
     const errors: typeof fieldErrors = {}
+    if (!currentPassword) errors.current_password = 'Current password is required'
     if (!newPassword) errors.new_password = 'New password is required'
     else if (newPassword.length < 10) errors.new_password = 'Password must be at least 10 characters'
     else if (!/[A-Za-z]/.test(newPassword)) errors.new_password = 'Password must contain at least one letter'
@@ -41,6 +48,7 @@ export default function ChangePasswordPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        current_password: currentPassword,
         new_password: newPassword,
         confirm_password: confirmPassword,
       }),
@@ -49,7 +57,7 @@ export default function ChangePasswordPage() {
     const data = await response.json()
 
     if (!response.ok) {
-      setError(data.error ?? 'Failed to change password. Please try again.')
+      setError(data.error ?? data.message ?? 'Failed to change password. Please try again.')
       setLoading(false)
       return
     }
@@ -68,13 +76,42 @@ export default function ChangePasswordPage() {
           </div>
           <h1 className={styles.title}>Set Your Password</h1>
           <p className={styles.subtitle}>
-            Your account was created with a temporary password. Please set a new password to continue.
+            Please enter your current temporary password, then set your new password.
           </p>
           <div className={styles.goldLine} />
         </div>
 
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
           {error && <div className={styles.errorBanner}>{error}</div>}
+
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="current-password">Current Password</label>
+            <div className="password-wrapper">
+              <input
+                id="current-password"
+                type={showCurrentPassword ? 'text' : 'password'}
+                className={`${styles.input} password-input ${fieldErrors.current_password ? styles.inputError : ''}`}
+                placeholder="Enter current password"
+                value={currentPassword}
+                onChange={e => {
+                  setCurrentPassword(e.target.value)
+                  setFieldErrors(prev => ({ ...prev, current_password: undefined }))
+                }}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+              >
+                {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {fieldErrors.current_password && (
+              <p className={styles.fieldError}>{fieldErrors.current_password}</p>
+            )}
+          </div>
 
           <div className={styles.field}>
             <label className={styles.label} htmlFor="new-password">New Password</label>

@@ -370,7 +370,8 @@ export default function DirectorDashboard() {
   async function handleLogout() {
     setLoggingOut(true)
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('fyimp_director_settings_cache')
+      sessionStorage.clear()
+      localStorage.clear()
     }
     await fetch('/api/auth/logout', { method: 'POST' })
     window.location.href = '/login'

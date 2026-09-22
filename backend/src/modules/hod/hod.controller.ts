@@ -64,7 +64,7 @@ const AddStudentSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(100),
   cap_application_number: z.string().min(1, 'CAP Application Number is required'),
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8).optional(),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
   current_semester: z.coerce.number().int().min(1).max(10),
   academic_year_joined: z.string().min(1, 'Academic year is required'),
 })
@@ -205,7 +205,10 @@ export class HodController {
     @Body() body: { rows: any[]; batch_default_password?: string },
     @CurrentUser() user: AuthUser,
   ) {
-    return this.hodService.bulkCreateStudents(body.rows, body.batch_default_password ?? 'Student@123', user)
+    if (!body.batch_default_password || body.batch_default_password.trim().length < 8) {
+      throw new BadRequestException('A batch default password of at least 8 characters is required')
+    }
+    return this.hodService.bulkCreateStudents(body.rows, body.batch_default_password.trim(), user)
   }
 
   @Get('export-students-excel')

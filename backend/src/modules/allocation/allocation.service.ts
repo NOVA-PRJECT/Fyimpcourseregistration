@@ -1201,19 +1201,32 @@ export class AllocationService {
     const courseList = courses ?? []
     const results: any[] = []
 
+    // Fetch registrations once for this semester to avoid N+1 queries (L3)
+    const { data: registrations, error: regError } = await this.supabase.admin
+      .from('student_registrations')
+      .select('slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
+      .eq('semester', sem)
+
+    if (regError) {
+      this.logger.error(`Failed to fetch student registrations: ${regError.message}`)
+      throw new InternalServerErrorException('Failed to fetch student registrations')
+    }
+
+    const allocationCounts = new Map<string, number>()
+    if (registrations) {
+      for (const reg of registrations) {
+        for (let i = 1; i <= 6; i++) {
+          const cId = (reg as any)[`slot_${i}_course_id`]
+          if (cId) {
+            allocationCounts.set(cId, (allocationCounts.get(cId) || 0) + 1)
+          }
+        }
+      }
+    }
+
     for (const course of courseList) {
       const seatLimit = course.seat_limit ? Number(course.seat_limit) : 60
-
-      // Count all students who have this course confirmed across slots 1 to 6 in student_registrations
-      const { count } = await this.supabase.admin
-        .from('student_registrations')
-        .select('*', { count: 'exact', head: true })
-        .eq('semester', sem)
-        .or(
-          `slot_1_course_id.eq.${course.id},slot_2_course_id.eq.${course.id},slot_3_course_id.eq.${course.id},slot_4_course_id.eq.${course.id},slot_5_course_id.eq.${course.id},slot_6_course_id.eq.${course.id}`,
-        )
-
-      const totalAllocated = count ?? 0
+      const totalAllocated = allocationCounts.get(course.id) || 0
       const remaining = Math.max(0, seatLimit - totalAllocated)
 
       results.push({
@@ -1252,6 +1265,21 @@ export class AllocationService {
     const validSlots = ['slot_1', 'slot_2', 'slot_3', 'slot_4', 'slot_5', 'slot_6']
     if (!validSlots.includes(slot_key)) {
       throw new BadRequestException(`Invalid slot key: ${slot_key}`)
+    }
+
+    // Validate student exists and belongs to HOD's department (H1)
+    const { data: student, error: studentErr } = await this.supabase.admin
+      .from('students')
+      .select('id, department_id, campus_id, campuses(academic_year)')
+      .eq('id', student_id)
+      .single()
+
+    if (studentErr || !student) {
+      throw new NotFoundException('Student not found')
+    }
+
+    if (student.department_id !== departmentId) {
+      throw new ForbiddenException('You may only allocate courses to students in your department')
     }
 
     // Validate course belongs to HOD's department
@@ -1306,12 +1334,6 @@ export class AllocationService {
 
     // If student_registrations row doesn't exist yet, get student's campus and academic_year
     if (!reg) {
-      const { data: student } = await this.supabase.admin
-        .from('students')
-        .select('campus_id, campuses(academic_year)')
-        .eq('id', student_id)
-        .single()
-
       const { data: settings } = await this.supabase.admin
         .from('campus_settings')
         .select('academic_year')
