@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+export const dynamic = 'force-dynamic'
+
+import { useState, useEffect, Suspense } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
 import styles from './login.module.css'
 import { ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
@@ -11,8 +13,9 @@ import { Role } from '@/core/constants/roles'
 import PortalHeader from '@/components/portal/PortalHeader'
 import PortalFooter from '@/components/portal/PortalFooter'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [checking, setChecking] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -20,7 +23,13 @@ export default function LoginPage() {
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState(searchParams.get('message') || '')
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
+
+  useEffect(() => {
+    const msg = searchParams.get('message')
+    if (msg) setSuccessMsg(msg)
+  }, [searchParams])
 
   useEffect(() => {
     async function checkSession(isBfcache: boolean) {
@@ -108,10 +117,6 @@ export default function LoginPage() {
           msg = 'Invalid email or password. Please try again.'
         } else if (data?.message) {
           msg = Array.isArray(data.message) ? data.message[0] : data.message
-        } else if (data?.error && typeof data.error === 'string' && data.error !== 'Bad Request' && data.error !== 'Unauthorized') {
-          msg = data.error
-        } else if (response.status === 400) {
-          msg = 'Invalid credentials or missing required fields. Please try again.'
         }
         setError(msg)
         setLoading(false)
@@ -170,12 +175,26 @@ export default function LoginPage() {
           <div className={styles.cardBody}>
             <p className={styles.formTitle}>Sign In</p>
 
-            {/* Global Error */}
-            {error && (
-              <div className={styles.errorBanner}>
-                {error}
+            {/* Success Message Banner */}
+            {successMsg && (
+              <div className="mb-4 rounded-lg p-3.5 flex items-start gap-2.5 text-xs bg-[#f0fdf4] border border-[#bbf7d0] text-[#166534]">
+                <span className="material-symbols-outlined text-[#16a34a] text-[18px] shrink-0 mt-0.5">
+                  check_circle
+                </span>
+                <span className="flex-1 font-medium leading-relaxed">{successMsg}</span>
+                <button
+                  type="button"
+                  onClick={() => setSuccessMsg('')}
+                  className="text-[#166534] hover:opacity-75 transition-opacity"
+                  aria-label="Dismiss message"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                </button>
               </div>
             )}
+
+            {/* Global Error */}
+            {error && <div className={styles.errorBanner}>{error}</div>}
 
             {/* Form Fields */}
             <form onSubmit={handleLogin}>
@@ -312,5 +331,19 @@ export default function LoginPage() {
       {/* Institutional Footer */}
       <PortalFooter />
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#082042] flex items-center justify-center">
+          <div className="w-12 h-12 border-3 border-[#E0A92C]/20 border-t-[#E0A92C] rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   )
 }

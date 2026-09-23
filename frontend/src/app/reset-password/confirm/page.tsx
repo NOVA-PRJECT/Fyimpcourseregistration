@@ -2,122 +2,267 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import PortalHeader from '@/components/portal/PortalHeader'
 import PortalFooter from '@/components/portal/PortalFooter'
-
-// ── Password strength helpers (matching change-password page) ──────────────────
-type StrengthLevel = 'bad' | 'better' | 'good' | 'strong'
-
-interface StrengthCheck {
-  label: string
-  met: boolean
-}
-
-function getChecks(password: string): StrengthCheck[] {
-  return [
-    { label: 'At least 10 characters', met: password.length >= 10 },
-    { label: 'Contains a number', met: /[0-9]/.test(password) },
-    { label: 'Contains uppercase letter', met: /[A-Z]/.test(password) },
-    { label: 'Contains lowercase letter', met: /[a-z]/.test(password) },
-    { label: 'Contains special character', met: /[^A-Za-z0-9]/.test(password) },
-  ]
-}
-
-function getStrengthLevel(password: string): StrengthLevel | null {
-  if (!password) return null
-  const metCount = getChecks(password).filter((c) => c.met).length
-  if (metCount <= 1) return 'bad'
-  if (metCount === 2) return 'better'
-  if (metCount === 3 || metCount === 4) return 'good'
-  return 'strong'
-}
-
-const STRENGTH_META: Record<StrengthLevel, { label: string; color: string }> = {
-  bad:    { label: 'Bad',    color: '#ef4444' },
-  better: { label: 'Better', color: '#f97316' },
-  good:   { label: 'Good',   color: '#eab308' },
-  strong: { label: 'Strong', color: '#22c55e' },
-}
-
-// ── Confirm Reset Form ────────────────────────────────────────────────────────
+import { supabase } from '@/core/supabase/client'
+import {
+  getChecks,
+  getPasswordLevel,
+  validatePassword,
+} from '@/core/validation/passwordValidation'
 
 function ConfirmResetForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const code = searchParams.get('code')
 
+  const [status, setStatus] = useState<'checking' | 'ready' | 'error'>('checking')
+  const [errorMessage, setErrorMessage] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [done, setDone] = useState(false)
-  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  useEffect(() => {
+    let isMounted = true
+
+    // 1. Extract from search parameters
+    const code = searchParams.get('code')
+    const queryError = searchParams.get('error_description') || searchParams.get('error')
+
+    // 2. Extract from hash fragment
+    let hashAccessToken: string | null = null
+    let hashRefreshToken: string | null = null
+    let hashError: string | null = null
+
+    if (typeof window !== 'undefined' && window.location.hash) {
+      try {
+        const hashStr = window.location.hash.startsWith('#')
+          ? window.location.hash.substring(1)
+          : window.location.hash
+        const hashParams = new URLSearchParams(hashStr)
+
+        hashAccessToken = hashParams.get('access_token')
+        hashRefreshToken = hashParams.get('refresh_token')
+        const errDesc = hashParams.get('error_description') || hashParams.get('error')
+        if (errDesc) {
+          hashError = decodeURIComponent(errDesc.replace(/\+/g, ' '))
+        }
+      } catch (err) {
+        console.error('Failed to parse URL hash:', err)
+      }
+    }
+
+    const explicitError =
+      hashError ||
+      (queryError ? decodeURIComponent(queryError.replace(/\+/g, ' ')) : null)
+
+    // Check for explicit error from Supabase (e.g. token expired, already used)
+    if (explicitError) {
+      setStatus('error')
+      setErrorMessage(explicitError)
+      return
+    }
+
+    // Step C: Listen to onAuthStateChange for PASSWORD_RECOVERY
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+        setStatus('ready')
+      }
+    })
+
+    async function initializeSession() {
+      try {
+        // Option A: Active session already established
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (sessionData?.session) {
+          if (isMounted) setStatus('ready')
+          return
+        }
+
+        // Option B: Access token in hash fragment (implicit flow)
+        if (hashAccessToken) {
+          const { data: setSessionData, error: setSessionError } =
+            await supabase.auth.setSession({
+              access_token: hashAccessToken,
+              refresh_token: hashRefreshToken || '',
+            })
+          if (!setSessionError && setSessionData?.session) {
+            if (isMounted) setStatus('ready')
+            return
+          }
+        }
+
+        // Option C: PKCE authorization code in query params
+        if (code) {
+          const { data: exchangeData, error: exchangeError } =
+            await supabase.auth.exchangeCodeForSession(code)
+
+          if (exchangeError || !exchangeData?.session) {
+            if (isMounted) {
+              setStatus('error')
+              setErrorMessage('This reset link has expired or has already been used.')
+            }
+            return
+          }
+
+          if (isMounted) setStatus('ready')
+          return
+        }
+
+        // Neither code, hash token, nor session present: direct navigation
+        if (isMounted) {
+          router.replace(
+            '/reset-password?message=Please%20request%20a%20new%20password%20reset%20link.',
+          )
+        }
+      } catch (err: any) {
+        console.error('Session initialization error:', err)
+        if (isMounted) {
+          setStatus('error')
+          setErrorMessage('This reset link has expired or has already been used.')
+        }
+      }
+    }
+
+    initializeSession()
+
+    return () => {
+      isMounted = false
+      authListener?.subscription?.unsubscribe()
+    }
+  }, [searchParams, router])
 
   const checks = getChecks(password)
-  const strengthLevel = getStrengthLevel(password)
-  const allChecksMet = checks.every((c) => c.met)
-
-  function validate(): boolean {
-    if (!password) { setError('Please enter a new password.'); return false }
-    if (!allChecksMet) { setError('Your password does not meet all requirements.'); return false }
-    if (!confirmPassword) { setError('Please confirm your new password.'); return false }
-    if (password !== confirmPassword) { setError('Passwords do not match.'); return false }
-    return true
-  }
+  const passwordLevel = getPasswordLevel(password)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!validate()) return
-    setLoading(true)
-    setError('')
+    setSubmitError('')
+
+    const validation = validatePassword(password, confirmPassword)
+    if (!validation.valid) {
+      setSubmitError(
+        validation.errors.new_password ||
+          validation.errors.confirm_password ||
+          'Please verify your password requirements.',
+      )
+      return
+    }
+
+    setSubmitting(true)
 
     try {
-      const response = await fetch('/api/auth/reset-password/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, new_password: password }),
+      // Step F.1: Call supabase.auth.updateUser({ password: newPassword })
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
       })
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        setError(data.error || 'Failed to update password. The reset link may have expired. Please request a new one.')
-        setLoading(false)
+      // Step F.2: If that fails, show the error message inline — do not redirect
+      if (updateError) {
+        setSubmitError(updateError.message || 'Failed to update password. Please try again.')
+        setSubmitting(false)
         return
       }
 
-      setDone(true)
-      setLoading(false)
-    } catch {
-      setError('Network error. Please check your connection and try again.')
-      setLoading(false)
+      // Step F.3: If that succeeds, call POST /api/auth/complete-password-reset with credentials: 'include'
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData?.session?.access_token
+        await fetch('/api/auth/complete-password-reset', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        })
+      } catch (backendErr) {
+        // Step F.4: If backend call fails, log the error but still proceed
+        console.error('complete-password-reset backend call error:', backendErr)
+      }
+
+      // Explicit sign out so student logs in explicitly
+      await supabase.auth.signOut().catch(() => {})
+
+      // Step F.5: Redirect to /login with success message
+      router.replace(
+        '/login?message=Password%20updated%20successfully.%20Please%20log%20in%20with%20your%20new%20password.',
+      )
+    } catch (err: any) {
+      setSubmitError(err?.message || 'An unexpected error occurred. Please try again.')
+      setSubmitting(false)
     }
   }
 
-  // ── Invalid / Expired Link ────────────────────────────────────────────────
-  if (!code) {
+  // ── Checking / Loading State ──────────────────────────────────────────────
+  if (status === 'checking') {
     return (
       <div className="w-full max-w-[460px] flex flex-col items-center">
         <div className="w-full bg-white rounded-xl shadow-md overflow-hidden relative border border-[#E2E8F0]">
           <div className="bg-[#082042] py-7 px-8 text-center">
             <div className="w-10 h-10 rounded-full bg-white/10 mx-auto mb-3.5 flex items-center justify-center">
-              <span className="material-symbols-outlined text-[#f7bd40] text-[20px]">link_off</span>
+              <span className="material-symbols-outlined text-[#f7bd40] text-[20px] animate-spin">
+                progress_activity
+              </span>
             </div>
-            <h1 className="font-serif text-2xl text-white font-medium tracking-tight">Link Expired</h1>
+            <h1 className="font-serif text-2xl text-white font-medium tracking-tight">
+              Verifying Reset Link
+            </h1>
             <div className="w-12 h-0.5 bg-[#E0A92C] mx-auto my-3 rounded-full" />
             <p className="text-xs text-[#dce9ff] max-w-xs mx-auto leading-relaxed">
-              This password reset link is invalid or has expired. Reset links are valid for 1 hour.
+              Validating your security session with Kannur University...
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Step D: Expired / Invalid Link State ───────────────────────────────────
+  if (status === 'error') {
+    return (
+      <div className="w-full max-w-[460px] flex flex-col items-center">
+        <div className="w-full bg-white rounded-xl shadow-md overflow-hidden relative border border-[#E2E8F0]">
+          <div className="bg-[#082042] py-7 px-8 text-center">
+            <div className="w-10 h-10 rounded-full bg-white/10 mx-auto mb-3.5 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[#f7bd40] text-[20px]">
+                link_off
+              </span>
+            </div>
+            <h1 className="font-serif text-2xl text-white font-medium tracking-tight">
+              Link Expired
+            </h1>
+            <div className="w-12 h-0.5 bg-[#E0A92C] mx-auto my-3 rounded-full" />
+            <p className="text-xs text-[#dce9ff] max-w-xs mx-auto leading-relaxed">
+              {errorMessage || 'This reset link has expired or has already been used.'}
             </p>
           </div>
           <div className="p-6 md:p-8 space-y-4 bg-white">
+            {/* Anti-Spam Bot Pre-fetch Tip */}
+            <div className="p-3.5 bg-amber-50 border border-amber-200/80 rounded-lg text-left text-xs text-amber-950 leading-relaxed flex items-start gap-2.5">
+              <span className="material-symbols-outlined text-amber-600 text-[18px] shrink-0 mt-0.5">
+                info
+              </span>
+              <span>
+                <strong>Spam Folder Notice:</strong> If this email arrived in your{' '}
+                <strong>Spam</strong> or <strong>Junk</strong> folder, your email provider
+                may have automatically scanned the link and consumed the single-use token.
+                Please request a new link and <strong>move the email to your Inbox</strong>{' '}
+                before opening it.
+              </span>
+            </div>
+
             <Link
               href="/reset-password"
               className="w-full h-11 bg-[#082042] hover:bg-[#0B192C] text-white text-xs font-semibold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
             >
-              <span>Request New Link</span>
+              <span>Request a new link</span>
               <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
             </Link>
             <div className="pt-1 text-center">
@@ -135,45 +280,20 @@ function ConfirmResetForm() {
     )
   }
 
-  // ── Success State ─────────────────────────────────────────────────────────
-  if (done) {
-    return (
-      <div className="w-full max-w-[460px] flex flex-col items-center">
-        <div className="w-full bg-white rounded-xl shadow-md overflow-hidden relative border border-[#E2E8F0]">
-          <div className="bg-[#082042] py-7 px-8 text-center">
-            <div className="w-10 h-10 rounded-full bg-white/10 mx-auto mb-3.5 flex items-center justify-center">
-              <span className="material-symbols-outlined text-[#4ade80] text-[22px]">check_circle</span>
-            </div>
-            <h1 className="font-serif text-2xl text-white font-medium tracking-tight">Password Updated</h1>
-            <div className="w-12 h-0.5 bg-[#E0A92C] mx-auto my-3 rounded-full" />
-            <p className="text-xs text-[#dce9ff] max-w-xs mx-auto leading-relaxed">
-              Your password has been changed successfully. You can now sign in with your new password.
-            </p>
-          </div>
-          <div className="p-6 md:p-8 space-y-4 bg-white">
-            <button
-              className="w-full h-11 bg-[#082042] hover:bg-[#0B192C] text-white text-xs font-semibold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
-              onClick={() => router.push('/login')}
-            >
-              <span>Sign In Now</span>
-              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ── Set New Password Form ─────────────────────────────────────────────────
+  // ── Step E: Password Reset Form ───────────────────────────────────────────
   return (
     <div className="w-full max-w-[460px] flex flex-col items-center">
       <div className="w-full bg-white rounded-xl shadow-md overflow-hidden relative border border-[#E2E8F0]">
         {/* Header */}
         <div className="bg-[#082042] py-7 px-8 text-center">
           <div className="w-10 h-10 rounded-full bg-white/10 mx-auto mb-3.5 flex items-center justify-center">
-            <span className="material-symbols-outlined text-[#f7bd40] text-[20px]">lock_reset</span>
+            <span className="material-symbols-outlined text-[#f7bd40] text-[20px]">
+              lock_reset
+            </span>
           </div>
-          <h1 className="font-serif text-2xl text-white font-medium tracking-tight">Set New Password</h1>
+          <h1 className="font-serif text-2xl text-white font-medium tracking-tight">
+            Set New Password
+          </h1>
           <div className="w-12 h-0.5 bg-[#E0A92C] mx-auto my-3 rounded-full" />
           <p className="text-xs text-[#dce9ff] max-w-xs mx-auto leading-relaxed">
             Choose a strong password for your FYIMP portal account.
@@ -182,34 +302,48 @@ function ConfirmResetForm() {
 
         {/* Body */}
         <div className="p-6 md:p-8 space-y-5 bg-white">
-          {/* Error Banner */}
-          {error && (
+          {/* Submit Error Banner */}
+          {submitError && (
             <div className="rounded-lg p-3.5 flex items-start gap-3 text-xs bg-[#ffdad6] border border-[#ba1a1a]/30 text-[#93000a]">
-              <span className="material-symbols-outlined text-[#ba1a1a] text-[18px] mt-0.5 shrink-0">error</span>
-              <span className="flex-1">{error}</span>
-              <button type="button" onClick={() => setError('')} className="text-[#93000a] hover:opacity-70">
+              <span className="material-symbols-outlined text-[#ba1a1a] text-[18px] mt-0.5 shrink-0">
+                error
+              </span>
+              <span className="flex-1">{submitError}</span>
+              <button
+                type="button"
+                onClick={() => setSubmitError('')}
+                className="text-[#93000a] hover:opacity-70"
+              >
                 <span className="material-symbols-outlined text-[16px]">close</span>
               </button>
             </div>
           )}
 
           <form className="space-y-5" onSubmit={handleSubmit}>
-            {/* New Password */}
+            {/* New Password Field */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-bold text-[#44474e] uppercase tracking-wider" htmlFor="newPassword">
+              <label
+                className="text-[11px] font-bold text-[#44474e] uppercase tracking-wider"
+                htmlFor="newPassword"
+              >
                 New Password
               </label>
               <div className="h-11 px-3.5 bg-[#EEF3FB] border border-[#CBD5E1] rounded-lg text-sm focus-within:bg-white focus-within:border-[#082042] focus-within:ring-2 focus-within:ring-[#082042]/15 flex items-center gap-2.5 transition-all">
-                <span className="material-symbols-outlined text-[#75777f] text-[18px] shrink-0">lock</span>
+                <span className="material-symbols-outlined text-[#75777f] text-[18px] shrink-0">
+                  lock
+                </span>
                 <input
                   id="newPassword"
                   type={showPassword ? 'text' : 'password'}
                   className="text-sm text-[#0B192C] placeholder:text-[#75777f] w-full bg-transparent outline-none border-none p-0 focus:ring-0"
                   placeholder="Min. 10 characters"
                   value={password}
-                  onChange={(e) => { setPassword(e.target.value); setError('') }}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    setSubmitError('')
+                  }}
                   autoComplete="new-password"
-                  disabled={loading}
+                  disabled={submitting}
                 />
                 <button
                   type="button"
@@ -224,13 +358,17 @@ function ConfirmResetForm() {
               </div>
 
               {/* Strength Level Label */}
-              {password && strengthLevel && (
+              {password && passwordLevel && (
                 <div className="flex items-center gap-2 mt-0.5">
                   <span
-                    className="text-[11px] font-bold uppercase tracking-wider"
-                    style={{ color: STRENGTH_META[strengthLevel].color }}
+                    className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border"
+                    style={{
+                      color: passwordLevel.color,
+                      backgroundColor: passwordLevel.bg,
+                      borderColor: passwordLevel.border,
+                    }}
                   >
-                    {STRENGTH_META[strengthLevel].label}
+                    {passwordLevel.label}
                   </span>
                 </div>
               )}
@@ -246,29 +384,37 @@ function ConfirmResetForm() {
                       >
                         {c.met ? 'check_circle' : 'radio_button_unchecked'}
                       </span>
-                      <span style={{ color: c.met ? '#22c55e' : '#64748b' }}>{c.label}</span>
+                      <span style={{ color: c.met ? '#166534' : '#64748b' }}>{c.label}</span>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
 
-            {/* Confirm Password */}
+            {/* Confirm Password Field */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-bold text-[#44474e] uppercase tracking-wider" htmlFor="confirmPassword">
+              <label
+                className="text-[11px] font-bold text-[#44474e] uppercase tracking-wider"
+                htmlFor="confirmPassword"
+              >
                 Confirm New Password
               </label>
               <div className="h-11 px-3.5 bg-[#EEF3FB] border border-[#CBD5E1] rounded-lg text-sm focus-within:bg-white focus-within:border-[#082042] focus-within:ring-2 focus-within:ring-[#082042]/15 flex items-center gap-2.5 transition-all">
-                <span className="material-symbols-outlined text-[#75777f] text-[18px] shrink-0">lock_clock</span>
+                <span className="material-symbols-outlined text-[#75777f] text-[18px] shrink-0">
+                  lock_clock
+                </span>
                 <input
                   id="confirmPassword"
                   type={showConfirm ? 'text' : 'password'}
                   className="text-sm text-[#0B192C] placeholder:text-[#75777f] w-full bg-transparent outline-none border-none p-0 focus:ring-0"
                   placeholder="Repeat your password"
                   value={confirmPassword}
-                  onChange={(e) => { setConfirmPassword(e.target.value); setError('') }}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value)
+                    setSubmitError('')
+                  }}
                   autoComplete="new-password"
-                  disabled={loading}
+                  disabled={submitting}
                 />
                 <button
                   type="button"
@@ -281,11 +427,12 @@ function ConfirmResetForm() {
                   </span>
                 </button>
               </div>
+
               {/* Match indicator */}
               {confirmPassword && (
                 <p
                   className="text-[11px] flex items-center gap-1.5 mt-0.5"
-                  style={{ color: password === confirmPassword ? '#22c55e' : '#ef4444' }}
+                  style={{ color: password === confirmPassword ? '#16a34a' : '#dc2626' }}
                 >
                   <span className="material-symbols-outlined text-[13px]">
                     {password === confirmPassword ? 'check_circle' : 'cancel'}
@@ -295,15 +442,17 @@ function ConfirmResetForm() {
               )}
             </div>
 
-            {/* Submit */}
+            {/* Submit Button */}
             <button
               className="w-full h-11 bg-[#082042] hover:bg-[#0B192C] text-white text-xs font-semibold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
               type="submit"
-              disabled={loading}
+              disabled={submitting}
             >
-              {loading ? (
+              {submitting ? (
                 <>
-                  <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                  <span className="material-symbols-outlined text-[16px] animate-spin">
+                    progress_activity
+                  </span>
                   <span>Updating Password...</span>
                 </>
               ) : (
@@ -340,8 +489,6 @@ function ConfirmResetForm() {
   )
 }
 
-// ── Page Shell ────────────────────────────────────────────────────────────────
-
 export default function ConfirmResetPage() {
   return (
     <div className="bg-[#f8f9ff] font-sans text-[#0b1c30] min-h-screen flex flex-col justify-between selection:bg-[#ffdea4] selection:text-[#261900]">
@@ -370,7 +517,9 @@ export default function ConfirmResetPage() {
                           progress_activity
                         </span>
                       </div>
-                      <h1 className="font-serif text-2xl text-white font-medium tracking-tight">Verifying Link</h1>
+                      <h1 className="font-serif text-2xl text-white font-medium tracking-tight">
+                        Verifying Link
+                      </h1>
                       <div className="w-12 h-0.5 bg-[#E0A92C] mx-auto my-3 rounded-full" />
                     </div>
                     <div className="p-6 text-center">

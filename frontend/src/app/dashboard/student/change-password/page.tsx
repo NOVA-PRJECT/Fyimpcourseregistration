@@ -21,6 +21,14 @@ import {
   Info,
 } from 'lucide-react'
 
+import {
+  hasMinLength as checkMinLength,
+  hasLetter as checkLetter,
+  hasNumber as checkNumber,
+  hasSpecial as checkSpecial,
+  getPasswordLevel,
+} from '@/core/validation/passwordValidation'
+
 export default function ChangePasswordPage() {
   useBfcacheGuard()
   const router = useRouter()
@@ -39,50 +47,12 @@ export default function ChangePasswordPage() {
     confirm_password?: string
   }>({})
 
-  // Dynamic password validation rules
-  const hasMinLength = newPassword.length >= 10
-  const hasLetter = /[A-Za-z]/.test(newPassword)
-  const hasNumber = /[0-9]/.test(newPassword)
-  const hasSpecial = /[^A-Za-z0-9]/.test(newPassword)
-
-  // Password Level: Bad, Better, Good, Strong
-  const passwordLevel = (() => {
-    if (!newPassword) return null
-    // Good: meets all 3 mandatory university criteria
-    if (hasMinLength && hasLetter && hasNumber) {
-      if (newPassword.length >= 12 && hasSpecial) {
-        return {
-          label: 'Strong',
-          color: '#0d9488',
-          bg: '#f0fdfa',
-          border: '#99f6e4',
-        }
-      }
-      return {
-        label: 'Good',
-        color: '#16a34a',
-        bg: '#f0fdf4',
-        border: '#bbf7d0',
-      }
-    }
-    // Better: getting closer (e.g. 8+ characters or meets 2 criteria)
-    const metCount = [hasMinLength, hasLetter, hasNumber].filter(Boolean).length
-    if (newPassword.length >= 8 || metCount >= 2) {
-      return {
-        label: 'Better',
-        color: '#d97706',
-        bg: '#fffbeb',
-        border: '#fde68a',
-      }
-    }
-    // Bad: short or missing essential requirements
-    return {
-      label: 'Bad',
-      color: '#dc2626',
-      bg: '#fef2f2',
-      border: '#fecaca',
-    }
-  })()
+  // Dynamic password validation rules from shared module
+  const hasMinLength = checkMinLength(newPassword)
+  const hasLetter = checkLetter(newPassword)
+  const hasNumber = checkNumber(newPassword)
+  const hasSpecial = checkSpecial(newPassword)
+  const passwordLevel = getPasswordLevel(newPassword)
 
   function validate() {
     const errors: typeof fieldErrors = {}

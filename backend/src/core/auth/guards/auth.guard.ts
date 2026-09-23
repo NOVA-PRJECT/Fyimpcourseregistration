@@ -104,7 +104,9 @@ export class AuthGuard implements CanActivate {
     const isAllowedPwdPath =
       reqPath.includes('/api/student/change-password') ||
       reqPath.includes('/api/student/dashboard-summary') ||
-      reqPath.includes('/api/auth/logout')
+      reqPath.includes('/api/auth/logout') ||
+      reqPath.includes('/api/auth/complete-password-reset') ||
+      reqPath.includes('/auth/complete-password-reset')
 
     if (authUser.must_change_password && !isAllowedPwdPath) {
       throw new ForbiddenException({

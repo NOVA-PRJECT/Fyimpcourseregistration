@@ -22,6 +22,7 @@ const LoginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 })
 
+
 @Controller('api/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -83,15 +84,10 @@ export class AuthController {
     return this.authService.getProfile(user)
   }
 
-  @Post('reset-password')
-  @HttpCode(HttpStatus.NOT_FOUND)
-  async resetPassword() {
-    return { error: 'Reset password feature is disabled' }
-  }
-
-  @Post('reset-password/confirm')
-  @HttpCode(HttpStatus.NOT_FOUND)
-  async resetPasswordConfirm() {
-    return { error: 'Reset password feature is disabled' }
+  @Post('complete-password-reset')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async completePasswordReset(@CurrentUser() user: AuthUser) {
+    return this.authService.completePasswordReset(user.userId)
   }
 }

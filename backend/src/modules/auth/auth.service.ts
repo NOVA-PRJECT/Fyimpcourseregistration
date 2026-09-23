@@ -226,4 +226,27 @@ export class AuthService {
 
     throw new ForbiddenException('Role not found or invalid')
   }
+
+  // ── Password Reset Flow (Flow B) ──────────────────────────────────────────
+
+  async completePasswordReset(userId: string) {
+    // 1. Update Supabase Auth app_metadata to clear must_change_password
+    const { error: authError } = await this.supabase.admin.auth.admin.updateUserById(userId, {
+      app_metadata: { must_change_password: false },
+    })
+
+    if (authError) {
+      throw new BadRequestException(
+        authError.message || 'Failed to update user authentication metadata.',
+      )
+    }
+
+    // 2. Also clear must_change_password in students table if user is a student
+    await this.supabase.admin
+      .from('students')
+      .update({ must_change_password: false })
+      .eq('id', userId)
+
+    return { success: true }
+  }
 }

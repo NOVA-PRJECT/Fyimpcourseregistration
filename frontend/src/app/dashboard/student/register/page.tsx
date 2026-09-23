@@ -729,132 +729,74 @@ export default function RegisterPage() {
                     (!!slot.course && (!slot.options || slot.options.length === 0))
                   const slotKey = `slot_${slot.slot}`
                   const existingCourseId = existingSlots[slotKey]
-                  const meta = allocationMetadata[slotKey]
                   const isAllocated = !!existingCourseId
 
-                  // Find course metadata if allocated
+                  // Find course metadata if allocated or fixed
                   const allocatedCourse = isFixed
                     ? slot.course
                     : slot.options?.find((c) => c.id === existingCourseId)
 
+                  const isConfirmed = isAllocated || (isFixed && !!slot.course)
+
                   return (
                     <div
                       key={slot.slot}
-                      className={`${styles.slotCard} ${styles.active}`}
+                      className={`${styles.slotCard} ${isConfirmed ? styles.slotCardConfirmed : styles.active}`}
                     >
                       <div className={styles.slotHeader}>
                         <span className={styles.slotLabel}>{slot.name}</span>
-
                       </div>
 
-                      {/* Case 1: Fixed Course */}
-                      {isFixed && slot.course && (
-                        <div
-                          className={styles.customSelectTrigger}
-                          style={{ cursor: 'default', pointerEvents: 'none' }}
-                        >
-                          <div className={styles.triggerContent}>
-                            <span className={styles.triggerTitle}>{slot.course.title}</span>
-                            <span className={styles.triggerMeta}>
-                              {slot.course.course_code ? `${slot.course.course_code} • ` : ''}
-                              {slot.course.department_name || 'General'} • {slot.course.credits} cr
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                      {/* Case 1: Confirmed Allocation (Unified for Core/Fixed & Allocated Electives) */}
+                      {isConfirmed && allocatedCourse ? (
+                        <div className={styles.confirmedCard}>
+                          <div className={styles.confirmedCardBody}>
+                            <div className={styles.confirmedBadgeRow}>
+                              <span className={styles.confirmedBadge}>
+                                <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                                Confirmed Allocation
+                              </span>
+                            </div>
 
-                      {/* Case 2: Elective Slot — Post Allocation (Window Closed or Allocated) */}
-                      {!isFixed && (!windowIsOpen || isAllocated) && (
-                        <div>
-                          {isAllocated ? (
-                            <div
-                              style={{
-                                padding: '0.85rem',
-                                borderRadius: '8px',
-                                background: 'rgba(34, 197, 94, 0.12)',
-                                border: '1px solid rgba(34, 197, 94, 0.3)',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                              }}
-                            >
-                              <div>
-                                <span
-                                  style={{
-                                    fontSize: '0.7rem',
-                                    fontWeight: 700,
-                                    color: '#4ade80',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.05em',
-                                  }}
-                                >
-                                  ✓ Confirmed Allocation
-                                </span>
-                                <p
-                                  style={{
-                                    margin: '0.2rem 0 0',
-                                    fontWeight: 600,
-                                    color: '#f1f5f9',
-                                    fontSize: '0.9rem',
-                                  }}
-                                >
-                                  {allocatedCourse?.title ?? 'Allocated Paper'}
-                                </p>
-                                <span
-                                  style={{
-                                    fontSize: '0.75rem',
-                                    fontFamily: 'monospace',
-                                    color: '#94a3b8',
-                                  }}
-                                >
-                                  {allocatedCourse?.course_code ?? ''} •{' '}
-                                  {allocatedCourse?.department_name || 'General'}
-                                </span>
-                              </div>
-                              {allocatedCourse?.credits && (
-                                <span className={styles.creditPill}>
-                                  {allocatedCourse.credits} cr
+                            <h4 className={styles.confirmedTitle}>
+                              {allocatedCourse.title || 'Allocated Paper'}
+                            </h4>
+
+                            <div className={styles.confirmedMeta}>
+                              {allocatedCourse.course_code && (
+                                <span className={styles.confirmedCode}>
+                                  {allocatedCourse.course_code}
                                 </span>
                               )}
+                              <span className={styles.confirmedDept}>
+                                {allocatedCourse.department_name || 'General Department'}
+                              </span>
                             </div>
-                          ) : (
-                            <div
-                              style={{
-                                padding: '0.85rem',
-                                borderRadius: '8px',
-                                background: 'rgba(245, 158, 11, 0.12)',
-                                border: '1px solid rgba(245, 158, 11, 0.3)',
-                              }}
-                            >
-                              <p
-                                style={{
-                                  margin: 0,
-                                  fontWeight: 600,
-                                  color: '#fbbf24',
-                                  fontSize: '0.85rem',
-                                }}
-                              >
-                                ⚠️ Not yet allocated — contact your HOD
-                              </p>
-                              <p
-                                style={{
-                                  margin: '0.25rem 0 0',
-                                  fontSize: '0.75rem',
-                                  color: '#cbd5e1',
-                                }}
-                              >
-                                Your submitted preferences could not be resolved during automated rounds.
-                                Please contact your department HOD for manual placement.
-                              </p>
-                            </div>
+                          </div>
+
+                          {allocatedCourse.credits != null && (
+                            <span className={styles.confirmedCreditPill}>
+                              {allocatedCourse.credits} cr
+                            </span>
                           )}
                         </div>
-                      )}
-
-                      {/* Case 3: Elective Slot — Window Open (Student Picking Preferences) */}
-                      {!isFixed && windowIsOpen && !isAllocated && (
+                      ) : !windowIsOpen ? (
+                        /* Case 2: Window Closed & Not Allocated */
+                        <div className={styles.unallocatedCard}>
+                          <p className={styles.unallocatedTitle}>
+                            <span>⚠️</span> Not yet allocated — contact your HOD
+                          </p>
+                          <p className={styles.unallocatedText}>
+                            Your submitted preferences could not be resolved during automated rounds.
+                            Please contact your department HOD for manual placement.
+                          </p>
+                        </div>
+                      ) : (
+                        /* Case 3: Elective Slot — Window Open (Student Picking Preferences) */
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>
                             Rank your preferences for this paper. The algorithm allocates round-by-round based on capacity and prerequisites.
                           </p>
 
@@ -863,7 +805,7 @@ export default function RegisterPage() {
                               <label
                                 style={{
                                   fontSize: '0.72rem',
-                                  color: '#38bdf8',
+                                  color: '#0284c7',
                                   fontWeight: 700,
                                   textTransform: 'uppercase',
                                   display: 'block',
@@ -888,7 +830,7 @@ export default function RegisterPage() {
                               <label
                                 style={{
                                   fontSize: '0.72rem',
-                                  color: '#94a3b8',
+                                  color: '#64748b',
                                   fontWeight: 600,
                                   textTransform: 'uppercase',
                                   display: 'block',
@@ -915,7 +857,7 @@ export default function RegisterPage() {
                               <label
                                 style={{
                                   fontSize: '0.72rem',
-                                  color: '#94a3b8',
+                                  color: '#64748b',
                                   fontWeight: 600,
                                   textTransform: 'uppercase',
                                   display: 'block',
