@@ -10,7 +10,6 @@ import { SupabaseService } from '../../core/database/supabase.service'
 import { AuditLoggerService, AuditEvents } from '../../core/logging/audit-logger.service'
 import { ServerLoggerService } from '../../core/logging/server-logger.service'
 import { AuthUser } from '../../core/auth/types'
-import { z } from 'zod'
 
 function generatePathwayId(name: string): string {
   const slug = name
@@ -499,8 +498,11 @@ export class HodService {
   }
 
   async bulkCreateStudents(rows: any[], batchPassword: string, user: AuthUser) {
-    if (!rows || rows.length === 0) {
+    if (!Array.isArray(rows) || rows.length === 0) {
       throw new BadRequestException('No student data provided')
+    }
+    if (rows.length > 100) {
+      throw new BadRequestException('Bulk student creation is limited to a maximum of 100 students per batch')
     }
 
     if (!batchPassword || batchPassword.trim().length < 8) {

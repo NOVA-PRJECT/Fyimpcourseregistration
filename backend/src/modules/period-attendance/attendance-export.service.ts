@@ -9,6 +9,13 @@ import * as ExcelJS from 'exceljs';
 import { SupabaseService } from '../../core/database/supabase.service';
 import { AuthUser } from '../../core/auth/types';
 
+function sanitizeSpreadsheetCell(value: any): any {
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(value)) {
+    return `'${value}`;
+  }
+  return value;
+}
+
 @Injectable()
 export class AttendanceExportService {
   private readonly logger = new Logger(AttendanceExportService.name);
@@ -127,20 +134,21 @@ export class AttendanceExportService {
       // Query period attendance for these courses
       const { data: attendanceRows, error: attError } = await this.supabase.admin
         .from('period_attendance')
-        .select('timetable_slot_id, student_id, course_id, status')
+        .select('timetable_slot_id, student_id, course_id, status, attendance_date')
         .in('course_id', courseIds);
 
       if (attError) {
         throw new InternalServerErrorException(`Failed to fetch period attendance records: ${attError.message}`);
       }
 
-      // Compute distinct timetable slots per course
+      // Compute distinct timetable sessions per course (slot + attendance_date)
       const courseSlotsMap = new Map<string, Set<string>>();
       for (const row of attendanceRows || []) {
         if (!courseSlotsMap.has(row.course_id)) {
           courseSlotsMap.set(row.course_id, new Set<string>());
         }
-        courseSlotsMap.get(row.course_id)!.add(row.timetable_slot_id);
+        const sessionKey = `${row.timetable_slot_id}_${row.attendance_date || ''}`;
+        courseSlotsMap.get(row.course_id)!.add(sessionKey);
 
         if (row.status === 'present') {
           const key = `${row.student_id}_${row.course_id}`;
@@ -232,8 +240,8 @@ export class AttendanceExportService {
       const nonNaPercentages: number[] = [];
       const rowValues: any[] = [
         i + 1,
-        student.cap_application_number || '—',
-        student.full_name,
+        sanitizeSpreadsheetCell(student.cap_application_number || '—'),
+        sanitizeSpreadsheetCell(student.full_name),
       ];
 
       for (const course of courseList) {

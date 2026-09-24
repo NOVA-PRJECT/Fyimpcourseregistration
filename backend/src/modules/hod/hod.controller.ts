@@ -205,6 +205,12 @@ export class HodController {
     @Body() body: { rows: any[]; batch_default_password?: string },
     @CurrentUser() user: AuthUser,
   ) {
+    if (!Array.isArray(body?.rows) || body.rows.length === 0) {
+      throw new BadRequestException('No student data provided')
+    }
+    if (body.rows.length > 100) {
+      throw new BadRequestException('Bulk student creation is limited to a maximum of 100 students per batch')
+    }
     if (!body.batch_default_password || body.batch_default_password.trim().length < 8) {
       throw new BadRequestException('A batch default password of at least 8 characters is required')
     }

@@ -1,17 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import {
   LogOut,
   LayoutDashboard,
   Bell,
-  BookOpen,
   Calendar,
   MapPin,
-  Award,
+  BookOpen,
+  Award
 } from 'lucide-react'
 
 import styles from './student-dashboard.module.css'

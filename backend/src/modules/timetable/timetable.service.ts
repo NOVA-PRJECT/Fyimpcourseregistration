@@ -7,13 +7,13 @@ import {
 } from '@nestjs/common'
 import * as fs from 'fs'
 import * as path from 'path'
+import { z } from 'zod'
 import { SupabaseService } from '../../core/database/supabase.service'
 import { AuditLoggerService, AuditEvents } from '../../core/logging/audit-logger.service'
 import { ServerLoggerService } from '../../core/logging/server-logger.service'
 import { AuthUser } from '../../core/auth/types'
 import { runGenerationJob } from './solver/job'
 import { getRedisClient } from './solver/redisClient'
-import { z } from 'zod'
 
 const CONSTRAINTS_PATH = path.join(__dirname, 'solver/constraints.base.json')
 

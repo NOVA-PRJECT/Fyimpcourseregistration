@@ -492,7 +492,7 @@ export class RegistrationsService {
       throw new BadRequestException('Submitted semester does not match current semester')
     }
 
-    const [settingsRes, blueprintRes] = await Promise.all([
+    const [settingsRes, blueprintRes, deptRes] = await Promise.all([
       this.supabase.admin
         .from('campus_settings')
         .select('deadline, min_credits, max_credits, academic_year')
@@ -504,7 +504,21 @@ export class RegistrationsService {
         .eq('department_id', departmentId)
         .eq('semester', semester)
         .maybeSingle(),
+      this.supabase.admin.from('departments').select('id, name, code'),
     ])
+
+    const departmentsData = deptRes.data ?? []
+    const deptMap = new Map<string, string>()
+    for (const d of departmentsData) {
+      if (d.code) {
+        deptMap.set(d.code, d.id)
+        deptMap.set(d.code.toUpperCase(), d.id)
+        deptMap.set(d.code.toLowerCase(), d.id)
+      }
+      if (d.id) {
+        deptMap.set(d.id, d.id)
+      }
+    }
 
     const settings = settingsRes.data
     const blueprint = blueprintRes.data
@@ -648,17 +662,46 @@ export class RegistrationsService {
     if (allElectiveCourseIds.size > 0) {
       const { data: electiveCourses, error: elecErr } = await this.supabase.admin
         .from('courses')
-        .select('id, course_code, title, credits, department_id, category')
+        .select('id, course_code, title, credits, department_id, category, tag')
         .in('id', Array.from(allElectiveCourseIds))
 
       if (elecErr || !electiveCourses) {
         throw new InternalServerErrorException('Failed to validate selected courses')
       }
 
-      const foundCourseIds = new Set(electiveCourses.map((c) => c.id))
+      const courseMap = new Map(electiveCourses.map((c) => [c.id, c]))
       for (const id of allElectiveCourseIds) {
-        if (!foundCourseIds.has(id)) {
+        if (!courseMap.has(id)) {
           throw new BadRequestException(`Course ID ${id} is invalid or does not exist`)
+        }
+      }
+
+      // Validate each elective choice against slot eligibility rules (FND-05)
+      for (const sItem of unifiedPreferences) {
+        if (sItem.is_fixed) continue
+        const slotDef = pathway.slots[sItem.slot - 1]
+        if (!slotDef) continue
+
+        for (const choice of sItem.choices) {
+          const course = courseMap.get(choice.course_id)
+          if (!course) {
+            throw new BadRequestException(`Course ID ${choice.course_id} is invalid or does not exist`)
+          }
+
+          const isEligible = isCourseEligibleForSlot(
+            course,
+            slotDef.rule,
+            slotDef.target || '',
+            departmentId ?? '',
+            deptMap,
+            slotDef.name || sItem.name,
+          )
+
+          if (!isEligible) {
+            throw new BadRequestException(
+              `Course ${course.course_code} - ${course.title} is not eligible for Slot ${sItem.slot} (${slotDef.name || slotDef.rule})`,
+            )
+          }
         }
       }
 

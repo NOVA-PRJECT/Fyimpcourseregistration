@@ -117,7 +117,8 @@ export class PeriodAttendanceService {
           this.supabase.admin
             .from('period_attendance')
             .select('student_id, status, marked_at')
-            .eq('timetable_slot_id', entry.id),
+            .eq('timetable_slot_id', entry.id)
+            .eq('attendance_date', ist.dateString),
         ]);
 
         const markedMap = new Map((existingMarks || []).map((m) => [m.student_id, m.status]));
@@ -242,7 +243,8 @@ export class PeriodAttendanceService {
         const { data: marks } = await this.supabase.admin
           .from('period_attendance')
           .select('student_id, status')
-          .eq('timetable_slot_id', entry.id);
+          .eq('timetable_slot_id', entry.id)
+          .eq('attendance_date', dateStr);
 
         const isMarked = (marks || []).length > 0;
         const presentCount = (marks || []).filter((m) => m.status === 'present').length;
@@ -410,6 +412,9 @@ export class PeriodAttendanceService {
 
     const absentSet = new Set(absentStudentIds);
     const submissionTime = clientTimestamp || new Date().toISOString();
+    const attendanceDate = clientTimestamp
+      ? getISTDateTime(new Date(clientTimestamp)).dateString
+      : getISTDateTime().dateString;
 
     // 5. Construct rows with default-present pattern
     const rows = roster.map((student) => ({
@@ -419,6 +424,7 @@ export class PeriodAttendanceService {
       marked_by: user.userId,
       status: absentSet.has(student.id) ? 'absent' : 'present',
       marked_at: submissionTime,
+      attendance_date: attendanceDate,
       is_late_entry: isLateEntry,
       unlocked_by: unlockedBy,
     }));
@@ -426,7 +432,7 @@ export class PeriodAttendanceService {
     // 6. Bulk upsert rows in single atomic operation
     const { error: upsertError } = await this.supabase.admin
       .from('period_attendance')
-      .upsert(rows, { onConflict: 'timetable_slot_id,student_id' });
+      .upsert(rows, { onConflict: 'timetable_slot_id,student_id,attendance_date' });
 
     if (upsertError) {
       throw new InternalServerErrorException(`Failed to record attendance: ${upsertError.message}`);

@@ -230,7 +230,31 @@ export class AuthService {
   // ── Password Reset Flow (Flow B) ──────────────────────────────────────────
 
   async completePasswordReset(userId: string) {
-    // 1. Update Supabase Auth app_metadata to clear must_change_password
+    // 1. Fetch user to verify recovery state
+    const { data: authUserData, error: userError } = await this.supabase.admin.auth.admin.getUserById(userId)
+    if (userError || !authUserData?.user) {
+      throw new BadRequestException('User authentication record not found.')
+    }
+
+    const authUser = authUserData.user
+    // If must_change_password is true, enforce that recovery email was initiated and password updated
+    if (authUser.app_metadata?.must_change_password) {
+      if (!authUser.recovery_sent_at) {
+        throw new BadRequestException(
+          'Password reset was not initiated via email recovery. Please use the standard change-password portal.',
+        )
+      }
+
+      const recoveryTime = new Date(authUser.recovery_sent_at).getTime()
+      const updatedTime = new Date(authUser.updated_at || 0).getTime()
+      if (updatedTime < recoveryTime - 2000) {
+        throw new BadRequestException(
+          'Password has not been updated. Please set a new password first before completing reset.',
+        )
+      }
+    }
+
+    // 2. Update Supabase Auth app_metadata to clear must_change_password
     const { error: authError } = await this.supabase.admin.auth.admin.updateUserById(userId, {
       app_metadata: { must_change_password: false },
     })
@@ -241,7 +265,7 @@ export class AuthService {
       )
     }
 
-    // 2. Also clear must_change_password in students table if user is a student
+    // 3. Also clear must_change_password in students table if user is a student
     await this.supabase.admin
       .from('students')
       .update({ must_change_password: false })

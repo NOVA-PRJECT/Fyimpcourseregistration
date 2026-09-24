@@ -1,11 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import Image from 'next/image'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import styles from '../student-dashboard.module.css'
-import ResourceBanner from '@/component/ResourceBanner'
+import ResourceBanner from '@/components/ResourceBanner'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
 
 interface Course {

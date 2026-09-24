@@ -1,4 +1,4 @@
-import ConsentGate from '@/component/ConsentGate'
+import ConsentGate from '@/components/ConsentGate'
 
 export default function DashboardRootLayout({
   children,

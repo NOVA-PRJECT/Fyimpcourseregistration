@@ -100,13 +100,19 @@ export class AuthGuard implements CanActivate {
       token,
     }
 
-    const reqPath = request.originalUrl || request.path || request.url || ''
-    const isAllowedPwdPath =
-      reqPath.includes('/api/student/change-password') ||
-      reqPath.includes('/api/student/dashboard-summary') ||
-      reqPath.includes('/api/auth/logout') ||
-      reqPath.includes('/api/auth/complete-password-reset') ||
-      reqPath.includes('/auth/complete-password-reset')
+    const rawUrl = (request.originalUrl || request.path || request.url || '') as string
+    const cleanPath = rawUrl.split(/[?#]/)[0]
+    const normalizedPath = cleanPath ? cleanPath.replace(/\/+$/, '') : '/'
+
+    const ALLOWED_PWD_PATHS = new Set([
+      '/api/student/change-password',
+      '/api/student/dashboard-summary',
+      '/api/auth/logout',
+      '/api/auth/complete-password-reset',
+      '/auth/complete-password-reset',
+    ])
+
+    const isAllowedPwdPath = ALLOWED_PWD_PATHS.has(normalizedPath)
 
     if (authUser.must_change_password && !isAllowedPwdPath) {
       throw new ForbiddenException({
