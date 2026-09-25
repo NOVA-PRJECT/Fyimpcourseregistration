@@ -55,7 +55,7 @@ export class PeriodAttendanceController {
       throw new BadRequestException(parsed.error.issues[0]?.message || 'Invalid payload');
     }
 
-    const ip = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
     return this.periodService.submitAttendance(
       user,
       parsed.data.timetable_slot_id,
@@ -77,7 +77,7 @@ export class PeriodAttendanceController {
       throw new BadRequestException(parsed.error.issues[0]?.message || 'Invalid payload');
     }
 
-    const ip = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
     return this.periodService.unlockPeriod(
       user,
       parsed.data.timetable_slot_id,
@@ -127,9 +127,10 @@ export class PeriodAttendanceController {
       departmentId
     );
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', buffer.length);
+    const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_')
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`)
+    res.setHeader('Content-Length', buffer.length)
     return res.end(buffer);
   }
 }

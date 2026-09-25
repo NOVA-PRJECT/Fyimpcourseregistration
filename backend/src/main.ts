@@ -8,17 +8,26 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap')
   const app = await NestFactory.create(AppModule)
 
+  // Trust first proxy hop (Render, Cloudflare, Nginx) for accurate client IP in rate limiting & audits
+  ;(app.getHttpAdapter().getInstance() as any).set('trust proxy', 1)
+
   app.use(cookieParser())
 
-  // Ensure API responses are never cached by browsers or proxy layers
+  const isProd = process.env.NODE_ENV === 'production'
+
+  // Defensive security headers and cache control
   app.use((_req: any, res: any, next: any) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
     res.setHeader('Pragma', 'no-cache')
     res.setHeader('Expires', '0')
+    res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+    if (isProd) {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    }
     next()
   })
-
-  const isProd = process.env.NODE_ENV === 'production'
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
   const rawOrigins = process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',').map((o) => o.trim()).filter(Boolean)

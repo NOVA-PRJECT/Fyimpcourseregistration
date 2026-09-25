@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,6 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common'
+import { z } from 'zod'
 import { AdminService } from './admin.service'
 import { DataSeedService } from './data-seed.service'
 import { AuthGuard } from '../../core/auth/guards/auth.guard'
@@ -16,6 +18,37 @@ import { RolesGuard } from '../../core/auth/guards/roles.guard'
 import { Roles } from '../../core/auth/decorators/roles.decorator'
 import { CurrentUser } from '../../core/auth/decorators/current-user.decorator'
 import { AuthUser } from '../../core/auth/types'
+
+const CreateCampusSchema = z.object({
+  name: z.string().trim().min(1, 'Campus name is required').max(100, 'Campus name too long'),
+  code: z.string().trim().min(1, 'Campus code is required').max(20, 'Campus code too long'),
+})
+
+const UpdateCampusSchema = z.object({
+  id: z.string().min(1, 'Campus ID is required'),
+  name: z.string().trim().min(1, 'Campus name is required').max(100, 'Campus name too long'),
+  code: z.string().trim().min(1, 'Campus code is required').max(20, 'Campus code too long'),
+})
+
+const DeleteCampusSchema = z.object({
+  campus_id: z.string().min(1, 'Campus ID is required'),
+})
+
+const CreateDepartmentSchema = z.object({
+  name: z.string().trim().min(1, 'Department name is required').max(100, 'Department name too long'),
+  code: z.string().trim().min(1, 'Department code is required').max(20, 'Department code too long'),
+  campus_id: z.string().min(1, 'Campus ID is required'),
+})
+
+const UpdateDepartmentSchema = z.object({
+  id: z.string().min(1, 'Department ID is required'),
+  name: z.string().trim().min(1, 'Department name is required').max(100, 'Department name too long'),
+  code: z.string().trim().min(1, 'Department code is required').max(20, 'Department code too long'),
+})
+
+const DeleteDepartmentSchema = z.object({
+  department_id: z.string().min(1, 'Department ID is required'),
+})
 
 @Controller('api/admin')
 @UseGuards(AuthGuard, RolesGuard)
@@ -51,20 +84,32 @@ export class AdminController {
 
   @Post('campuses')
   @Roles('superadmin')
-  async createCampus(@Body() body: { name: string; code: string }, @CurrentUser() user: AuthUser) {
-    return this.adminService.createCampus(body.name, body.code, user)
+  async createCampus(@Body() body: unknown, @CurrentUser() user: AuthUser) {
+    const parsed = CreateCampusSchema.safeParse(body)
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0].message)
+    }
+    return this.adminService.createCampus(parsed.data.name, parsed.data.code, user)
   }
 
   @Put('campuses')
   @Roles('superadmin')
-  async updateCampus(@Body() body: { id: string; name: string; code: string }, @CurrentUser() user: AuthUser) {
-    return this.adminService.updateCampus(body.id, body.name, body.code, user)
+  async updateCampus(@Body() body: unknown, @CurrentUser() user: AuthUser) {
+    const parsed = UpdateCampusSchema.safeParse(body)
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0].message)
+    }
+    return this.adminService.updateCampus(parsed.data.id, parsed.data.name, parsed.data.code, user)
   }
 
   @Delete('campuses')
   @Roles('superadmin')
-  async deleteCampus(@Body() body: { campus_id: string }, @CurrentUser() user: AuthUser) {
-    return this.adminService.deleteCampus(body.campus_id, user)
+  async deleteCampus(@Body() body: unknown, @CurrentUser() user: AuthUser) {
+    const parsed = DeleteCampusSchema.safeParse(body)
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0].message)
+    }
+    return this.adminService.deleteCampus(parsed.data.campus_id, user)
   }
 
   // ──────────────── Departments ────────────────
@@ -77,25 +122,37 @@ export class AdminController {
   @Post('departments')
   @Roles('superadmin')
   async createDepartment(
-    @Body() body: { name: string; code: string; campus_id: string },
+    @Body() body: unknown,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.adminService.createDepartment(body.name, body.code, body.campus_id, user)
+    const parsed = CreateDepartmentSchema.safeParse(body)
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0].message)
+    }
+    return this.adminService.createDepartment(parsed.data.name, parsed.data.code, parsed.data.campus_id, user)
   }
 
   @Put('departments')
   @Roles('superadmin')
   async updateDepartment(
-    @Body() body: { id: string; name: string; code: string },
+    @Body() body: unknown,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.adminService.updateDepartment(body.id, body.name, body.code, user)
+    const parsed = UpdateDepartmentSchema.safeParse(body)
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0].message)
+    }
+    return this.adminService.updateDepartment(parsed.data.id, parsed.data.name, parsed.data.code, user)
   }
 
   @Delete('departments')
   @Roles('superadmin')
-  async deleteDepartment(@Body() body: { department_id: string }, @CurrentUser() user: AuthUser) {
-    return this.adminService.deleteDepartment(body.department_id, user)
+  async deleteDepartment(@Body() body: unknown, @CurrentUser() user: AuthUser) {
+    const parsed = DeleteDepartmentSchema.safeParse(body)
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0].message)
+    }
+    return this.adminService.deleteDepartment(parsed.data.department_id, user)
   }
 
   // ──────────────── Faculty List ────────────────

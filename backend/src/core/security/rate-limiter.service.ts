@@ -26,9 +26,15 @@ export class RateLimiterService {
     } else {
       this.isConfigured = false
       this.redis = null
-      this.logger.warn(
-        'Upstash Redis is not configured (missing UPSTASH_REDIS_REST_URL or TOKEN). Rate limiting will fail-open without remote network calls.',
-      )
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.error(
+          'CRITICAL: Upstash Redis is not configured in PRODUCTION (missing UPSTASH_REDIS_REST_URL or TOKEN). Rate limiting will fail-open!'
+        )
+      } else {
+        this.logger.warn(
+          'Upstash Redis is not configured (missing UPSTASH_REDIS_REST_URL or TOKEN). Rate limiting will fail-open without remote network calls.'
+        )
+      }
     }
 
     const redisClient = this.redis || new Redis({ url: 'https://dummy.upstash.io', token: 'dummy_token' })
@@ -84,6 +90,11 @@ export class RateLimiterService {
     identifier: string,
   ): Promise<{ success: boolean; remaining: number; reset: number }> {
     if (!this.isConfigured || !this.redis) {
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.error(
+          `[RateLimit:UNCONFIGURED] Bypassing rate limit check for identifier "${identifier}" due to missing Redis configuration in production!`
+        )
+      }
       return { success: true, remaining: 100, reset: Date.now() + 60000 }
     }
 

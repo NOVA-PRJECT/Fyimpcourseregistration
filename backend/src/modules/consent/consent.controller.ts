@@ -41,7 +41,7 @@ export class ConsentController {
     }
 
     const ip =
-      (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
+      (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
 
     return this.consentService.acceptConsent(
       user,

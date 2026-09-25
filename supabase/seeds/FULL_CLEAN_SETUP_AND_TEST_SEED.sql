@@ -1,4 +1,9 @@
 -- =============================================================================
+-- ⚠️  WARNING: LOCAL DEVELOPMENT SEED ONLY
+-- DO NOT run this against production or staging databases.
+-- This file drops and recreates all tables with test data.
+-- Production RLS policies are managed by migrations, not this seed.
+-- =============================================================================
 -- FYIMP Course Registration Portal — Complete Unified Master Migration
 -- Target Schema: PostgreSQL 15+ / Supabase (public)
 -- Version: 3.0.0 (GoTrue Safe + Consolidated E2E Architecture)
@@ -710,7 +715,9 @@ ALTER TABLE campus_sign_ins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE consent_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_logs ENABLE ROW LEVEL SECURITY;
 
--- Allow authenticated and service_role full read/write for test environment
+-- Service-role full access (required for NestJS backend)
+-- NOTE: Blanket policies (authenticated_all_* and authenticated_select_*) have been REMOVED.
+-- Production and development RLS policies are defined in migration files, not here.
 DO $$
 DECLARE
     t text;
@@ -721,12 +728,6 @@ BEGIN
     LOOP
         EXECUTE format('DROP POLICY IF EXISTS "service_role_all_%I" ON %I;', t, t);
         EXECUTE format('CREATE POLICY "service_role_all_%I" ON %I FOR ALL TO service_role USING (true) WITH CHECK (true);', t, t);
-        
-        EXECUTE format('DROP POLICY IF EXISTS "authenticated_select_%I" ON %I;', t, t);
-        EXECUTE format('CREATE POLICY "authenticated_select_%I" ON %I FOR SELECT TO authenticated USING (true);', t, t);
-
-        EXECUTE format('DROP POLICY IF EXISTS "authenticated_all_%I" ON %I;', t, t);
-        EXECUTE format('CREATE POLICY "authenticated_all_%I" ON %I FOR ALL TO authenticated USING (true) WITH CHECK (true);', t, t);
     END LOOP;
 END;
 $$;

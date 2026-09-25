@@ -39,7 +39,7 @@ export class AuthController {
       throw new BadRequestException(parsed.error.issues[0].message)
     }
 
-    const ip = (req.headers['x-forwarded-for'] as string) || (req as any).ip || 'unknown'
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || (req as any).ip || 'unknown'
     const result = await this.authService.login(parsed.data.email, parsed.data.password, ip)
 
     // Set HTTP-only cookies
@@ -66,7 +66,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const ip = (req.headers['x-forwarded-for'] as string) || (req as any).ip || 'unknown'
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || (req as any).ip || 'unknown'
     const authHeader = (req.headers as any).authorization as string | undefined
     const token = (req as any).cookies?.auth_token || (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined)
     const user = (req as any).user as AuthUser | undefined

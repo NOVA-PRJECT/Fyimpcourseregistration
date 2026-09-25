@@ -382,12 +382,15 @@ export class PeriodAttendanceService {
           .maybeSingle();
 
         if (!unlockRecord) {
-          if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-            isLateEntry = true;
-          } else {
+          if (process.env.NODE_ENV === 'production') {
             throw new ForbiddenException(
               `The 15-minute marking window for this period ended at ${slot.end_time}. An HOD unlock is required to submit late attendance.`
             );
+          } else {
+            this.serverLogger.warn(
+              `[Attendance] Non-production mode: late attendance marking permitted for slot ${slotId} without HOD unlock.`
+            );
+            isLateEntry = true;
           }
         }
 

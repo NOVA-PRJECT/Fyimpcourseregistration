@@ -65,13 +65,20 @@ export class TimetableService {
   }
 
   async updateConstraints(body: any) {
+    const ConstraintItemSchema = z.string().trim().min(1).max(500)
+    const SemesterConstraintObjSchema = z.object({
+      hard_constraints: z.array(ConstraintItemSchema).max(100).optional(),
+      soft_constraints: z.array(ConstraintItemSchema).max(100).optional(),
+    }).passthrough()
+
     const ConstraintsSchema = z.object({
+      reset: z.boolean().optional(),
       schedule: z.record(z.any()).optional(),
-      universal_hard_constraints: z.array(z.any()).optional(),
-      hard_constraints: z.array(z.any()).optional(),
-      universal_soft_constraints: z.array(z.any()).optional(),
-      soft_constraints: z.array(z.any()).optional(),
-      semester_constraints: z.record(z.any()).optional(),
+      universal_hard_constraints: z.array(ConstraintItemSchema).max(100).optional(),
+      hard_constraints: z.array(ConstraintItemSchema).max(100).optional(),
+      universal_soft_constraints: z.array(ConstraintItemSchema).max(100).optional(),
+      soft_constraints: z.array(ConstraintItemSchema).max(100).optional(),
+      semester_constraints: z.record(SemesterConstraintObjSchema).optional(),
     })
 
     const parsed = ConstraintsSchema.safeParse(body)
@@ -81,18 +88,18 @@ export class TimetableService {
 
     const current = this.readConstraintsFile()
     const updated = {
-      schedule: body.schedule || current.schedule,
-      hard_constraints: Array.isArray(body.universal_hard_constraints)
-        ? body.universal_hard_constraints
-        : Array.isArray(body.hard_constraints)
-        ? body.hard_constraints
+      schedule: parsed.data.schedule || current.schedule,
+      hard_constraints: Array.isArray(parsed.data.universal_hard_constraints)
+        ? parsed.data.universal_hard_constraints
+        : Array.isArray(parsed.data.hard_constraints)
+        ? parsed.data.hard_constraints
         : current.hard_constraints,
-      soft_constraints: Array.isArray(body.universal_soft_constraints)
-        ? body.universal_soft_constraints
-        : Array.isArray(body.soft_constraints)
-        ? body.soft_constraints
+      soft_constraints: Array.isArray(parsed.data.universal_soft_constraints)
+        ? parsed.data.universal_soft_constraints
+        : Array.isArray(parsed.data.soft_constraints)
+        ? parsed.data.soft_constraints
         : current.soft_constraints,
-      semester_constraints: body.semester_constraints || current.semester_constraints,
+      semester_constraints: parsed.data.semester_constraints || current.semester_constraints,
     }
 
     try {

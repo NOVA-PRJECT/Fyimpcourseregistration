@@ -43,7 +43,7 @@ export class AssignmentsController {
       throw new BadRequestException(parsed.error.issues[0]?.message || 'Invalid payload');
     }
 
-    const ip = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
     return this.assignmentsService.assignTeacher(
       user,
       parsed.data.teacher_id,
@@ -65,7 +65,7 @@ export class AssignmentsController {
       throw new BadRequestException(parsed.error.issues[0]?.message || 'Invalid payload');
     }
 
-    const ip = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
     return this.assignmentsService.reassignTeacher(user, id, parsed.data.teacher_id, ip);
   }
 
@@ -76,7 +76,7 @@ export class AssignmentsController {
     @Param('id') id: string,
     @Req() req: Request
   ) {
-    const ip = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
     return this.assignmentsService.removeAssignment(user, id, ip);
   }
 }

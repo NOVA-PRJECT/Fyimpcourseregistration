@@ -20,6 +20,8 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Authentication token missing')
     }
 
+    this.validateMutatingOrigin(request)
+
     const { data: authData, error: authError } = await this.supabaseService.admin.auth.getUser(token)
     if (authError || !authData?.user) {
       throw new UnauthorizedException('Invalid or expired authentication session')
@@ -141,5 +143,48 @@ export class AuthGuard implements CanActivate {
     }
 
     return null
+  }
+
+  private validateMutatingOrigin(request: any): void {
+    const mutatingMethods = new Set(['POST', 'PUT', 'DELETE', 'PATCH'])
+    const method = (request.method || '').toUpperCase()
+
+    // If method is not mutating or caller used Bearer token header, ambient cookie CSRF is not a concern
+    const authHeader = request.headers['authorization']
+    if (
+      !mutatingMethods.has(method) ||
+      (authHeader && typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer '))
+    ) {
+      return
+    }
+
+    // Request is using ambient cookies for state mutation
+    const originHeader = (request.headers['origin'] || request.headers['referer'] || '') as string
+    if (!originHeader) {
+      // Non-browser or server-to-server proxy call
+      return
+    }
+
+    const rawOrigins = process.env.FRONTEND_URL
+      ? process.env.FRONTEND_URL.split(',').map((o) => o.trim()).filter(Boolean)
+      : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001']
+
+    try {
+      const parsedOrigin = new URL(originHeader).origin
+      const isAllowed = rawOrigins.some((allowed) => {
+        try {
+          return new URL(allowed).origin === parsedOrigin
+        } catch {
+          return allowed === parsedOrigin
+        }
+      })
+
+      if (!isAllowed && process.env.NODE_ENV === 'production') {
+        throw new ForbiddenException('Cross-site request rejected')
+      }
+    } catch (err: any) {
+      if (err instanceof ForbiddenException) throw err
+      // invalid URL in originHeader - ignore
+    }
   }
 }
