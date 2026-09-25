@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from '../../core/database/supabase.service';
 import { AuditLoggerService } from '../../core/logging/audit-logger.service';
+import { ServerLoggerService } from '../../core/logging/server-logger.service';
 import { AuthUser } from '../../core/auth/types';
 import { PERIOD_GRACE_MINUTES } from './period-attendance.constants';
 import { getISTDateTime } from '../../core/utils/date-time.util';
@@ -15,7 +16,8 @@ import { getISTDateTime } from '../../core/utils/date-time.util';
 export class PeriodAttendanceService {
   constructor(
     private readonly supabase: SupabaseService,
-    private readonly auditLogger: AuditLoggerService
+    private readonly auditLogger: AuditLoggerService,
+    private readonly serverLogger: ServerLoggerService,
   ) {}
 
   /**
