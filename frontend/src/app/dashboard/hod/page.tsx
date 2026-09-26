@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation'
 import Papa from 'papaparse'
 import styles from './hod-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
-import { Eye, EyeOff, LogOut } from 'lucide-react'
+import { Eye, EyeOff, LogOut, Menu, ChevronDown } from 'lucide-react'
 import { downloadStudentsExcel } from '@/core/utils/exportExcel'
 
 // ── Types ──
