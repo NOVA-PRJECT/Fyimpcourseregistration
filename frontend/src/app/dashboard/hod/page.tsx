@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import BlueprintTab from './BlueprintTab'
 import TeacherAssignmentTab from './TeacherAssignmentTab'
 import PeriodMarkingTab from './PeriodMarkingTab'
