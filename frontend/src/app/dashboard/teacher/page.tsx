@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
