@@ -17,8 +17,9 @@ export default function PortalHeader({ variant = 'back', rightAction }: PortalHe
         <Image
           src="/knrunilogo.png"
           alt="Kannur University"
-          width={34}
+          width={31}
           height={34}
+          style={{ width: 'auto', height: '34px' }}
           className="object-contain flex-shrink-0"
           priority
         />

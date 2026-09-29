@@ -144,8 +144,9 @@ export default function ChangePasswordPage() {
               <Image
                 src="/knrunilogo.png"
                 alt="Kannur University Crest"
-                width={48}
+                width={44}
                 height={48}
+                style={{ width: 'auto', height: '48px' }}
                 className={styles.logo}
                 priority
               />

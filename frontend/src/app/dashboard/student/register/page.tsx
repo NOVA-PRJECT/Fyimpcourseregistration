@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import styles from '../student-dashboard.module.css'
 import ResourceBanner from '@/components/ResourceBanner'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
-
+import { Link } from 'lucide-react'
 interface Course {
   id: string
   course_code: string
@@ -447,7 +448,14 @@ export default function RegisterPage() {
         <div className={styles.topBarLeft}>
           <div className={styles.topBarBranding}>
             <div className={styles.logoSmall}>
-              <Image src="/knrunilogo.png" alt="KU" width={30} height={30} priority />
+              <Image
+                src="/knrunilogo.png"
+                alt="KU"
+                width={27}
+                height={30}
+                style={{ width: 'auto', height: '30px' }}
+                priority
+              />
             </div>
             <div className={styles.topBarTitles}>
               <p className={styles.topBarTitle}>FYIMP Portal</p>

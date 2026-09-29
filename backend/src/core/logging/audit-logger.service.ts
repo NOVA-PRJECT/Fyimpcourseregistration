@@ -49,14 +49,51 @@ export class AuditLoggerService {
   private static readonly UUID_REGEX =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+  private sanitizeIpAddress(rawIp?: string): { sanitizedIp: string | null; rawAttempted?: string } {
+    if (!rawIp || typeof rawIp !== 'string') {
+      return { sanitizedIp: null }
+    }
+    const trimmed = rawIp.trim()
+    if (!trimmed) return { sanitizedIp: null }
+
+    // If forwarded header has comma-separated list e.g. "1.2.3.4, 10.0.0.1", take the first
+    let candidate = trimmed.split(',')[0].trim()
+
+    // Strip IPv6-mapped IPv4 prefix (e.g., "::ffff:127.0.0.1" -> "127.0.0.1")
+    if (candidate.startsWith('::ffff:')) {
+      candidate = candidate.replace(/^::ffff:/, '')
+    }
+
+    // Check standard IPv4 regex (each octet 0-255)
+    const ipv4Regex = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}$/
+    if (ipv4Regex.test(candidate)) {
+      return { sanitizedIp: candidate }
+    }
+
+    // Check standard IPv6 or loopback
+    if (candidate === '::1' || candidate.includes(':')) {
+      return { sanitizedIp: candidate }
+    }
+
+    // Invalid INET format (e.g. "localhost", "unknown", socket path)
+    return { sanitizedIp: null, rawAttempted: trimmed }
+  }
+
   async log(entry: AuditLogEntry): Promise<void> {
     try {
       const isValidUuid = entry.userId && AuditLoggerService.UUID_REGEX.test(entry.userId)
       const validUserId = isValidUuid ? entry.userId : null
 
+      const isValidResourceId = entry.resourceId && AuditLoggerService.UUID_REGEX.test(entry.resourceId)
+      const validResourceId = isValidResourceId ? entry.resourceId : null
+
+      const { sanitizedIp, rawAttempted: attemptedIp } = this.sanitizeIpAddress(entry.ipAddress)
+
       const enrichedMetadata = {
         ...entry.metadata,
         ...(isValidUuid ? {} : { attempted_identifier: entry.userId }),
+        ...(entry.resourceId && !isValidResourceId ? { resource_identifier: entry.resourceId } : {}),
+        ...(attemptedIp ? { raw_ip_address: attemptedIp } : {}),
       }
 
       const logPayload = {
@@ -66,9 +103,9 @@ export class AuditLoggerService {
         user_role: entry.userRole,
         action: entry.action,
         resource_type: entry.resourceType,
-        resource_id: entry.resourceId ?? null,
+        resource_id: validResourceId,
         status: entry.status,
-        ip_address: entry.ipAddress ?? null,
+        ip_address: sanitizedIp,
         user_agent: entry.userAgent ?? null,
         metadata: enrichedMetadata,
       }
@@ -77,18 +114,28 @@ export class AuditLoggerService {
       const { error } = await this.supabase.admin.from('system_logs').insert(logPayload)
 
       if (error) {
-        // 2. Fallback to audit_logs view / legacy table
+        this.logger.debug(
+          `[AuditLoggerService] system_logs insert returned (${error.message}); attempting audit_logs fallback`,
+        )
+
+        // 2. Fallback to audit_logs view / legacy table.
+        // Omit top-level user_agent since older audit_logs views do not have this column;
+        // preserve user_agent inside metadata so logging never fails schema validation.
+        const fallbackMetadata = {
+          ...enrichedMetadata,
+          ...(entry.userAgent ? { user_agent: entry.userAgent } : {}),
+        }
+
         const { error: fallbackError } = await this.supabase.admin.from('audit_logs').insert({
           event_type: entry.eventType,
           user_id: validUserId,
           user_role: entry.userRole,
           action: entry.action,
           resource_type: entry.resourceType,
-          resource_id: entry.resourceId ?? null,
+          resource_id: validResourceId,
           status: entry.status,
-          ip_address: entry.ipAddress ?? null,
-          user_agent: entry.userAgent ?? null,
-          metadata: enrichedMetadata,
+          ip_address: sanitizedIp,
+          metadata: fallbackMetadata,
         })
 
         if (fallbackError) {

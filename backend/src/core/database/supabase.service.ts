@@ -20,6 +20,11 @@ export class SupabaseService {
     }
 
     this.adminClientInstance = createClient(this.supabaseUrl, this.supabaseServiceRoleKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${this.supabaseServiceRoleKey}`,
+        },
+      },
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -29,6 +34,15 @@ export class SupabaseService {
 
   get admin(): SupabaseClient {
     return this.adminClientInstance
+  }
+
+  createAuthClient(): SupabaseClient {
+    return createClient(this.supabaseUrl, this.supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
   }
 
   getClientForToken(token: string): SupabaseClient {

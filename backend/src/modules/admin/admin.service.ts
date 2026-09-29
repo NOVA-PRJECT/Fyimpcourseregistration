@@ -241,7 +241,7 @@ export class AdminService {
   }, user: AuthUser) {
     const { full_name, email, password, role, department_id, campus_id } = body
 
-    const ALLOWED_ROLES = ['superadmin', 'campus_director', 'hod', 'teacher', 'teaching_staff']
+    const ALLOWED_ROLES = ['campus_director', 'hod', 'teacher', 'teaching_staff']
     if (!ALLOWED_ROLES.includes(role)) {
       throw new BadRequestException(`Invalid role "${role}". Allowed roles are: ${ALLOWED_ROLES.join(', ')}`)
     }
@@ -340,7 +340,7 @@ export class AdminService {
   }, user: AuthUser) {
     const { full_name, role, department_id, campus_id } = body
 
-    const ALLOWED_ROLES = ['superadmin', 'campus_director', 'hod', 'teacher', 'teaching_staff']
+    const ALLOWED_ROLES = ['campus_director', 'hod', 'teacher', 'teaching_staff']
     if (!ALLOWED_ROLES.includes(role)) {
       throw new BadRequestException(`Invalid role "${role}". Allowed roles are: ${ALLOWED_ROLES.join(', ')}`)
     }

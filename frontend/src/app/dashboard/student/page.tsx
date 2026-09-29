@@ -119,7 +119,14 @@ export default function StudentDashboardPage() {
           <div className={styles.topBarLeft}>
             <div className={styles.topBarBranding}>
               <div className={styles.logoSmall}>
-                <Image src="/knrunilogo.png" alt="KU" width={30} height={30} priority />
+                <Image
+                  src="/knrunilogo.png"
+                  alt="KU"
+                  width={27}
+                  height={30}
+                  style={{ width: 'auto', height: '30px' }}
+                  priority
+                />
               </div>
               <div className={styles.topBarTitles}>
                 <p className={styles.topBarTitle}>FYIMP Portal</p>

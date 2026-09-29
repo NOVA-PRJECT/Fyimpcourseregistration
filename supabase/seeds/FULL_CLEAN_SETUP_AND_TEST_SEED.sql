@@ -18,13 +18,25 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- =============================================================================
 -- STEP 2: CLEAN TEARDOWN (Reverse Dependency Order with CASCADE)
 -- =============================================================================
--- Drop compatibility views
-DROP VIEW IF EXISTS allocation_runs CASCADE;
-DROP VIEW IF EXISTS allocation_runs_legacy CASCADE;
-DROP VIEW IF EXISTS timetable_generation_jobs CASCADE;
-DROP VIEW IF EXISTS timetable_generation_jobs_legacy CASCADE;
-DROP VIEW IF EXISTS audit_logs CASCADE;
-DROP VIEW IF EXISTS audit_logs_legacy CASCADE;
+-- Drop compatibility views/tables (handles both VIEWs and legacy BASE TABLEs)
+DO $$
+DECLARE
+    obj text;
+    objs text[] := ARRAY[
+        'allocation_runs_legacy', 'allocation_runs',
+        'timetable_generation_jobs_legacy', 'timetable_generation_jobs',
+        'audit_logs_legacy', 'audit_logs'
+    ];
+BEGIN
+    FOREACH obj IN ARRAY objs LOOP
+        IF EXISTS (SELECT 1 FROM information_schema.views WHERE table_schema = 'public' AND table_name = obj) THEN
+            EXECUTE format('DROP VIEW IF EXISTS public.%I CASCADE;', obj);
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = obj AND table_type = 'BASE TABLE') THEN
+            EXECUTE format('DROP TABLE IF EXISTS public.%I CASCADE;', obj);
+        END IF;
+    END LOOP;
+END $$;
 
 -- Drop operational and tracking tables
 DROP TABLE IF EXISTS consent_records CASCADE;
@@ -418,7 +430,7 @@ CREATE OR REPLACE VIEW timetable_generation_jobs_legacy AS SELECT * FROM timetab
 CREATE OR REPLACE VIEW audit_logs AS
 SELECT 
     id, event_type, user_id, user_role, action, resource_type, resource_id,
-    status, error_message, metadata, ip_address, created_at
+    status, error_message, metadata, ip_address, user_agent, created_at
 FROM system_logs WHERE log_type = 'audit_event';
 
 CREATE OR REPLACE VIEW audit_logs_legacy AS SELECT * FROM audit_logs;
@@ -516,12 +528,12 @@ BEGIN
     IF TG_OP = 'INSERT' THEN
         INSERT INTO system_logs (
             id, log_type, event_type, user_id, user_role, action, resource_type,
-            resource_id, status, error_message, metadata, ip_address, created_at, updated_at
+            resource_id, status, error_message, metadata, ip_address, user_agent, created_at, updated_at
         ) VALUES (
             COALESCE(NEW.id, gen_random_uuid()),
             'audit_event', NEW.event_type, NEW.user_id, NEW.user_role, NEW.action,
             NEW.resource_type, NEW.resource_id, NEW.status, NEW.error_message,
-            COALESCE(NEW.metadata, '{}'::jsonb), NEW.ip_address,
+            COALESCE(NEW.metadata, '{}'::jsonb), NEW.ip_address, NEW.user_agent,
             COALESCE(NEW.created_at, clock_timestamp()), clock_timestamp()
         ) RETURNING id INTO NEW.id;
         RETURN NEW;

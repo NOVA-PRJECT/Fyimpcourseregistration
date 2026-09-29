@@ -839,7 +839,10 @@ export class AllocationService {
 
         // Direct Fallback:
         // Update student_registrations with winning allocations
+        const affectedStudentIds = new Set<string>()
+
         for (const alloc of finalAllocations) {
+          affectedStudentIds.add(alloc.student_id)
           const { data: currentReg } = await this.supabase.admin
             .from('student_registrations')
             .select('allocation_metadata')
@@ -898,6 +901,48 @@ export class AllocationService {
             .from('registration_preferences')
             .update({ allocation_metadata: mergedPrefMeta, updated_at: new Date().toISOString() })
             .eq('id', unalloc.preference_id)
+        }
+
+        // Safely recalculate total_credits for affected students in student_registrations
+        for (const sId of affectedStudentIds) {
+          try {
+            const { data: reg } = await this.supabase.admin
+              .from('student_registrations')
+              .select('slot_1_course_id, slot_2_course_id, slot_3_course_id, slot_4_course_id, slot_5_course_id, slot_6_course_id')
+              .eq('student_id', sId)
+              .eq('semester', body.semester)
+              .eq('academic_year', body.academicYear)
+              .maybeSingle()
+
+            if (reg) {
+              const assignedIds = [
+                reg.slot_1_course_id,
+                reg.slot_2_course_id,
+                reg.slot_3_course_id,
+                reg.slot_4_course_id,
+                reg.slot_5_course_id,
+                reg.slot_6_course_id,
+              ].filter(Boolean)
+
+              if (assignedIds.length > 0) {
+                const { data: courses } = await this.supabase.admin
+                  .from('courses')
+                  .select('credits')
+                  .in('id', assignedIds)
+
+                const calculatedTotal = (courses || []).reduce((acc: number, c: any) => acc + (c.credits || 0), 0)
+
+                await this.supabase.admin
+                  .from('student_registrations')
+                  .update({ total_credits: calculatedTotal })
+                  .eq('student_id', sId)
+                  .eq('semester', body.semester)
+                  .eq('academic_year', body.academicYear)
+              }
+            }
+          } catch (calcErr: any) {
+            this.logger.warn(`Failed to recalculate total_credits for student ${sId} in fallback: ${calcErr.message}`)
+          }
         }
       }
 
@@ -1340,7 +1385,7 @@ export class AllocationService {
         .eq('campus_id', student?.campus_id)
         .maybeSingle()
 
-      const academicYear = settings?.academic_year || '2026-2027'
+      const academicYear = settings?.academic_year || '2026-27'
 
       await this.supabase.admin.from('student_registrations').insert({
         student_id,

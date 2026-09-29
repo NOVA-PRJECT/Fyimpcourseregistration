@@ -64,7 +64,10 @@ const DAYS_MAP: Record<number, string> = {
   3: 'Wednesday',
   4: 'Thursday',
   5: 'Friday',
+  6: 'Saturday',
 };
+
+const DAYS_LIST = [1, 2, 3, 4, 5, 6];
 
 const PERIODS = [
   { num: 1, label: 'P1', time: '09:30 - 10:30' },
@@ -720,7 +723,7 @@ export default function CampusDirectorTimetablePage() {
           allSheetRows.push([`DEPARTMENT: ${dept.name.toUpperCase()} (${dept.code || dept.name})`]);
           allSheetRows.push(['Day / Period', ...PERIODS.map((p) => `${p.label} (${p.time})`)]);
 
-          [1, 2, 3, 4, 5].forEach((dayNum) => {
+          DAYS_LIST.forEach((dayNum) => {
             const row: string[] = [DAYS_MAP[dayNum]];
             PERIODS.forEach((p) => {
               const entries = deptEntries.filter((e) => e.day === dayNum && e.period === p.num);
@@ -756,7 +759,7 @@ export default function CampusDirectorTimetablePage() {
           ['Day / Period', ...PERIODS.map((p) => `${p.label} (${p.time})`)],
         ];
 
-        [1, 2, 3, 4, 5].forEach((dayNum) => {
+        DAYS_LIST.forEach((dayNum) => {
           const row: string[] = [DAYS_MAP[dayNum]];
           PERIODS.forEach((p) => {
             const entries = deptEntries.filter((e) => e.day === dayNum && e.period === p.num);
@@ -827,7 +830,13 @@ export default function CampusDirectorTimetablePage() {
       {/* Top Navigation */}
       <div className={styles.topBar}>
         <div className={styles.topBarLeft}>
-          <Image src="/knrunilogo.png" alt="KU" width={28} height={28} />
+          <Image
+            src="/knrunilogo.png"
+            alt="KU"
+            width={26}
+            height={28}
+            style={{ width: 'auto', height: '28px' }}
+          />
           <div>
             <p className={styles.topBarTitle}>Timetable Management</p>
             <p className={styles.topBarSubtitle}>Campus Director Dashboard (AI-Powered Engine)</p>
@@ -1161,7 +1170,7 @@ export default function CampusDirectorTimetablePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {[1, 2, 3, 4, 5].map((dayNum) => (
+                      {DAYS_LIST.map((dayNum) => (
                         <tr key={dayNum}>
                           <td style={{ fontWeight: 700, background: '#f8fafc' }}>{DAYS_MAP[dayNum]}</td>
                           {PERIODS.map((p) => {
@@ -1963,7 +1972,7 @@ export default function CampusDirectorTimetablePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[1, 2, 3, 4, 5].map((dayNum) => (
+                  {DAYS_LIST.map((dayNum) => (
                     <tr key={dayNum}>
                       <td style={{ fontWeight: 700, background: '#f8fafc' }}>{DAYS_MAP[dayNum]}</td>
                       {PERIODS.map((p) => {

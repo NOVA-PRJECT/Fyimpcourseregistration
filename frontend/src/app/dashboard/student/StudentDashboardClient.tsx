@@ -55,6 +55,7 @@ const DAYS = [
   { num: 3, name: 'Wednesday', short: 'Wed' },
   { num: 4, name: 'Thursday', short: 'Thu' },
   { num: 5, name: 'Friday', short: 'Fri' },
+  { num: 6, name: 'Saturday', short: 'Sat' },
 ]
 
 const PERIODS = [
@@ -68,8 +69,8 @@ const PERIODS = [
 
 function getCurrentUserDay(): number {
   const day = new Date().getDay() // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
-  if (day >= 1 && day <= 5) return day
-  return 1 // Default to Monday on weekends
+  if (day >= 1 && day <= 6) return day
+  return 1 // Default to Monday on Sunday
 }
 
 type StudentTab = 'overview' | 'notifications' | 'courses' | 'timetable' | 'campus-signin' | 'credits'
@@ -144,7 +145,14 @@ export default function StudentDashboardClient({
           {/* 1. Portal Branding Block */}
           <div className={styles.topBarBranding}>
             <div className={styles.logoSmall}>
-              <Image src="/knrunilogo.png" alt="KU" width={30} height={30} priority />
+              <Image
+                src="/knrunilogo.png"
+                alt="KU"
+                width={27}
+                height={30}
+                style={{ width: 'auto', height: '30px' }}
+                priority
+              />
             </div>
             <div className={styles.topBarTitles}>
               <p className={styles.topBarTitle}>FYIMP Portal</p>
@@ -654,7 +662,7 @@ export default function StudentDashboardClient({
                   <span>🗓️</span> Weekly Academic Schedule — Semester {studentInfo?.current_semester ?? 1}
                 </h2>
                 <p className={styles.enrolledSubtitle}>
-                  Assigned lecture and lab blocks across Periods 1 to 6 (Monday to Friday)
+                  Assigned lecture and lab blocks across Periods 1 to 6 (Monday to Saturday)
                 </p>
               </div>
             </div>

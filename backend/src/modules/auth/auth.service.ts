@@ -44,7 +44,8 @@ export class AuthService {
       throw new HttpException('Too many attempts for this account. Please try again later.', HttpStatus.TOO_MANY_REQUESTS)
     }
 
-    const { data: authData, error: authError } = await this.supabase.admin.auth.signInWithPassword({
+    const authClient = this.supabase.createAuthClient()
+    const { data: authData, error: authError } = await authClient.auth.signInWithPassword({
       email,
       password,
     })

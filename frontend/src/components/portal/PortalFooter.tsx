@@ -15,7 +15,14 @@ export default function PortalFooter({ className = '', currentYear = 2024 }: Por
       className={`w-full border-t border-slate-200/60 bg-white py-5 sm:py-6 px-6 md:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-[#64748B] gap-4 ${className}`}
     >
       <div className="flex items-center gap-2.5">
-        <Image src="/knrunilogo.png" alt="Kannur University" width={22} height={22} className="object-contain" />
+        <Image
+          src="/knrunilogo.png"
+          alt="Kannur University"
+          width={20}
+          height={22}
+          style={{ width: 'auto', height: '22px' }}
+          className="object-contain"
+        />
         <span>© {currentYear} Kannur University. All rights reserved.</span>
       </div>
       <div className="flex items-center gap-6">

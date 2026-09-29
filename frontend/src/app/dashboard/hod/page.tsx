@@ -6,11 +6,12 @@ import PeriodMarkingTab from './PeriodMarkingTab'
 import CampusAttendanceTab from './CampusAttendanceTab'
 import ManualAllocationTab from './ManualAllocationTab'
 import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Papa from 'papaparse'
 import styles from './hod-dashboard.module.css'
 import { useBfcacheGuard } from '@/core/hooks/useBfcacheGuard'
-import { Eye, EyeOff, LogOut } from 'lucide-react'
+import { Eye, EyeOff, LogOut, Menu, ChevronDown } from 'lucide-react'
 import { downloadStudentsExcel } from '@/core/utils/exportExcel'
 
 // ── Types ──
@@ -515,7 +516,14 @@ export default function HodDashboard() {
           {/* 1. Portal Branding Block */}
           <div className={styles.topBarBranding}>
             <div className={styles.logoSmall}>
-              <Image src="/knrunilogo.png" alt="KU" width={30} height={30} priority />
+              <Image
+                src="/knrunilogo.png"
+                alt="KU"
+                width={27}
+                height={30}
+                style={{ width: 'auto', height: '30px' }}
+                priority
+              />
             </div>
             <div className={styles.topBarTitles}>
               <p className={styles.topBarTitle}>FYIMP Portal</p>

@@ -178,12 +178,13 @@ export class PeriodAttendanceService {
     const assignedCourseIds = assignedCourses.map((c: any) => c.id);
 
     if (assignedCourseIds.length === 0) {
+      const istDefault = getISTDateTime();
       return {
         teacherName: faculty?.full_name || '',
         departmentName: (faculty as any)?.departments?.name || '',
         campusName: (faculty as any)?.campuses?.name || '',
-        date: queryDate || new Date().toISOString().split('T')[0],
-        dayOfWeek: 1,
+        date: queryDate || istDefault.dateString,
+        dayOfWeek: istDefault.dayOfWeek,
         assignedCourses: [],
         periods: [],
         weeklySchedule: [],
@@ -191,14 +192,18 @@ export class PeriodAttendanceService {
       };
     }
 
-    // Determine target date and day of week
-    const targetDate = queryDate && /^\d{4}-\d{2}-\d{2}$/.test(queryDate)
-      ? new Date(queryDate + 'T00:00:00Z')
-      : new Date();
-    const dateStr = queryDate || targetDate.toISOString().split('T')[0];
+    // Determine target date and day of week in IST
+    const ist = getISTDateTime();
+    let dateStr = ist.dateString;
+    let dayOfWeek = ist.dayOfWeek;
 
-    let dayOfWeek = targetDate.getUTCDay();
-    if (dayOfWeek === 0) dayOfWeek = 7; // Sunday
+    if (queryDate && /^\d{4}-\d{2}-\d{2}$/.test(queryDate)) {
+      dateStr = queryDate;
+      const [y, m, d] = queryDate.split('-').map(Number);
+      const parsedDate = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+      const day = parsedDate.getUTCDay();
+      dayOfWeek = day === 0 ? 7 : day;
+    }
 
     // 3. Fetch timetable entries for assigned courses
     const { data: entries, error: entriesError } = await this.supabase.admin
@@ -365,13 +370,23 @@ export class PeriodAttendanceService {
     let isLateEntry = false;
     let unlockedBy: string | null = null;
 
+    const ist = getISTDateTime();
+    const submissionTime = clientTimestamp || new Date().toISOString();
+    const attendanceDate = clientTimestamp
+      ? getISTDateTime(new Date(clientTimestamp)).dateString
+      : ist.dateString;
+
+    if (attendanceDate > ist.dateString) {
+      throw new BadRequestException('Cannot mark attendance for future dates.');
+    }
+
     if (slot) {
-      const ist = getISTDateTime();
+      const isDifferentDay = attendanceDate !== ist.dateString || slot.day_of_week !== ist.dayOfWeek;
       const currentMinutes = ist.totalMinutes;
       const endMin = this.timeToMinutes(slot.end_time);
       const graceLimitMin = endMin + PERIOD_GRACE_MINUTES;
 
-      const isPastGrace = currentMinutes > graceLimitMin;
+      const isPastGrace = isDifferentDay || currentMinutes > graceLimitMin;
 
       if (isPastGrace) {
         // Look for HOD unlock record
@@ -386,18 +401,20 @@ export class PeriodAttendanceService {
         if (!unlockRecord) {
           if (process.env.NODE_ENV === 'production') {
             throw new ForbiddenException(
-              `The 15-minute marking window for this period ended at ${slot.end_time}. An HOD unlock is required to submit late attendance.`
+              isDifferentDay
+                ? `Attendance for ${attendanceDate} requires an HOD unlock to submit.`
+                : `The 15-minute marking window for this period ended at ${slot.end_time}. An HOD unlock is required to submit late attendance.`
             );
           } else {
             this.serverLogger.warn(
-              `[Attendance] Non-production mode: late attendance marking permitted for slot ${slotId} without HOD unlock.`
+              `[Attendance] Non-production mode: late attendance marking permitted for slot ${slotId} (${attendanceDate}) without HOD unlock.`
             );
             isLateEntry = true;
           }
+        } else {
+          isLateEntry = true;
+          unlockedBy = unlockRecord.unlocked_by ?? null;
         }
-
-        isLateEntry = true;
-        unlockedBy = unlockRecord?.unlocked_by ?? null;
       }
     }
 
@@ -416,10 +433,6 @@ export class PeriodAttendanceService {
     }
 
     const absentSet = new Set(absentStudentIds);
-    const submissionTime = clientTimestamp || new Date().toISOString();
-    const attendanceDate = clientTimestamp
-      ? getISTDateTime(new Date(clientTimestamp)).dateString
-      : getISTDateTime().dateString;
 
     // 5. Construct rows with default-present pattern
     const rows = roster.map((student) => ({

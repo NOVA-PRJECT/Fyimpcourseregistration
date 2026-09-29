@@ -391,7 +391,13 @@ export default function SuperAdminDashboard() {
       <div className={styles.topBar}>
         <div className={styles.topBarLeft}>
           <div className={styles.logoSmall}>
-            <Image src="/knrunilogo.png" alt="KU" width={28} height={28} />
+            <Image
+              src="/knrunilogo.png"
+              alt="KU"
+              width={26}
+              height={28}
+              style={{ width: 'auto', height: '28px' }}
+            />
           </div>
           <div>
             <p className={styles.topBarTitle}>FYIMP Portal</p>

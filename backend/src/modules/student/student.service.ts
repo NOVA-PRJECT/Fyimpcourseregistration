@@ -221,7 +221,8 @@ export class StudentService {
 
   async changePassword(currentPassword: string, newPassword: string, user: AuthUser) {
     // 1. Verify current password
-    const { error: verifyError } = await this.supabase.admin.auth.signInWithPassword({
+    const verifyAuthClient = this.supabase.createAuthClient()
+    const { error: verifyError } = await verifyAuthClient.auth.signInWithPassword({
       email: user.email,
       password: currentPassword,
     })
@@ -258,7 +259,8 @@ export class StudentService {
     }
 
     // Sign in to get fresh session token
-    const { data: signInData, error: signInError } = await this.supabase.admin.auth.signInWithPassword({
+    const refreshAuthClient = this.supabase.createAuthClient()
+    const { data: signInData, error: signInError } = await refreshAuthClient.auth.signInWithPassword({
       email: user.email,
       password: newPassword,
     })

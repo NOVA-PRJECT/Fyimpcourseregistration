@@ -20,7 +20,7 @@ export class ServerLoggerService {
     try {
       const { error: dbError } = await this.supabase.admin.from('system_logs').insert({
         log_type: 'server_error',
-        status: 'error',
+        status: 'failure',
         route,
         error_message: errorMessage,
         error_stack: errorStack ?? null,
