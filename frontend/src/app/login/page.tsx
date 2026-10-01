@@ -32,30 +32,48 @@ function LoginForm() {
   }, [searchParams])
 
   useEffect(() => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+      controller.abort()
+      setChecking(false)
+    }, 2500)
+
     async function checkSession(isBfcache: boolean) {
       try {
-        const response = await fetch('/api/auth/profile')
+        const response = await fetch('/api/auth/profile', {
+          signal: controller.signal,
+          cache: 'no-store',
+        })
         if (response.ok) {
           const data = await response.json()
           if (data.role) {
             // Check consent status before redirecting to dashboard
-            const consentRes = await fetch('/api/consent/status')
+            const consentRes = await fetch('/api/consent/status', {
+              signal: controller.signal,
+              cache: 'no-store',
+            })
             if (consentRes.ok) {
               const consentData = await consentRes.json()
               if (!consentData.accepted) {
+                clearTimeout(timeoutId)
                 router.replace('/consent')
                 return
               }
             }
+            clearTimeout(timeoutId)
             const target = ROLE_DASHBOARD_MAP[data.role as Role] || '/dashboard/student'
             router.replace(target)
             return
           }
         }
-      } catch (err) {
-        console.error('Session check failed:', err)
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Session check failed:', err)
+        }
+      } finally {
+        clearTimeout(timeoutId)
+        setChecking(false)
       }
-      setChecking(false)
     }
 
     checkSession(false)
@@ -69,6 +87,8 @@ function LoginForm() {
 
     window.addEventListener('pageshow', handlePageShow)
     return () => {
+      clearTimeout(timeoutId)
+      controller.abort()
       window.removeEventListener('pageshow', handlePageShow)
     }
   }, [router])

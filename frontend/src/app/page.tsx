@@ -13,21 +13,35 @@ export default function Home() {
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+      controller.abort()
+      setChecking(false)
+    }, 2500)
+
     async function checkSession(isBfcache: boolean) {
       try {
-        const response = await fetch('/api/auth/profile')
+        const response = await fetch('/api/auth/profile', {
+          signal: controller.signal,
+          cache: 'no-store',
+        })
         if (response.ok) {
           const data = await response.json()
           if (data.role) {
+            clearTimeout(timeoutId)
             const target = ROLE_DASHBOARD_MAP[data.role as Role] || '/dashboard/student'
             router.replace(target)
             return
           }
         }
-      } catch (err) {
-        console.error('Session check failed:', err)
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Session check failed:', err)
+        }
+      } finally {
+        clearTimeout(timeoutId)
+        setChecking(false)
       }
-      setChecking(false)
     }
 
     checkSession(false)
@@ -41,17 +55,11 @@ export default function Home() {
 
     window.addEventListener('pageshow', handlePageShow)
     return () => {
+      clearTimeout(timeoutId)
+      controller.abort()
       window.removeEventListener('pageshow', handlePageShow)
     }
   }, [router])
-
-  if (checking) {
-    return (
-      <div className="min-h-screen bg-[#082042] flex items-center justify-center">
-        <div className="w-12 h-12 border-3 border-[#E0A92C]/20 border-t-[#E0A92C] rounded-full animate-spin" />
-      </div>
-    )
-  }
 
   return (
     <div className="bg-[#f8f9ff] text-[#0b1c30] flex flex-col min-h-screen selection:bg-[#d3e4fe] selection:text-[#0b1c30]">
@@ -81,7 +89,7 @@ export default function Home() {
           </p>
 
           {/* Primary & Secondary CTA */}
-          <div className="flex flex-wrap items-center justify-center gap-4 mb-16">
+          <div className="flex flex-wrap items-center justify-center gap-4 mb-8">
             <Link
               href="/login"
               className="px-6 py-3 bg-[#0B192C] text-white rounded-lg text-sm font-medium hover:bg-[#152846] transition-all inline-flex items-center gap-2 shadow-sm border border-[#0B192C]"
@@ -96,6 +104,17 @@ export default function Home() {
               <span className="material-symbols-outlined text-[18px] text-[#E0A92C]">menu_book</span>
               <span>Academic Guidelines</span>
             </Link>
+          </div>
+
+          {/* Pulsing 3-dot yellow loader in space between CTA and footer while checking session */}
+          <div className="h-6 flex items-center justify-center mb-8">
+            {checking && (
+              <div className="flex items-center justify-center gap-2 transition-opacity duration-300" aria-label="Checking session status">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#E0A92C] animate-pulse [animation-delay:0ms]" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#E0A92C] animate-pulse [animation-delay:200ms]" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#E0A92C] animate-pulse [animation-delay:400ms]" />
+              </div>
+            )}
           </div>
         </div>
       </main>
