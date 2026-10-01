@@ -12,7 +12,6 @@ import {
 } from '@nestjs/common'
 import { z } from 'zod'
 import { AdminService } from './admin.service'
-import { DataSeedService } from './data-seed.service'
 import { AuthGuard } from '../../core/auth/guards/auth.guard'
 import { RolesGuard } from '../../core/auth/guards/roles.guard'
 import { Roles } from '../../core/auth/decorators/roles.decorator'
@@ -53,27 +52,7 @@ const DeleteDepartmentSchema = z.object({
 @Controller('api/admin')
 @UseGuards(AuthGuard, RolesGuard)
 export class AdminController {
-  constructor(
-    private readonly adminService: AdminService,
-    private readonly dataSeedService: DataSeedService,
-  ) {}
-
-  // ──────────────── Data Seed ────────────────
-  @Get('seed-status')
-  @Roles('superadmin', 'campus_director')
-  async getSeedStatus() {
-    return this.dataSeedService.getStatus()
-  }
-
-  @Post('run-seed')
-  @Roles('superadmin')
-  async runSeed() {
-    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PROD_SEED !== 'true') {
-      throw new ForbiddenException('Database re-seeding is disabled in production.')
-    }
-    await this.dataSeedService.seedCoursesAndBlueprints()
-    return this.dataSeedService.getStatus()
-  }
+  constructor(private readonly adminService: AdminService) {}
 
   // ──────────────── Campuses ────────────────
   @Get('campuses')
