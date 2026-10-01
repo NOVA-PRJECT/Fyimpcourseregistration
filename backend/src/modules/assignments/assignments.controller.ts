@@ -17,7 +17,7 @@ import { Roles } from '../../core/auth/decorators/roles.decorator';
 import { CurrentUser } from '../../core/auth/decorators/current-user.decorator';
 import { AuthUser } from '../../core/auth/types';
 import { AssignmentsService } from './assignments.service';
-import { AssignTeacherSchema, BatchAssignTeacherSchema } from './dto/assign-teacher.dto';
+import { AssignTeacherSchema, BatchAssignTeacherSchema, BatchAssignmentItem } from './dto/assign-teacher.dto';
 import { ReassignTeacherSchema } from './dto/reassign-teacher.dto';
 
 @Controller('api/assignments')
@@ -65,7 +65,7 @@ export class AssignmentsController {
     }
 
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
-    return this.assignmentsService.batchAssignTeachers(user, parsed.data.assignments, ip);
+    return this.assignmentsService.batchAssignTeachers(user, parsed.data.assignments as BatchAssignmentItem[], ip);
   }
 
 

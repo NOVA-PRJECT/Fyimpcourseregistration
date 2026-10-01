@@ -8,6 +8,7 @@ import {
 import { SupabaseService } from '../../core/database/supabase.service';
 import { AuditLoggerService } from '../../core/logging/audit-logger.service';
 import { AuthUser } from '../../core/auth/types';
+import { BatchAssignmentItem } from './dto/assign-teacher.dto';
 
 @Injectable()
 export class AssignmentsService {
@@ -182,7 +183,7 @@ export class AssignmentsService {
    */
   async batchAssignTeachers(
     user: AuthUser,
-    assignments: Array<{ teacher_id: string; course_id: string }>,
+    assignments: BatchAssignmentItem[],
     ip: string
   ) {
     const departmentId = user.department_id;

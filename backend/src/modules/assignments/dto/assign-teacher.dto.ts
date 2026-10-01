@@ -18,5 +18,12 @@ export const BatchAssignTeacherSchema = z.object({
     .min(1, 'At least one assignment is required'),
 });
 
-export type BatchAssignTeacherDto = z.infer<typeof BatchAssignTeacherSchema>;
+export interface BatchAssignmentItem {
+  teacher_id: string;
+  course_id: string;
+}
+
+export type BatchAssignTeacherDto = {
+  assignments: BatchAssignmentItem[];
+};
 
