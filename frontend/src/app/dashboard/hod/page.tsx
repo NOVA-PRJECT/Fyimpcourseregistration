@@ -223,8 +223,16 @@ export default function HodDashboard() {
   ]
 
   const isMoreTabActive = moreTabs.some(t => t.id === activeTab)
+  const [isAssignmentTabDirty, setIsAssignmentTabDirty] = useState(false)
 
   function changeTab(tab: Tab) {
+    if (tab === activeTab) return
+    if (activeTab === 'assignments' && isAssignmentTabDirty) {
+      if (!confirm('You have unsaved faculty assignments. Do you want to discard your changes and switch tabs?')) {
+        return
+      }
+      setIsAssignmentTabDirty(false)
+    }
     setActiveTab(tab)
     sessionStorage.setItem('hod_active_tab', tab)
   }
@@ -954,7 +962,7 @@ export default function HodDashboard() {
 
         {activeTab === 'blueprint' && <BlueprintTab view="blueprint" />}
         {activeTab === 'courses' && <BlueprintTab view="courses" />}
-        {activeTab === 'assignments' && <TeacherAssignmentTab />}
+        {activeTab === 'assignments' && <TeacherAssignmentTab onDirtyChange={setIsAssignmentTabDirty} />}
         {activeTab === 'period-marking' && <PeriodMarkingTab />}
         {activeTab === 'campus-attendance' && <CampusAttendanceTab />}
 

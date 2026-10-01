@@ -36,6 +36,7 @@ import {
   EyeOff,
   X,
   AlertCircle,
+  Check,
 } from 'lucide-react'
 import styles from './hod-dashboard.module.css'
 
@@ -52,6 +53,15 @@ interface CourseAssignment {
   teacher_name: string
   teacher_email: string
   assigned_at: string
+}
+
+interface StagedAssignment {
+  courseId: string
+  courseCode: string
+  courseTitle: string
+  teacherId: string
+  teacherName: string
+  teacherEmail?: string
 }
 
 interface Course {
@@ -134,20 +144,32 @@ function CourseNode({
 }: {
   data: {
     course: Course
+    stagedAssignment?: StagedAssignment
+    onCancelStaged?: (courseId: string) => void
     onReassign: (assignment: CourseAssignment) => void
     onRemove: (assignment: CourseAssignment, course: Course) => void
   }
 }) {
   const isAssigned = data.course.is_assigned
+  const hasStaged = !!data.stagedAssignment
+
   return (
     <div
       style={{
         background: '#ffffff',
-        border: isAssigned ? '1.5px solid #0284c7' : '2px dashed #f59e0b',
+        border: hasStaged
+          ? '2px solid #E0A92C'
+          : isAssigned
+          ? '1.5px solid #0284c7'
+          : '2px dashed #f59e0b',
         borderRadius: '10px',
         padding: '10px 14px',
         minWidth: '240px',
-        boxShadow: isAssigned ? '0 4px 12px rgba(2, 132, 199, 0.08)' : '0 4px 12px rgba(245, 158, 11, 0.12)',
+        boxShadow: hasStaged
+          ? '0 4px 14px rgba(224, 169, 44, 0.25)'
+          : isAssigned
+          ? '0 4px 12px rgba(2, 132, 199, 0.08)'
+          : '0 4px 12px rgba(245, 158, 11, 0.12)',
         position: 'relative',
       }}
     >
@@ -156,7 +178,7 @@ function CourseNode({
         position={Position.Left}
         id="course-target"
         style={{
-          background: isAssigned ? '#0284c7' : '#f59e0b',
+          background: hasStaged ? '#E0A92C' : isAssigned ? '#0284c7' : '#f59e0b',
           width: '10px',
           height: '10px',
           border: '2px solid #fff',
@@ -167,8 +189,8 @@ function CourseNode({
           style={{
             fontSize: '11px',
             fontWeight: 700,
-            background: isAssigned ? '#e0f2fe' : '#fef3c7',
-            color: isAssigned ? '#0369a1' : '#b45309',
+            background: hasStaged ? '#fef3c7' : isAssigned ? '#e0f2fe' : '#fef3c7',
+            color: hasStaged ? '#92400e' : isAssigned ? '#0369a1' : '#b45309',
             padding: '2px 6px',
             borderRadius: '4px',
           }}
@@ -184,8 +206,100 @@ function CourseNode({
         {data.course.title}
       </div>
 
-      <div style={{ marginTop: '8px' }}>
-        {data.course.assignments.length === 0 ? (
+      <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {/* Existing active assignments */}
+        {data.course.assignments.map((a) => (
+          <div
+            key={a.assignment_id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '6px',
+              padding: '3px 6px',
+              fontSize: '11px',
+            }}
+          >
+            <span style={{ fontWeight: 500, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px' }}>
+              {a.teacher_name}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  data.onReassign(a)
+                }}
+                title="Reassign to another teacher"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#0284c7',
+                  padding: '2px',
+                }}
+              >
+                <Edit2 size={11} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  data.onRemove(a, data.course)
+                }}
+                title="Remove assignment"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#ef4444',
+                  padding: '2px',
+                }}
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {/* Staged pending assignment */}
+        {data.stagedAssignment && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#fffbeb',
+              border: '1.5px solid #E0A92C',
+              borderRadius: '6px',
+              padding: '3px 6px',
+              fontSize: '11px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#E0A92C', flexShrink: 0 }} />
+              <span style={{ fontWeight: 600, color: '#92400e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
+                {data.stagedAssignment.teacherName}
+              </span>
+              <span style={{ fontSize: '9px', background: '#fde68a', color: '#78350f', padding: '1px 4px', borderRadius: '3px', fontWeight: 700 }}>
+                PENDING
+              </span>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                data.onCancelStaged?.(data.course.id)
+              }}
+              title="Discard staged assignment"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b45309', padding: '2px' }}
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
+        {/* Unassigned placeholder */}
+        {data.course.assignments.length === 0 && !data.stagedAssignment && (
           <div
             style={{
               display: 'flex',
@@ -199,62 +313,6 @@ function CourseNode({
             <AlertTriangle size={12} />
             <span>Drop teacher here to assign</span>
           </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {data.course.assignments.map((a) => (
-              <div
-                key={a.assignment_id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '6px',
-                  padding: '3px 6px',
-                  fontSize: '11px',
-                }}
-              >
-                <span style={{ fontWeight: 500, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px' }}>
-                  {a.teacher_name}
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      data.onReassign(a)
-                    }}
-                    title="Reassign to another teacher"
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: '#0284c7',
-                      padding: '2px',
-                    }}
-                  >
-                    <Edit2 size={11} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      data.onRemove(a, data.course)
-                    }}
-                    title="Remove assignment"
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: '#ef4444',
-                      padding: '2px',
-                    }}
-                  >
-                    <Trash2 size={11} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         )}
       </div>
     </div>
@@ -266,7 +324,11 @@ const nodeTypes = {
   courseNode: CourseNode,
 }
 
-export default function TeacherAssignmentTab() {
+export default function TeacherAssignmentTab({
+  onDirtyChange,
+}: {
+  onDirtyChange?: (isDirty: boolean) => void
+} = {}) {
   const [loading, setLoading] = useState(true)
   const [faculty, setFaculty] = useState<Teacher[]>([])
   const [courses, setCourses] = useState<Course[]>([])
@@ -275,6 +337,29 @@ export default function TeacherAssignmentTab() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isMobileView, setIsMobileView] = useState(false)
+
+  // Staged assignments awaiting batch save
+  const [stagedAssignments, setStagedAssignments] = useState<Map<string, StagedAssignment>>(new Map())
+  const [savingBatch, setSavingBatch] = useState(false)
+
+  const isDirty = stagedAssignments.size > 0
+
+  // Sync dirty state to parent HOD tab manager
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
+
+  // Prevent accidental browser reload / window close when dirty
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
 
   // Reassignment Modal State
   const [reassignTarget, setReassignTarget] = useState<CourseAssignment | null>(null)
@@ -376,16 +461,71 @@ export default function TeacherAssignmentTab() {
     })
   }, [courses, semesterFilter, searchQuery])
 
+  // ── Handle Discarding a Single Staged Assignment ──
+  const handleCancelStaged = useCallback((courseId: string) => {
+    setStagedAssignments((prev) => {
+      const next = new Map(prev)
+      next.delete(courseId)
+      return next
+    })
+  }, [])
+
+  // ── Handle Discarding All Staged Assignments ──
+  const handleDiscardAllStaged = useCallback(() => {
+    if (stagedAssignments.size === 0) return
+    if (confirm(`Discard all ${stagedAssignments.size} pending assignment changes?`)) {
+      setStagedAssignments(new Map())
+    }
+  }, [stagedAssignments.size])
+
+  // ── Handle Saving All Staged Assignments in a Single Batch Request ──
+  const handleSaveAllStaged = useCallback(async () => {
+    if (stagedAssignments.size === 0) return
+    setSavingBatch(true)
+    setError('')
+    try {
+      const payload = {
+        assignments: Array.from(stagedAssignments.values()).map((s) => ({
+          teacher_id: s.teacherId,
+          course_id: s.courseId,
+        })),
+      }
+
+      const res = await fetch('/api/assignments/batch-assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.message || 'Failed to save batch assignments.')
+        return
+      }
+
+      setSuccess(`Successfully saved ${stagedAssignments.size} assignment(s)!`)
+      setTimeout(() => setSuccess(''), 4000)
+      setStagedAssignments(new Map())
+      await fetchData()
+    } catch (err: any) {
+      setError(err.message || 'Network error saving assignments.')
+    } finally {
+      setSavingBatch(false)
+    }
+  }, [stagedAssignments, fetchData])
+
   // ── Compute React Flow Nodes and Edges ──
   useEffect(() => {
     if (isMobileView) return
 
-    // Calculate teacher assignment count
+    // Calculate teacher assignment count (including staged assignments)
     const teacherCountMap = new Map<string, number>()
     for (const c of courses) {
       for (const a of c.assignments) {
         teacherCountMap.set(a.teacher_id, (teacherCountMap.get(a.teacher_id) || 0) + 1)
       }
+    }
+    for (const s of stagedAssignments.values()) {
+      teacherCountMap.set(s.teacherId, (teacherCountMap.get(s.teacherId) || 0) + 1)
     }
 
     // Filter faculty matching search query if relevant (strictly excluding HOD)
@@ -414,12 +554,16 @@ export default function TeacherAssignmentTab() {
 
     // Place Course nodes on the Right (X: 520)
     filteredCourses.forEach((course, idx) => {
+      const staged = stagedAssignments.get(course.id)
+
       newNodes.push({
         id: `course-${course.id}`,
         type: 'courseNode',
         position: { x: 520, y: 50 + idx * 130 },
         data: {
           course,
+          stagedAssignment: staged,
+          onCancelStaged: handleCancelStaged,
           onReassign: (a: CourseAssignment) => {
             setReassignTarget(a)
             setReassignTeacherId('')
@@ -452,15 +596,32 @@ export default function TeacherAssignmentTab() {
           },
         })
       })
+
+      // Add dashed edge for staged pending assignment
+      if (staged) {
+        newEdges.push({
+          id: `edge-staged-${course.id}`,
+          source: `teacher-${staged.teacherId}`,
+          target: `course-${course.id}`,
+          sourceHandle: 'teacher-source',
+          targetHandle: 'course-target',
+          animated: true,
+          style: { stroke: '#E0A92C', strokeWidth: 2.5, strokeDasharray: '5,5' },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: '#E0A92C',
+          },
+        })
+      }
     })
 
     setNodes(newNodes)
     setEdges(newEdges)
-  }, [eligibleFaculty, courses, filteredCourses, isMobileView, searchQuery])
+  }, [eligibleFaculty, courses, filteredCourses, isMobileView, searchQuery, stagedAssignments, handleCancelStaged])
 
-  // ── Handle Connection Drag on Canvas ──
+  // ── Handle Connection Drag on Canvas (Stages locally) ──
   const onConnect = useCallback(
-    async (params: Connection) => {
+    (params: Connection) => {
       const sourceId = params.source
       const targetId = params.target
 
@@ -472,25 +633,26 @@ export default function TeacherAssignmentTab() {
       const teacherId = sourceId.replace('teacher-', '')
       const courseId = targetId.replace('course-', '')
 
-      try {
-        const res = await fetch('/api/assignments/assign', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ teacher_id: teacherId, course_id: courseId }),
+      const teacher = faculty.find((f) => f.id === teacherId)
+      const course = courses.find((c) => c.id === courseId)
+
+      if (!teacher || !course) return
+
+      setStagedAssignments((prev) => {
+        const next = new Map(prev)
+        next.set(courseId, {
+          teacherId,
+          teacherName: teacher.full_name,
+          teacherEmail: teacher.email,
+          courseId,
+          courseCode: course.course_code,
+          courseTitle: course.title,
         })
-        const data = await res.json()
-        if (!res.ok) {
-          setError(data.message || 'Failed to assign teacher.')
-          return
-        }
-        setSuccess('Teacher assigned successfully!')
-        setTimeout(() => setSuccess(''), 3000)
-        await fetchData()
-      } catch (err: any) {
-        setError(err.message || 'Network error.')
-      }
+        return next
+      })
+      setError('')
     },
-    [fetchData]
+    [faculty, courses]
   )
 
   // ── Handle Mid-Semester Reassignment ──
@@ -546,32 +708,27 @@ export default function TeacherAssignmentTab() {
     }
   }
 
-  // ── Handle Manual Assignment (List View) ──
-  async function handleConfirmAssign() {
+  // ── Handle Manual Assignment (List View) — Stages locally ──
+  function handleConfirmAssign() {
     if (!assignCourseTarget || !assignTeacherId) return
-    setAssigning(true)
-    setError('')
-    try {
-      const res = await fetch('/api/assignments/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teacher_id: assignTeacherId, course_id: assignCourseTarget.id }),
+    const teacher = faculty.find((f) => f.id === assignTeacherId)
+    if (!teacher) return
+
+    setStagedAssignments((prev) => {
+      const next = new Map(prev)
+      next.set(assignCourseTarget.id, {
+        teacherId: teacher.id,
+        teacherName: teacher.full_name,
+        teacherEmail: teacher.email,
+        courseId: assignCourseTarget.id,
+        courseCode: assignCourseTarget.course_code,
+        courseTitle: assignCourseTarget.title,
       })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.message || 'Failed to assign teacher.')
-        return
-      }
-      setSuccess('Teacher assigned successfully.')
-      setTimeout(() => setSuccess(''), 3000)
-      setAssignCourseTarget(null)
-      setAssignTeacherId('')
-      await fetchData()
-    } catch (err: any) {
-      setError(err.message || 'Network error.')
-    } finally {
-      setAssigning(false)
-    }
+      return next
+    })
+
+    setAssignCourseTarget(null)
+    setAssignTeacherId('')
   }
 
   // ── Handle Add New Teacher to Department ──
@@ -914,140 +1071,195 @@ export default function TeacherAssignmentTab() {
       ) : (
         /* ── Fallback View: Touch-Friendly Card List (< 1024px) ── */
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
-          {filteredCourses.map((course) => (
-            <div
-              key={course.id}
-              style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                border: course.is_assigned ? '1.5px solid #e2e8f0' : '2px dashed #f59e0b',
-                padding: '1rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.75rem',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    background: course.is_assigned ? '#e0f2fe' : '#fef3c7',
-                    color: course.is_assigned ? '#0369a1' : '#b45309',
-                  }}
-                >
-                  {course.course_code}
-                </span>
-                <span style={{ fontSize: '11px', color: '#64748b' }}>
-                  Sem {course.semester} • {course.credits} Credits
-                </span>
-              </div>
+          {filteredCourses.map((course) => {
+            const staged = stagedAssignments.get(course.id)
+            const hasStaged = !!staged
 
-              <div>
-                <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: 0 }}>{course.title}</h4>
-                <p style={{ fontSize: '11px', color: '#64748b', margin: '2px 0 0' }}>Category: {course.category}</p>
-              </div>
-
-              {/* Assigned Teachers List */}
-              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                  Assigned Faculty:
-                </div>
-                {course.assignments.length === 0 ? (
-                  <div
+            return (
+              <div
+                key={course.id}
+                style={{
+                  background: '#ffffff',
+                  borderRadius: '12px',
+                  border: hasStaged
+                    ? '2px solid #E0A92C'
+                    : course.is_assigned
+                    ? '1.5px solid #e2e8f0'
+                    : '2px dashed #f59e0b',
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem',
+                  boxShadow: hasStaged
+                    ? '0 4px 14px rgba(224, 169, 44, 0.25)'
+                    : '0 2px 6px rgba(0,0,0,0.03)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
                       fontSize: '12px',
-                      color: '#d97706',
-                      padding: '4px 0',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      background: hasStaged ? '#fef3c7' : course.is_assigned ? '#e0f2fe' : '#fef3c7',
+                      color: hasStaged ? '#92400e' : course.is_assigned ? '#0369a1' : '#b45309',
                     }}
                   >
-                    <AlertTriangle size={14} />
-                    <span>No faculty assigned yet</span>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {course.assignments.map((a) => (
-                      <div
-                        key={a.assignment_id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          background: '#f8fafc',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '8px',
-                          padding: '6px 10px',
-                        }}
-                      >
-                        <div style={{ overflow: 'hidden' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>{a.teacher_name}</div>
-                          <div style={{ fontSize: '10px', color: '#64748b' }}>{a.teacher_email}</div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <button
-                            onClick={() => {
-                              setReassignTarget(a)
-                              setReassignTeacherId('')
-                            }}
-                            title="Reassign"
-                            style={{
-                              background: '#e0f2fe',
-                              border: 'none',
-                              borderRadius: '6px',
-                              padding: '4px 8px',
-                              cursor: 'pointer',
-                              color: '#0284c7',
-                              fontSize: '11px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
-                          >
-                            <Edit2 size={12} /> Reassign
-                          </button>
-                          <button
-                            onClick={() => {
-                              setRemoveTarget({
-                                assignment_id: a.assignment_id,
-                                course_code: course.course_code,
-                                course_title: course.title,
-                                teacher_name: a.teacher_name,
-                              })
-                              setRemoveModalError('')
-                            }}
-                            title="Remove"
-                            style={{
-                              background: '#fee2e2',
-                              border: 'none',
-                              borderRadius: '6px',
-                              padding: '4px 8px',
-                              cursor: 'pointer',
-                              color: '#dc2626',
-                              fontSize: '11px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
-                          >
-                            <Trash2 size={12} /> Remove
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    {course.course_code}
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>
+                    Sem {course.semester} • {course.credits} Credits
+                  </span>
+                </div>
 
-              {/* Assign Faculty Button */}
-              <button
-                onClick={() => {
-                  setAssignCourseTarget(course)
+                <div>
+                  <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: 0 }}>{course.title}</h4>
+                  <p style={{ fontSize: '11px', color: '#64748b', margin: '2px 0 0' }}>Category: {course.category}</p>
+                </div>
+
+                {/* Assigned Teachers List */}
+                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                    Assigned Faculty:
+                  </div>
+                  {course.assignments.length === 0 && !hasStaged ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '12px',
+                        color: '#d97706',
+                        padding: '4px 0',
+                      }}
+                    >
+                      <AlertTriangle size={14} />
+                      <span>No faculty assigned yet</span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {course.assignments.map((a) => (
+                        <div
+                          key={a.assignment_id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            padding: '6px 10px',
+                          }}
+                        >
+                          <div style={{ overflow: 'hidden' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>{a.teacher_name}</div>
+                            <div style={{ fontSize: '10px', color: '#64748b' }}>{a.teacher_email}</div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <button
+                              onClick={() => {
+                                setReassignTarget(a)
+                                setReassignTeacherId('')
+                              }}
+                              title="Reassign"
+                              style={{
+                                background: '#e0f2fe',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '4px 8px',
+                                cursor: 'pointer',
+                                color: '#0284c7',
+                                fontSize: '11px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <Edit2 size={12} /> Reassign
+                            </button>
+                            <button
+                              onClick={() => {
+                                setRemoveTarget({
+                                  assignment_id: a.assignment_id,
+                                  course_code: course.course_code,
+                                  course_title: course.title,
+                                  teacher_name: a.teacher_name,
+                                })
+                                setRemoveModalError('')
+                              }}
+                              title="Remove"
+                              style={{
+                                background: '#fee2e2',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '4px 8px',
+                                cursor: 'pointer',
+                                color: '#dc2626',
+                                fontSize: '11px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <Trash2 size={12} /> Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Staged pending assignment */}
+                      {staged && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: '#fffbeb',
+                            border: '1.5px solid #E0A92C',
+                            borderRadius: '8px',
+                            padding: '6px 10px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#E0A92C', flexShrink: 0 }} />
+                            <div>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#92400e' }}>
+                                {staged.teacherName}
+                              </div>
+                              <div style={{ fontSize: '10px', color: '#b45309', fontWeight: 700 }}>
+                                PENDING SAVE
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleCancelStaged(course.id)}
+                            title="Discard staged assignment"
+                            style={{
+                              background: '#fef3c7',
+                              border: '1px solid #fde68a',
+                              borderRadius: '6px',
+                              padding: '4px 8px',
+                              cursor: 'pointer',
+                              color: '#b45309',
+                              fontSize: '11px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <X size={12} /> Discard
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Assign Faculty Button */}
+                <button
+                  onClick={() => {
+                    setAssignCourseTarget(course)
                   setAssignTeacherId('')
                 }}
                 style={{
@@ -1069,7 +1281,8 @@ export default function TeacherAssignmentTab() {
                 <Plus size={14} /> Assign Faculty Member
               </button>
             </div>
-          ))}
+          )
+        })}
         </div>
       )}
 
@@ -1200,16 +1413,15 @@ export default function TeacherAssignmentTab() {
               <button
                 className={styles.modalCancelBtn}
                 onClick={() => setAssignCourseTarget(null)}
-                disabled={assigning}
               >
                 Cancel
               </button>
               <button
                 className={styles.modalConfirmBtn}
                 onClick={handleConfirmAssign}
-                disabled={!assignTeacherId || assigning}
+                disabled={!assignTeacherId}
               >
-                {assigning ? 'Assigning...' : 'Assign Faculty →'}
+                Stage Assignment →
               </button>
             </div>
           </div>
@@ -1503,6 +1715,88 @@ export default function TeacherAssignmentTab() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Sticky Action Bar for Staged Assignments ── */}
+      {stagedAssignments.size > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#0f172a',
+            color: '#ffffff',
+            padding: '12px 24px',
+            borderRadius: '14px',
+            boxShadow: '0 12px 32px rgba(15, 23, 42, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '20px',
+            zIndex: 1000,
+            border: '1.5px solid #334155',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span
+              style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: '#E0A92C',
+                boxShadow: '0 0 8px #E0A92C',
+              }}
+            />
+            <span style={{ fontSize: '13px', fontWeight: 600 }}>
+              {stagedAssignments.size} {stagedAssignments.size === 1 ? 'assignment' : 'assignments'} pending save
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              onClick={handleDiscardAllStaged}
+              disabled={savingBatch}
+              style={{
+                background: 'transparent',
+                border: '1px solid #475569',
+                color: '#cbd5e1',
+                padding: '7px 14px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Discard Changes
+            </button>
+            <button
+              onClick={handleSaveAllStaged}
+              disabled={savingBatch}
+              style={{
+                background: '#E0A92C',
+                border: 'none',
+                color: '#002147',
+                padding: '7px 18px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: savingBatch ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 8px rgba(224, 169, 44, 0.4)',
+              }}
+            >
+              {savingBatch ? (
+                <>Saving Changes...</>
+              ) : (
+                <>
+                  <Check size={14} /> Save All Assignments
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}

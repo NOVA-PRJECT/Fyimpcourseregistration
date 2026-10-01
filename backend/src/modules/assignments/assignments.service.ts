@@ -178,6 +178,100 @@ export class AssignmentsService {
   }
 
   /**
+   * Batch assigns multiple teachers to courses in a single atomic database operation.
+   */
+  async batchAssignTeachers(
+    user: AuthUser,
+    assignments: Array<{ teacher_id: string; course_id: string }>,
+    ip: string
+  ) {
+    const departmentId = user.department_id;
+    if (!departmentId) {
+      throw new ForbiddenException('Only department HODs can assign teachers.');
+    }
+
+    if (!assignments || assignments.length === 0) {
+      throw new BadRequestException('No assignments provided.');
+    }
+
+    const courseIds = Array.from(new Set(assignments.map((a) => a.course_id)));
+    const teacherIds = Array.from(new Set(assignments.map((a) => a.teacher_id)));
+
+    // 1. Verify all courses belong to HOD's department
+    const { data: courses, error: coursesError } = await this.supabase.admin
+      .from('courses')
+      .select('id, department_id, course_code')
+      .in('id', courseIds);
+
+    if (coursesError || !courses || courses.length !== courseIds.length) {
+      throw new BadRequestException('One or more courses not found or invalid.');
+    }
+
+    for (const c of courses) {
+      if (c.department_id !== departmentId) {
+        throw new ForbiddenException(`Course ${c.course_code} does not belong to your department.`);
+      }
+    }
+
+    // 2. Verify all teachers belong to HOD's department and are strictly not HOD
+    const { data: facultyMembers, error: facultyError } = await this.supabase.admin
+      .from('faculty')
+      .select('id, department_id, role, full_name')
+      .in('id', teacherIds);
+
+    if (facultyError || !facultyMembers || facultyMembers.length !== teacherIds.length) {
+      throw new BadRequestException('One or more faculty members not found.');
+    }
+
+    for (const f of facultyMembers) {
+      if (f.department_id !== departmentId) {
+        throw new ForbiddenException(`Faculty member ${f.full_name} does not belong to your department.`);
+      }
+      if (f.role === 'hod') {
+        throw new BadRequestException(`HOD (${f.full_name}) cannot be assigned as a course teacher.`);
+      }
+    }
+
+    const assignedAt = new Date().toISOString();
+    const rowsToUpsert = assignments.map((a) => ({
+      teacher_id: a.teacher_id,
+      course_id: a.course_id,
+      assigned_by: user.userId,
+      assigned_at: assignedAt,
+    }));
+
+    // 3. Single batch upsert into teacher_course_assignments
+    const { data, error } = await this.supabase.admin
+      .from('teacher_course_assignments')
+      .upsert(rowsToUpsert, { onConflict: 'teacher_id,course_id' })
+      .select();
+
+    if (error) {
+      throw new InternalServerErrorException(`Failed to batch assign teachers: ${error.message}`);
+    }
+
+    // 4. Consolidated audit log
+    await this.auditLogger.log({
+      eventType: 'teachers_batch_assigned',
+      userId: user.userId,
+      userRole: user.role,
+      action: `batch assigned ${assignments.length} courses to faculty`,
+      resourceType: 'course_assignment_batch',
+      status: 'success',
+      ipAddress: ip,
+      metadata: { count: assignments.length, courseIds, teacherIds },
+    });
+
+    return {
+      success: true,
+      count: assignments.length,
+      assignments: data,
+      message: `Successfully saved ${assignments.length} faculty assignment(s).`,
+    };
+  }
+
+
+  /**
    * Reassigns an existing assignment row to a new teacher mid-semester.
    */
   async reassignTeacher(user: AuthUser, assignmentId: string, newTeacherId: string, ip: string) {

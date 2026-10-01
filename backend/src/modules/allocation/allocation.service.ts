@@ -1307,7 +1307,7 @@ export class AllocationService {
       throw new BadRequestException('Missing required fields (student_id, slot_key, course_id)')
     }
 
-    const validSlots = ['slot_1', 'slot_2', 'slot_3', 'slot_4', 'slot_5', 'slot_6']
+    const validSlots = ['slot_1', 'slot_2', 'slot_3', 'slot_4', 'slot_5', 'slot_6', 'slot_7', 'slot_8']
     if (!validSlots.includes(slot_key)) {
       throw new BadRequestException(`Invalid slot key: ${slot_key}`)
     }

@@ -39,7 +39,7 @@ export class StudentService {
 
     const effectiveCampusId = student.campus_id || user.campus_id
 
-    const [regRes, prefRes, settingsRes] = await Promise.all([
+    const [regResWith8, prefRes, settingsRes] = await Promise.all([
       this.supabase.admin
         .from('student_registrations')
         .select(`
@@ -51,6 +51,8 @@ export class StudentService {
           slot_4_course_id,
           slot_5_course_id,
           slot_6_course_id,
+          slot_7_course_id,
+          slot_8_course_id,
           allocation_metadata,
           selections
         `)
@@ -72,7 +74,28 @@ export class StudentService {
         : Promise.resolve({ data: null, error: null }),
     ])
 
-    const reg = regRes.data
+    let reg: any = regResWith8.data
+    if (regResWith8.error && (regResWith8.error.message?.includes('slot_7_course_id') || regResWith8.error.message?.includes('slot_8_course_id'))) {
+      const { data: fallbackReg } = await this.supabase.admin
+        .from('student_registrations')
+        .select(`
+          id,
+          total_credits,
+          slot_1_course_id,
+          slot_2_course_id,
+          slot_3_course_id,
+          slot_4_course_id,
+          slot_5_course_id,
+          slot_6_course_id,
+          allocation_metadata,
+          selections
+        `)
+        .eq('student_id', user.userId)
+        .eq('semester', student.current_semester)
+        .maybeSingle()
+      reg = fallbackReg
+    }
+
     const pref = prefRes.data
     const settings = settingsRes.data
 
@@ -127,7 +150,7 @@ export class StudentService {
         }
       }
 
-      for (let s = 1; s <= 6; s++) {
+      for (let s = 1; s <= 8; s++) {
         const slotKey = `slot_${s}`
         const cid = (reg as any)?.[`${slotKey}_course_id`]
         const slotMeta = meta[slotKey]

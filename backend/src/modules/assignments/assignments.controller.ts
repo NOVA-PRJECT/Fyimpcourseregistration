@@ -17,7 +17,7 @@ import { Roles } from '../../core/auth/decorators/roles.decorator';
 import { CurrentUser } from '../../core/auth/decorators/current-user.decorator';
 import { AuthUser } from '../../core/auth/types';
 import { AssignmentsService } from './assignments.service';
-import { AssignTeacherSchema } from './dto/assign-teacher.dto';
+import { AssignTeacherSchema, BatchAssignTeacherSchema } from './dto/assign-teacher.dto';
 import { ReassignTeacherSchema } from './dto/reassign-teacher.dto';
 
 @Controller('api/assignments')
@@ -51,6 +51,23 @@ export class AssignmentsController {
       ip
     );
   }
+
+  @Post('batch-assign')
+  @Roles('hod', 'superadmin')
+  async batchAssignTeachers(
+    @CurrentUser() user: AuthUser,
+    @Body() body: unknown,
+    @Req() req: Request
+  ) {
+    const parsed = BatchAssignTeacherSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0]?.message || 'Invalid batch payload');
+    }
+
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
+    return this.assignmentsService.batchAssignTeachers(user, parsed.data.assignments, ip);
+  }
+
 
   @Patch(':id/reassign')
   @Roles('hod', 'superadmin')

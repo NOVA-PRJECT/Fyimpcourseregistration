@@ -179,6 +179,8 @@ CREATE TABLE IF NOT EXISTS student_registrations (
     slot_4_course_id UUID REFERENCES courses(id) ON DELETE SET NULL,
     slot_5_course_id UUID REFERENCES courses(id) ON DELETE SET NULL,
     slot_6_course_id UUID REFERENCES courses(id) ON DELETE SET NULL,
+    slot_7_course_id UUID REFERENCES courses(id) ON DELETE SET NULL,
+    slot_8_course_id UUID REFERENCES courses(id) ON DELETE SET NULL,
     total_credits INTEGER NOT NULL DEFAULT 0 CHECK (total_credits >= 0),
     submitted_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     pathway_id TEXT,

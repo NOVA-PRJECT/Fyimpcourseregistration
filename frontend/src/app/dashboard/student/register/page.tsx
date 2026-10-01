@@ -132,6 +132,7 @@ interface BlueprintData {
   minCredits?: number
   maxCredits?: number
   slots?: BlueprintSlot[]
+  minorCourses?: Course[]
   pathways?: PathwaySummary[]
   pathway_id?: string
   existingPreferences?: Record<string, { course_id: string; rank: number }[]>
@@ -168,6 +169,10 @@ export default function RegisterPage() {
   const [blueprint, setBlueprint] = useState<BlueprintData | null>(null)
   const [resolvedSlots, setResolvedSlots] = useState<BlueprintSlot[]>([])
   const [selectedPathwayId, setSelectedPathwayId] = useState<string | null>(null)
+
+  // Minor courses and optional papers state (up to 8 papers max)
+  const [minorCourses, setMinorCourses] = useState<Course[]>([])
+  const [extraSlotsCount, setExtraSlotsCount] = useState<number>(0)
 
   // Scored model preferences per slot
   const [rankedPreferences, setRankedPreferences] = useState<Record<number, SlotRankedPreferences>>({})
@@ -209,6 +214,9 @@ export default function RegisterPage() {
           window_status: isOpen ? 'OPEN' : 'CLOSED',
         })
 
+        const minors: Course[] = rawBp.minorCourses || []
+        setMinorCourses(minors)
+
         if (rawBp.existingRegistration || rawBp.existingSlots) {
           setExistingSubmission(rawBp.existingRegistration || {})
         }
@@ -220,10 +228,10 @@ export default function RegisterPage() {
           setAllocationMetadata(rawBp.allocationMetadata)
         }
 
-        // Hydrate preferences
+        // Hydrate preferences for up to 8 slots
         const existingPrefs = rawBp.existingPreferences || {}
         const initialPrefs: Record<number, SlotRankedPreferences> = {}
-        for (let i = 1; i <= 6; i++) {
+        for (let i = 1; i <= 8; i++) {
           const list = existingPrefs[`slot_${i}`] || []
           initialPrefs[i] = {
             rank1: list.find((p: any) => p.rank === 1)?.course_id || '',
@@ -232,7 +240,14 @@ export default function RegisterPage() {
           }
         }
 
-        // No auto-selection: students must manually choose all elective papers
+        // Re-hydrate extraSlotsCount if slot 7 or 8 existed
+        const hasSlot7 = (existingPrefs.slot_7 && existingPrefs.slot_7.length > 0) || !!rawBp.existingSlots?.slot_7
+        const hasSlot8 = (existingPrefs.slot_8 && existingPrefs.slot_8.length > 0) || !!rawBp.existingSlots?.slot_8
+        if (hasSlot8) {
+          setExtraSlotsCount(2)
+        } else if (hasSlot7) {
+          setExtraSlotsCount(1)
+        }
 
         setRankedPreferences(initialPrefs)
 
@@ -286,10 +301,62 @@ export default function RegisterPage() {
 
     const slots = data.data.slots as BlueprintSlot[]
     setResolvedSlots(slots)
-
-    // Preserve existing preferences on pathway change — no auto-selection
-
     setPageState('ready')
+  }
+
+  // Build active slots list: base blueprint slots (1-6) + optional minor slots (7, 8)
+  const activeSlots: BlueprintSlot[] = [...resolvedSlots]
+  if (extraSlotsCount >= 1) {
+    activeSlots.push({
+      slot: 7,
+      rule: 'EXCLUDE_DEPT',
+      name: 'Paper 7 (Minor Elective)',
+      options: minorCourses,
+    })
+  }
+  if (extraSlotsCount >= 2) {
+    activeSlots.push({
+      slot: 8,
+      rule: 'EXCLUDE_DEPT',
+      name: 'Paper 8 (Minor Elective)',
+      options: minorCourses,
+    })
+  }
+
+  function handleAddPaper() {
+    if (extraSlotsCount < 2) {
+      setExtraSlotsCount((prev) => prev + 1)
+      setError('')
+    }
+  }
+
+  function handleRemovePaper(slotNum: number) {
+    if (slotNum === 8 && extraSlotsCount === 2) {
+      setExtraSlotsCount(1)
+      setRankedPreferences((prev) => {
+        const next = { ...prev }
+        delete next[8]
+        return next
+      })
+    } else if (slotNum === 7) {
+      if (extraSlotsCount === 2) {
+        setExtraSlotsCount(1)
+        setRankedPreferences((prev) => {
+          const next = { ...prev }
+          next[7] = prev[8] || { rank1: '', rank2: '', rank3: '' }
+          delete next[8]
+          return next
+        })
+      } else {
+        setExtraSlotsCount(0)
+        setRankedPreferences((prev) => {
+          const next = { ...prev }
+          delete next[7]
+          return next
+        })
+      }
+    }
+    setError('')
   }
 
   function handlePreferenceChange(
@@ -323,10 +390,11 @@ export default function RegisterPage() {
     setError('')
   }
 
-  function calculateCredits(): number {
+  // Calculate credits strictly for the base 6 papers (per user instruction)
+  function calculateBaseCredits(): number {
     if (!resolvedSlots.length) return 0
     let total = 0
-    resolvedSlots.forEach((slot) => {
+    resolvedSlots.slice(0, 6).forEach((slot) => {
       const isFixed =
         slot.rule === 'FIXED' ||
         slot.rule === 'CAMPUS_FIXED' ||
@@ -345,25 +413,56 @@ export default function RegisterPage() {
     return total
   }
 
+  // Calculate optional extra credits from minor papers (slot 7 & 8)
+  function calculateExtraCredits(): number {
+    let total = 0
+    if (extraSlotsCount >= 1) {
+      const p7 = rankedPreferences[7]?.rank1
+      if (p7) {
+        const c = minorCourses.find((x) => x.id === p7)
+        if (c) total += c.credits
+      }
+    }
+    if (extraSlotsCount >= 2) {
+      const p8 = rankedPreferences[8]?.rank1
+      if (p8) {
+        const c = minorCourses.find((x) => x.id === p8)
+        if (c) total += c.credits
+      }
+    }
+    return total
+  }
+
   async function handleSubmit() {
     if (!blueprint || !selectedPathwayId) return
 
     const preferencesPayload: Record<string, { course_id: string; rank: number }[]> = {}
+    const chosenRank1Courses = new Map<string, number>()
 
-    for (const slot of resolvedSlots) {
+    for (const slot of activeSlots) {
       const isFixed =
         slot.rule === 'FIXED' ||
         slot.rule === 'CAMPUS_FIXED' ||
         slot.rule === 'AEC_ELECT' ||
         (!!slot.course && (!slot.options || slot.options.length === 0))
-      if (!isFixed) {
+
+      if (isFixed && slot.course) {
+        chosenRank1Courses.set(slot.course.id, slot.slot)
+      } else {
         const slotKey = `slot_${slot.slot}`
         const currentPrefs = rankedPreferences[slot.slot] || { rank1: '', rank2: '', rank3: '' }
 
         if (!currentPrefs.rank1) {
-          setError(`Please select at least a 1st choice preference for "${slot.name}"`)
+          setError(`Please select at least a 1st choice preference for "${slot.name}" (or click "✕ Remove Paper" if not taking it).`)
           return
         }
+
+        if (chosenRank1Courses.has(currentPrefs.rank1)) {
+          const prevSlot = chosenRank1Courses.get(currentPrefs.rank1)
+          setError(`Duplicate paper chosen: The paper selected in ${slot.name} is already selected in Paper ${prevSlot}. Each paper must be unique across all slots.`)
+          return
+        }
+        chosenRank1Courses.set(currentPrefs.rank1, slot.slot)
 
         const choices: { course_id: string; rank: number }[] = []
         choices.push({ course_id: currentPrefs.rank1, rank: 1 })
@@ -436,9 +535,10 @@ export default function RegisterPage() {
 
   const minCredits = blueprint?.minCredits ?? blueprint?.min_credits ?? 20
   const maxCredits = blueprint?.maxCredits ?? blueprint?.max_credits ?? 24
-  const totalCredits = calculateCredits()
+  const baseCredits = calculateBaseCredits()
+  const extraCredits = calculateExtraCredits()
   const isValidCredits = blueprint
-    ? totalCredits >= minCredits && totalCredits <= maxCredits
+    ? baseCredits >= minCredits && baseCredits <= maxCredits
     : false
 
   return (
@@ -708,17 +808,26 @@ export default function RegisterPage() {
               {/* Credit Counter */}
               {windowIsOpen && (
                 <div className={styles.creditCounter}>
-                  <span className={styles.creditLabel}>Estimated Credits (Rank 1 Electives)</span>
-                  <span
-                    className={`${styles.creditValue} ${
-                      totalCredits === 0 ? '' : isValidCredits ? styles.valid : styles.invalid
-                    }`}
-                  >
-                    {totalCredits}
-                    <span className={styles.creditRange}>
-                      &nbsp;(min {minCredits} — max {maxCredits})
-                    </span>
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    <div>
+                      <span className={styles.creditLabel}>Estimated Credits (Base 6 Papers): </span>
+                      <span
+                        className={`${styles.creditValue} ${
+                          baseCredits === 0 ? '' : isValidCredits ? styles.valid : styles.invalid
+                        }`}
+                      >
+                        {baseCredits}
+                        <span className={styles.creditRange}>
+                          &nbsp;(min {minCredits} — max {maxCredits})
+                        </span>
+                      </span>
+                    </div>
+                    {extraCredits > 0 && (
+                      <span style={{ fontSize: '0.8rem', color: '#0284c7', fontWeight: 600 }}>
+                        + {extraCredits} optional minor credits ({extraSlotsCount} paper{extraSlotsCount > 1 ? 's' : ''} added)
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -727,7 +836,7 @@ export default function RegisterPage() {
               </p>
 
               <div className={styles.slotsContainer}>
-                {resolvedSlots.map((slot) => {
+                {activeSlots.map((slot) => {
                   const isFixed =
                     slot.rule === 'FIXED' ||
                     slot.rule === 'CAMPUS_FIXED' ||
@@ -749,8 +858,39 @@ export default function RegisterPage() {
                       key={slot.slot}
                       className={`${styles.slotCard} ${isConfirmed ? styles.slotCardConfirmed : styles.active}`}
                     >
-                      <div className={styles.slotHeader}>
-                        <span className={styles.slotLabel}>{slot.name}</span>
+                      <div className={styles.slotHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <span className={styles.slotLabel}>
+                          {slot.name}
+                          {slot.slot > 6 && (
+                            <span style={{ marginLeft: '0.6rem', fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: '#e0f2fe', color: '#0369a1', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              Minor Elective
+                            </span>
+                          )}
+                        </span>
+                        {slot.slot > 6 && windowIsOpen && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePaper(slot.slot)}
+                            style={{
+                              background: '#fef2f2',
+                              color: '#dc2626',
+                              border: '1px solid #fecaca',
+                              borderRadius: '0.375rem',
+                              padding: '0.25rem 0.65rem',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.25rem',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = '#fee2e2')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = '#fef2f2')}
+                          >
+                            ✕ Remove Paper
+                          </button>
+                        )}
                       </div>
 
                       {/* Case 1: Confirmed Allocation (Unified for Core/Fixed & Allocated Electives) */}
@@ -803,7 +943,9 @@ export default function RegisterPage() {
                         /* Case 3: Elective Slot — Window Open (Student Picking Preferences) */
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                           <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>
-                            Rank your preferences for this paper. The algorithm allocates round-by-round based on capacity and prerequisites.
+                            {slot.slot > 6
+                              ? 'Select an elective course offered by any department outside your own for this Minor Paper.'
+                              : 'Rank your preferences for this paper. The algorithm allocates round-by-round based on capacity and prerequisites.'}
                           </p>
 
                           <div>
@@ -891,6 +1033,46 @@ export default function RegisterPage() {
                   )
                 })}
               </div>
+
+              {/* Add Paper Button for Minor Electives (Slots 7 & 8) */}
+              {windowIsOpen && extraSlotsCount < 2 && pageState === 'ready' && (
+                <div style={{ marginTop: '1.25rem', marginBottom: '1rem', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={handleAddPaper}
+                    style={{
+                      background: '#f8fafc',
+                      border: '1.5px dashed #0284c7',
+                      borderRadius: '0.625rem',
+                      padding: '0.75rem 1.75rem',
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      color: '#0284c7',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#e0f2fe')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = '#f8fafc')}
+                  >
+                    <span style={{ fontSize: '1.2rem', fontWeight: 700, lineHeight: 1 }}>+</span>
+                    Add Paper {extraSlotsCount === 0 ? '7' : '8'} (Minor Elective)
+                  </button>
+                  <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem', marginBottom: 0 }}>
+                    Optional Minor Paper ({extraSlotsCount}/2 added) — Select an elective from outside your department
+                  </p>
+                </div>
+              )}
+              {extraSlotsCount === 2 && windowIsOpen && (
+                <div style={{ marginTop: '1rem', marginBottom: '1rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#0369a1', background: '#f0f9ff', padding: '0.35rem 0.85rem', borderRadius: '9999px', border: '1px solid #bae6fd', fontWeight: 600 }}>
+                    ✓ Maximum 8 papers reached (6 blueprint + 2 minor electives)
+                  </span>
+                </div>
+              )}
 
               {error && <div className={styles.errorBanner}>{error}</div>}
               {successMsg && (

@@ -33,6 +33,8 @@ export type StudentRegistration = {
   slot_4_course_id: string
   slot_5_course_id: string
   slot_6_course_id: string
+  slot_7_course_id?: string | null
+  slot_8_course_id?: string | null
   total_credits: number
   submitted_at: string
 }
