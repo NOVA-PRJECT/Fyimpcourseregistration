@@ -2,102 +2,113 @@ import { NextRequest, NextResponse } from 'next/server'
 import { DASHBOARD_ROLE_MAP, ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
 import { Role, ROLES } from '@/core/constants/roles'
 
-function extractTokenClaims(token: string): { role: Role | null; isExpired: boolean } {
+type ProfileCheck =
+  | { kind: 'authorized'; role: Role }
+  | { kind: 'unauthorized' }
+  | { kind: 'unavailable' }
+
+async function resolveRoleFromBackend(token: string): Promise<ProfileCheck> {
+  const backendUrl = (process.env.BACKEND_URL || 'http://127.0.0.1:4000').replace(/\/$/, '')
+
   try {
-    const parts = token.split('.')
-    if (parts.length !== 3) return { role: null, isExpired: true }
+    const response = await fetch(`${backendUrl}/api/auth/profile`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      cache: 'no-store',
+    })
 
-    const base64Url = parts[1]
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    )
-    const payload = JSON.parse(jsonPayload)
+    if (response.status === 401 || response.status === 403) {
+      return { kind: 'unauthorized' }
+    }
+    if (!response.ok) {
+      return { kind: 'unavailable' }
+    }
 
-    const isExpired = typeof payload.exp === 'number' && Date.now() >= payload.exp * 1000
-    const rawRole = payload.app_metadata?.role || payload.role
+    const payload = await response.json()
     const validRoles = Object.values(ROLES) as string[]
-    const role = validRoles.includes(rawRole) ? (rawRole as Role) : null
+    if (!validRoles.includes(payload?.role)) {
+      return { kind: 'unauthorized' }
+    }
 
-    return { role, isExpired }
+    return { kind: 'authorized', role: payload.role as Role }
   } catch {
-    return { role: null, isExpired: true }
+    return { kind: 'unavailable' }
   }
+}
+
+function clearLegacyRoleCookie(response: NextResponse) {
+  response.cookies.delete('user_role')
+  return response
 }
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isLoginRoute = pathname.startsWith('/login')
   const isDashboardRoute = pathname.startsWith('/dashboard')
+  const isConsentRoute = pathname.startsWith('/consent')
+  const isHomeRoute = pathname === '/'
   const isApiRoute = pathname.startsWith('/api')
 
-  // API routes are proxied directly to NestJS backend
-  if (isApiRoute) {
-    return NextResponse.next()
-  }
+  // API requests are authorized by the NestJS AuthGuard and never by this UI middleware.
+  if (isApiRoute) return NextResponse.next()
 
-  const authToken = request.cookies.get('auth_token')?.value
-  const cookieRole = request.cookies.get('user_role')?.value as Role | undefined
+  const needsRole = isDashboardRoute || isConsentRoute || isLoginRoute || isHomeRoute
+  if (!needsRole) return NextResponse.next()
 
-  let userRole: Role | null = null
-  let isExpired = false
-
-  if (authToken) {
-    const claims = extractTokenClaims(authToken)
-    userRole = claims.role
-    isExpired = claims.isExpired
-  }
-
-  // Fallback to cookie role only if JWT claims role wasn't found, but if expired or missing token -> reject
-  if (!userRole && cookieRole && !authToken) {
-    userRole = null
-  } else if (!userRole && cookieRole) {
-    userRole = cookieRole
-  }
-
-  const isConsentRoute = pathname.startsWith('/consent')
-
-  // Not authenticated or token expired
-  if (!authToken || !userRole || isExpired) {
+  const token = request.cookies.get('auth_token')?.value
+  if (!token) {
     if (isDashboardRoute || isConsentRoute) {
-      const redirectResponse = NextResponse.redirect(new URL('/login', request.url))
-      redirectResponse.cookies.delete('user_role')
-      redirectResponse.cookies.delete('auth_token')
-      return redirectResponse
+      const response = NextResponse.redirect(new URL('/login', request.url))
+      response.cookies.delete('auth_token')
+      return clearLegacyRoleCookie(response)
     }
-    return NextResponse.next()
+    return clearLegacyRoleCookie(NextResponse.next())
   }
 
-  // Already logged in - trying to access login or root page
-  const isHomeRoute = pathname === '/'
+  // Never authorize a page from decoded JWT claims or a role cookie. Ask the
+  // backend to verify the token and resolve the current role from portal tables.
+  const profile = await resolveRoleFromBackend(token)
+  if (profile.kind === 'unavailable') {
+    if (isDashboardRoute || isConsentRoute) {
+      return NextResponse.json(
+        { message: 'Authentication service is temporarily unavailable. Please retry.' },
+        { status: 503 },
+      )
+    }
+    return clearLegacyRoleCookie(NextResponse.next())
+  }
+
+  if (profile.kind === 'unauthorized') {
+    const response = isDashboardRoute || isConsentRoute
+      ? NextResponse.redirect(new URL('/login', request.url))
+      : NextResponse.next()
+    response.cookies.delete('auth_token')
+    return clearLegacyRoleCookie(response)
+  }
+
+  const role = profile.role
   if (isLoginRoute || isHomeRoute) {
-    if (userRole && ROLE_DASHBOARD_MAP[userRole]) {
-      return NextResponse.redirect(new URL(ROLE_DASHBOARD_MAP[userRole], request.url))
-    }
-    return NextResponse.redirect(new URL('/login', request.url))
+    const response = NextResponse.redirect(new URL(ROLE_DASHBOARD_MAP[role] || '/login', request.url))
+    return clearLegacyRoleCookie(response)
   }
 
-  // Guarding dashboard routes based on authoritative user role
   if (isDashboardRoute) {
     const matchedRoute = Object.keys(DASHBOARD_ROLE_MAP)
       .sort((a, b) => b.length - a.length)
       .find((route) => pathname === route || pathname.startsWith(route + '/'))
 
     if (!matchedRoute) {
-      return NextResponse.redirect(new URL('/login', request.url))
+      return clearLegacyRoleCookie(NextResponse.redirect(new URL('/login', request.url)))
     }
 
     const requiredRole = DASHBOARD_ROLE_MAP[matchedRoute]
-    if (userRole !== requiredRole) {
-      const fallback = ROLE_DASHBOARD_MAP[userRole] || '/login'
-      return NextResponse.redirect(new URL(fallback, request.url))
+    if (role !== requiredRole) {
+      return clearLegacyRoleCookie(
+        NextResponse.redirect(new URL(ROLE_DASHBOARD_MAP[role] || '/login', request.url)),
+      )
     }
   }
 
-  return NextResponse.next()
+  return clearLegacyRoleCookie(NextResponse.next())
 }
 
 export const config = {

@@ -1,16 +1,6 @@
+// Role access is verified centrally by middleware against the backend profile.
 export const dynamic = 'force-dynamic'
 
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
-import { ROLE_DASHBOARD_MAP } from '@/core/security/routeConfig'
-import { Role } from '@/core/constants/roles'
-
-export default async function StudentLayout({ children }: { children: React.ReactNode }) {
-  const cookieStore = await cookies()
-  const role = cookieStore.get('user_role')?.value as Role | undefined
-  if (!role || role !== 'student') {
-    if (!role) redirect('/login')
-    redirect(ROLE_DASHBOARD_MAP[role] ?? '/login')
-  }
+export default function DashboardRoleLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }

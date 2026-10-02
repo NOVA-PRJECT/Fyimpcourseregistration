@@ -571,7 +571,7 @@ BEGIN
 END $$;
 
 -- 1. Allocation Runs View
-CREATE OR REPLACE VIEW allocation_runs AS
+CREATE OR REPLACE VIEW allocation_runs WITH (security_invoker = true) AS
 SELECT 
     id, campus_id, academic_year, semester, status,
     user_id AS triggered_by,
@@ -584,10 +584,10 @@ SELECT
     error_message, started_at, completed_at, created_at
 FROM system_logs WHERE log_type = 'allocation_run';
 
-CREATE OR REPLACE VIEW allocation_runs_legacy AS SELECT * FROM allocation_runs;
+CREATE OR REPLACE VIEW allocation_runs_legacy WITH (security_invoker = true) AS SELECT * FROM allocation_runs;
 
 -- 2. Timetable Generation Jobs View
-CREATE OR REPLACE VIEW timetable_generation_jobs AS
+CREATE OR REPLACE VIEW timetable_generation_jobs WITH (security_invoker = true) AS
 SELECT 
     id, campus_id, academic_year, semester, status, progress, error_message,
     user_id AS triggered_by,
@@ -595,16 +595,16 @@ SELECT
     started_at, completed_at, created_at, updated_at
 FROM system_logs WHERE log_type = 'timetable_job';
 
-CREATE OR REPLACE VIEW timetable_generation_jobs_legacy AS SELECT * FROM timetable_generation_jobs;
+CREATE OR REPLACE VIEW timetable_generation_jobs_legacy WITH (security_invoker = true) AS SELECT * FROM timetable_generation_jobs;
 
 -- 3. Audit Logs View
-CREATE OR REPLACE VIEW audit_logs AS
+CREATE OR REPLACE VIEW audit_logs WITH (security_invoker = true) AS
 SELECT 
     id, event_type, user_id, user_role, action, resource_type, resource_id,
     status, error_message, metadata, ip_address, user_agent, created_at
 FROM system_logs WHERE log_type = 'audit_event';
 
-CREATE OR REPLACE VIEW audit_logs_legacy AS SELECT * FROM audit_logs;
+CREATE OR REPLACE VIEW audit_logs_legacy WITH (security_invoker = true) AS SELECT * FROM audit_logs;
 
 -- Triggers for Allocation Runs View
 CREATE OR REPLACE FUNCTION trg_allocation_runs_io()
@@ -843,6 +843,34 @@ BEGIN
 END;
 $$;
 
+-- Remove named legacy policies that are not covered by the blanket-policy
+-- cleanup above. Operational logs are written/read by the NestJS service role.
+DROP POLICY IF EXISTS "Admins, Directors, HODs can view system_logs" ON system_logs;
+DROP POLICY IF EXISTS "Authenticated users can insert system_logs" ON system_logs;
+DROP POLICY IF EXISTS "Allow update only on job records in system_logs" ON system_logs;
+REVOKE ALL PRIVILEGES ON TABLE system_logs FROM PUBLIC, anon, authenticated;
+GRANT ALL PRIVILEGES ON TABLE system_logs TO service_role;
+REVOKE ALL PRIVILEGES ON TABLE
+    audit_logs, audit_logs_legacy,
+    allocation_runs, allocation_runs_legacy,
+    timetable_generation_jobs, timetable_generation_jobs_legacy
+FROM PUBLIC, anon, authenticated;
+GRANT ALL PRIVILEGES ON TABLE
+    audit_logs, audit_logs_legacy,
+    allocation_runs, allocation_runs_legacy,
+    timetable_generation_jobs, timetable_generation_jobs_legacy
+TO service_role;
+
+-- The RLS auto-enable event trigger is server-side infrastructure, not a
+-- Data API RPC. Prevent direct calls by client roles if the function exists.
+DO $$
+BEGIN
+    IF to_regprocedure('public.rls_auto_enable()') IS NOT NULL THEN
+        EXECUTE 'REVOKE ALL PRIVILEGES ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated';
+    END IF;
+END;
+$$;
+
 -- 2. Campus Student Promotion Procedure
 CREATE OR REPLACE FUNCTION promote_campus_students(p_campus_id UUID)
 RETURNS JSONB
@@ -1037,120 +1065,40 @@ WITH CHECK (
 
 -- 6. Teacher Course Assignments
 DROP POLICY IF EXISTS "Allow read assignments for authenticated users" ON teacher_course_assignments;
-CREATE POLICY "Allow read assignments for authenticated users"
-    ON teacher_course_assignments FOR SELECT TO authenticated USING (true);
-
 DROP POLICY IF EXISTS "Allow write assignments for HODs and Admins" ON teacher_course_assignments;
-CREATE POLICY "Allow write assignments for HODs and Admins"
-    ON teacher_course_assignments FOR ALL TO authenticated
-    USING (
-        EXISTS (SELECT 1 FROM faculty WHERE id = auth.uid() AND role = 'hod')
-        OR EXISTS (SELECT 1 FROM admins WHERE id = auth.uid())
-    )
-    WITH CHECK (
-        EXISTS (SELECT 1 FROM faculty WHERE id = auth.uid() AND role = 'hod')
-        OR EXISTS (SELECT 1 FROM admins WHERE id = auth.uid())
-    );
+REVOKE ALL PRIVILEGES ON TABLE teacher_course_assignments FROM PUBLIC, anon, authenticated;
+GRANT ALL PRIVILEGES ON TABLE teacher_course_assignments TO service_role;
 
 -- 7. Period Attendance
 DROP POLICY IF EXISTS period_attendance_select_auth ON period_attendance;
 DROP POLICY IF EXISTS "Students can view own period attendance" ON period_attendance;
-CREATE POLICY period_attendance_select_auth ON period_attendance
-    FOR SELECT TO authenticated USING (student_id = auth.uid() OR marked_by = auth.uid());
-
 DROP POLICY IF EXISTS "Faculty can mark period attendance" ON period_attendance;
 DROP POLICY IF EXISTS "Faculty can mark assigned period attendance" ON period_attendance;
-CREATE POLICY "Faculty can mark assigned period attendance"
-    ON period_attendance FOR ALL TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1 FROM teacher_course_assignments tca
-            WHERE tca.teacher_id = auth.uid()
-              AND tca.course_id = period_attendance.course_id
-        )
-        OR EXISTS (
-            SELECT 1 FROM faculty f
-            JOIN courses c ON c.department_id = f.department_id
-            WHERE f.id = auth.uid()
-              AND f.role = 'hod'
-              AND c.id = period_attendance.course_id
-        )
-        OR EXISTS (
-            SELECT 1 FROM faculty f
-            WHERE f.id = auth.uid()
-              AND f.role = 'campus_director'
-        )
-        OR EXISTS (
-            SELECT 1 FROM admins a
-            WHERE a.id = auth.uid()
-        )
-    )
-    WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM teacher_course_assignments tca
-            WHERE tca.teacher_id = auth.uid()
-              AND tca.course_id = period_attendance.course_id
-        )
-        OR EXISTS (
-            SELECT 1 FROM faculty f
-            JOIN courses c ON c.department_id = f.department_id
-            WHERE f.id = auth.uid()
-              AND f.role = 'hod'
-              AND c.id = period_attendance.course_id
-        )
-        OR EXISTS (
-            SELECT 1 FROM faculty f
-            WHERE f.id = auth.uid()
-              AND f.role = 'campus_director'
-        )
-        OR EXISTS (
-            SELECT 1 FROM admins a
-            WHERE a.id = auth.uid()
-        )
-    );
+REVOKE ALL PRIVILEGES ON TABLE period_attendance FROM PUBLIC, anon, authenticated;
+GRANT ALL PRIVILEGES ON TABLE period_attendance TO service_role;
 
 -- 8. Period Unlock Requests
 DROP POLICY IF EXISTS "Allow HODs and Admins to manage unlock requests" ON period_unlock_requests;
-CREATE POLICY "Allow HODs and Admins to manage unlock requests"
-    ON period_unlock_requests FOR ALL TO authenticated
-    USING (
-        EXISTS (SELECT 1 FROM faculty WHERE id = auth.uid() AND role = 'hod')
-        OR EXISTS (SELECT 1 FROM admins WHERE id = auth.uid())
-    )
-    WITH CHECK (
-        EXISTS (SELECT 1 FROM faculty WHERE id = auth.uid() AND role = 'hod')
-        OR EXISTS (SELECT 1 FROM admins WHERE id = auth.uid())
-    );
+REVOKE ALL PRIVILEGES ON TABLE period_unlock_requests FROM PUBLIC, anon, authenticated;
+GRANT ALL PRIVILEGES ON TABLE period_unlock_requests TO service_role;
+
+-- Timetable conflicts are consumed and written through the backend only.
+DROP POLICY IF EXISTS "Allow write access to timetable_conflicts for directors and sup" ON timetable_conflicts;
+DROP POLICY IF EXISTS "Allow read access to timetable_conflicts for authenticated user" ON timetable_conflicts;
+REVOKE ALL PRIVILEGES ON TABLE timetable_conflicts FROM PUBLIC, anon, authenticated;
+GRANT ALL PRIVILEGES ON TABLE timetable_conflicts TO service_role;
 
 -- 9. Campus Sign-Ins
 DROP POLICY IF EXISTS "Students can view own campus sign-in records" ON campus_sign_ins;
 DROP POLICY IF EXISTS "Students insert own campus sign-ins" ON campus_sign_ins;
 DROP POLICY IF EXISTS "Students can insert own campus sign-in records" ON campus_sign_ins;
-
-CREATE POLICY "Students can view own campus sign-in records"
-    ON campus_sign_ins FOR SELECT TO authenticated USING (student_id = auth.uid());
-
+DROP POLICY IF EXISTS "Students and staff view campus sign-in records" ON campus_sign_ins;
+DROP POLICY IF EXISTS "Staff manage campus sign-ins" ON campus_sign_ins;
 DROP POLICY IF EXISTS "HODs can view department campus sign-in records" ON campus_sign_ins;
-CREATE POLICY "HODs can view department campus sign-in records"
-    ON campus_sign_ins FOR SELECT TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1 FROM faculty f
-            JOIN students s ON s.department_id = f.department_id
-            WHERE f.id = auth.uid()
-              AND f.role = 'hod'
-              AND s.id = campus_sign_ins.student_id
-        )
-    );
-
 DROP POLICY IF EXISTS "Admins and Directors can view all campus sign-in records" ON campus_sign_ins;
-CREATE POLICY "Admins and Directors can view all campus sign-in records"
-    ON campus_sign_ins FOR ALL TO authenticated
-    USING (
-        (auth.jwt() -> 'app_metadata' ->> 'role') IN ('campus_director', 'superadmin')
-        OR (auth.jwt() ->> 'role') IN ('campus_director', 'superadmin')
-        OR (auth.jwt() -> 'user_metadata' ->> 'role') IN ('campus_director', 'superadmin')
-    );
+DROP POLICY IF EXISTS "Campus admins and directors can read campus sign-ins" ON campus_sign_ins;
+REVOKE ALL PRIVILEGES ON TABLE campus_sign_ins FROM PUBLIC, anon, authenticated;
+GRANT ALL PRIVILEGES ON TABLE campus_sign_ins TO service_role;
 
 -- 10. Consent Records
 DROP POLICY IF EXISTS consent_select_own ON consent_records;

@@ -1,8 +1,9 @@
-import {
+﻿import {
   BadRequestException,
   ForbiddenException,
   HttpException,
   HttpStatus,
+  InternalServerErrorException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common'
@@ -67,7 +68,10 @@ export class AuthService {
     await this.rateLimiter.resetLoginLimits(ip, email)
 
     const userId = authData.user.id
-    const userRoleInfo = await this.determineUserRoute(userId)
+    // Pass any existing role from app_metadata so determineUserRoute can skip
+    // the triple-table scan when the role is already known
+    const existingRole = authData.user.app_metadata?.role as Role | undefined
+    const userRoleInfo = await this.determineUserRoute(userId, existingRole)
 
     if (!userRoleInfo.role || !userRoleInfo.redirectTo) {
       throw new ForbiddenException('Account configuration mismatch: user role not found in portal database.')
@@ -75,27 +79,27 @@ export class AuthService {
 
     const { role, redirectTo, department_id, campus_id, must_change_password } = userRoleInfo
 
-    // Update Supabase Auth metadata
-    await this.supabase.admin.auth.admin.updateUserById(userId, {
-      user_metadata: { role },
-      app_metadata: {
-        role,
-        department_id: department_id ?? null,
-        campus_id: campus_id ?? null,
-        must_change_password: must_change_password ?? false,
-      },
-    })
-
-    await this.auditLogger.log({
-      eventType: AuditEvents.USER_LOGIN,
-      userId,
-      userRole: role,
-      action: 'user logged in',
-      resourceType: 'user',
-      resourceId: userId,
-      status: 'success',
-      ipAddress: ip,
-    })
+    // Update Supabase Auth metadata (parallelised with audit log)
+    await Promise.all([
+      this.supabase.admin.auth.admin.updateUserById(userId, {
+        app_metadata: {
+          role,
+          department_id: department_id ?? null,
+          campus_id: campus_id ?? null,
+          must_change_password: must_change_password ?? false,
+        },
+      }),
+      this.auditLogger.log({
+        eventType: AuditEvents.USER_LOGIN,
+        userId,
+        userRole: role,
+        action: 'user logged in',
+        resourceType: 'user',
+        resourceId: userId,
+        status: 'success',
+        ipAddress: ip,
+      }),
+    ])
 
     return {
       token: authData.session.access_token,
@@ -105,13 +109,66 @@ export class AuthService {
     }
   }
 
-  async determineUserRoute(authUserId: string): Promise<{
+  async determineUserRoute(
+    authUserId: string,
+    existingRole?: Role,
+  ): Promise<{
     role: Role | null
     redirectTo: string | null
     department_id?: string | null
     campus_id?: string | null
     must_change_password?: boolean
   }> {
+    const VALID_ROLES = new Set<Role>(['superadmin', 'campus_director', 'hod', 'teaching_staff', 'teacher', 'student'])
+
+    if (existingRole && VALID_ROLES.has(existingRole)) {
+      // Fast path: role is already known, query only the matching table
+      if (existingRole === 'student') {
+        const { data, error } = await this.supabase.admin
+          .from('students')
+          .select('id, department_id, campus_id, must_change_password')
+          .eq('id', authUserId)
+          .maybeSingle()
+        if (error) throw new InternalServerErrorException('Could not verify the account role')
+        if (!data) return { role: null, redirectTo: null }
+        return {
+          role: 'student',
+          redirectTo: ROLE_DASHBOARD_MAP['student'],
+          department_id: data.department_id,
+          campus_id: data.campus_id,
+          must_change_password: data.must_change_password,
+        }
+      }
+
+      if (existingRole === 'superadmin') {
+        const { data, error } = await this.supabase.admin
+          .from('admins')
+          .select('id')
+          .eq('id', authUserId)
+          .maybeSingle()
+        if (error) throw new InternalServerErrorException('Could not verify the account role')
+        if (!data) return { role: null, redirectTo: null }
+        return { role: 'superadmin', redirectTo: ROLE_DASHBOARD_MAP['superadmin'] }
+      }
+
+      // campus_director | hod | teaching_staff | teacher
+      const { data, error } = await this.supabase.admin
+        .from('faculty')
+        .select('id, role, department_id, campus_id')
+        .eq('id', authUserId)
+        .maybeSingle()
+      if (error) throw new InternalServerErrorException('Could not verify the account role')
+      if (!data) return { role: null, redirectTo: null }
+      const role = data.role as Role
+      return {
+        role,
+        redirectTo: ROLE_DASHBOARD_MAP[role],
+        department_id: data.department_id,
+        campus_id: data.campus_id,
+      }
+    }
+
+    // Slow path: role unknown, query all three tables in parallel
     const [studentRes, facultyRes, adminRes] = await Promise.all([
       this.supabase.admin
         .from('students')
@@ -129,6 +186,15 @@ export class AuthService {
         .eq('id', authUserId)
         .maybeSingle(),
     ])
+
+    if (studentRes.error || facultyRes.error || adminRes.error) {
+      throw new InternalServerErrorException('Could not verify the account role')
+    }
+
+    const accountCount = Number(!!studentRes.data) + Number(!!facultyRes.data) + Number(!!adminRes.data)
+    if (accountCount > 1) {
+      return { role: null, redirectTo: null }
+    }
 
     if (studentRes.data) {
       const s = studentRes.data
@@ -166,10 +232,14 @@ export class AuthService {
       try {
         const { data } = await this.supabase.admin.auth.getUser(userOrToken)
         if (data?.user) {
-          resolvedUser = {
-            userId: data.user.id,
-            email: data.user.email || '',
-            role: (data.user.app_metadata?.role || 'student') as any,
+          // Read role from app_metadata instead of doing a triple-table lookup
+          const role = data.user.app_metadata?.role as Role | undefined
+          if (role) {
+            resolvedUser = {
+              userId: data.user.id,
+              email: data.user.email || '',
+              role,
+            }
           }
         }
       } catch {

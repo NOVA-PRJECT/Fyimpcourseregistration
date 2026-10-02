@@ -1,7 +1,8 @@
-import {
+﻿import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  InternalServerErrorException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common'
@@ -28,16 +29,57 @@ export class AuthGuard implements CanActivate {
     }
 
     const user = authData.user
-    const claimsRole = user.app_metadata?.role as Role | undefined
-    let departmentId = user.app_metadata?.department_id as string | undefined
-    let campusId = user.app_metadata?.campus_id as string | undefined
     let mustChangePassword = user.app_metadata?.must_change_password as boolean | undefined
     let currentSemester: number | undefined
     let fullName: string | undefined
-    let role = claimsRole
+    let role: Role | undefined
+    let departmentId: string | undefined
+    let campusId: string | undefined
 
-    // If role or details missing from app_metadata, query DB tables
-    if (!role || !campusId || (role === 'hod' && !departmentId)) {
+    const VALID_ROLES = new Set<Role>(['superadmin', 'campus_director', 'hod', 'teaching_staff', 'teacher', 'student'])
+    const cachedRole = user.app_metadata?.role as Role | undefined
+
+    if (cachedRole && VALID_ROLES.has(cachedRole)) {
+      // Fast path: role already in app_metadata, query only the matching table
+      if (cachedRole === 'student') {
+        const { data, error } = await this.supabaseService.admin
+          .from('students')
+          .select('id, department_id, campus_id, must_change_password, current_semester, full_name')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (error) throw new InternalServerErrorException('Could not verify the account permissions')
+        if (!data) throw new UnauthorizedException('User account not found in portal')
+        role = 'student'
+        departmentId = data.department_id ?? undefined
+        campusId = data.campus_id ?? undefined
+        mustChangePassword = data.must_change_password
+        currentSemester = data.current_semester
+        fullName = data.full_name
+      } else if (cachedRole === 'superadmin') {
+        const { data, error } = await this.supabaseService.admin
+          .from('admins')
+          .select('id')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (error) throw new InternalServerErrorException('Could not verify the account permissions')
+        if (!data) throw new UnauthorizedException('User account not found in portal')
+        role = 'superadmin'
+      } else {
+        // campus_director | hod | teaching_staff | teacher
+        const { data, error } = await this.supabaseService.admin
+          .from('faculty')
+          .select('id, role, department_id, campus_id, full_name')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (error) throw new InternalServerErrorException('Could not verify the account permissions')
+        if (!data) throw new UnauthorizedException('User account not found in portal')
+        role = data.role as Role
+        departmentId = data.department_id ?? undefined
+        campusId = data.campus_id ?? undefined
+        fullName = data.full_name
+      }
+    } else {
+      // Slow path: role absent from app_metadata, check all three tables
       const [studentRes, facultyRes, adminRes] = await Promise.all([
         this.supabaseService.admin
           .from('students')
@@ -56,33 +98,36 @@ export class AuthGuard implements CanActivate {
           .maybeSingle(),
       ])
 
+      if (studentRes.error || facultyRes.error || adminRes.error) {
+        throw new InternalServerErrorException('Could not verify the account permissions')
+      }
+
+      const accountCount = Number(!!studentRes.data) + Number(!!facultyRes.data) + Number(!!adminRes.data)
+      if (accountCount !== 1) {
+        throw new UnauthorizedException('User account is missing or has conflicting portal roles')
+      }
+
       if (studentRes.data) {
         role = 'student'
-        departmentId = studentRes.data.department_id
-        campusId = studentRes.data.campus_id
+        departmentId = studentRes.data.department_id ?? undefined
+        campusId = studentRes.data.campus_id ?? undefined
         mustChangePassword = studentRes.data.must_change_password
         currentSemester = studentRes.data.current_semester
         fullName = studentRes.data.full_name
       } else if (facultyRes.data) {
         role = facultyRes.data.role as Role
-        departmentId = facultyRes.data.department_id
-        campusId = facultyRes.data.campus_id
+        departmentId = facultyRes.data.department_id ?? undefined
+        campusId = facultyRes.data.campus_id ?? undefined
         fullName = facultyRes.data.full_name
       } else if (adminRes.data) {
         role = 'superadmin'
       }
-    } else if (role === 'student') {
-      const { data: s } = await this.supabaseService.admin
-        .from('students')
-        .select('department_id, campus_id, current_semester, full_name, must_change_password')
-        .eq('id', user.id)
-        .maybeSingle()
-      if (s) {
-        if (s.department_id) departmentId = s.department_id
-        if (s.campus_id) campusId = s.campus_id
-        currentSemester = s.current_semester
-        fullName = s.full_name
-        mustChangePassword = s.must_change_password
+
+      // Backfill app_metadata so the next request takes the fast path (fire-and-forget)
+      if (role) {
+        this.supabaseService.admin.auth.admin
+          .updateUserById(user.id, { app_metadata: { role } })
+          .catch(() => { /* non-critical, do not block the request */ })
       }
     }
 

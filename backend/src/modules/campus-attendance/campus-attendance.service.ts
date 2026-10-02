@@ -109,7 +109,7 @@ export class CampusAttendanceService {
     // 1. Resolve student and their assigned campus
     const { data: student, error: studentError } = await this.supabase.admin
       .from('students')
-      .select('id, full_name, campus_id, campuses(*)')
+      .select('id, full_name, department_id, campus_id, campuses(*)')
       .eq('id', studentId)
       .maybeSingle();
 
@@ -245,7 +245,8 @@ export class CampusAttendanceService {
    * Retrieves today's morning & evening campus verification status for a student.
    */
   async getStudentCampusStatus(user: AuthUser, studentId: string) {
-    // Validate authorization: student viewing self or staff viewing student
+    // Students can only view themselves. Staff scope is checked against the
+    // student's database profile below; route roles alone are not enough.
     if (user.role === 'student' && user.userId !== studentId) {
       throw new ForbiddenException('Cannot access attendance for another student.');
     }
@@ -258,6 +259,29 @@ export class CampusAttendanceService {
 
     if (studentError || !student) {
       throw new NotFoundException('Student profile not found.');
+    }
+
+    const belongsToUserScope = (() => {
+      switch (user.role) {
+        case 'student':
+          return student.id === user.userId;
+        case 'hod':
+        case 'teacher':
+          return !!user.department_id &&
+            student.department_id === user.department_id &&
+            student.campus_id === user.campus_id;
+        case 'teaching_staff':
+        case 'campus_director':
+          return !!user.campus_id && student.campus_id === user.campus_id;
+        case 'superadmin':
+          return true;
+        default:
+          return false;
+      }
+    })();
+
+    if (!belongsToUserScope) {
+      throw new ForbiddenException('Cannot access attendance outside your campus or department.');
     }
 
     const campus = (student as any).campuses as CampusRecord;

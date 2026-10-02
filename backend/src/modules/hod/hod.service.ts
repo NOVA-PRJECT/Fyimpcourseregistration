@@ -397,7 +397,6 @@ export class HodService {
         campus_id: user.campus_id,
         must_change_password: true,
       },
-      user_metadata: { role: 'student' },
     })
 
     await this.auditLogger.log({
@@ -567,7 +566,6 @@ export class HodService {
             campus_id: user.campus_id,
             must_change_password: true,
           },
-          user_metadata: { role: 'student' },
         })
 
         results.push({ row: i + 1, email, status: 'success' })
@@ -711,7 +709,6 @@ export class HodService {
       email,
       password,
       email_confirm: true,
-      user_metadata: { role: 'teacher' },
       app_metadata: {
         role: 'teacher',
         department_id: departmentId,
@@ -748,7 +745,6 @@ export class HodService {
 
     // 3. Set app_metadata
     await this.supabase.admin.auth.admin.updateUserById(teacherId, {
-      user_metadata: { role: 'teacher' },
       app_metadata: {
         role: 'teacher',
         department_id: departmentId,

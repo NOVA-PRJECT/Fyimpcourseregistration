@@ -273,7 +273,6 @@ export class AdminService {
       email,
       password,
       email_confirm: true,
-      user_metadata: { role },
       app_metadata: {
         role,
         campus_id,
@@ -306,7 +305,6 @@ export class AdminService {
 
     // Sync app_metadata
     await this.supabase.admin.auth.admin.updateUserById(authUserId, {
-      user_metadata: { role },
       app_metadata: {
         role,
         campus_id,

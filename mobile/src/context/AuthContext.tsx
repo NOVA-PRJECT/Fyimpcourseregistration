@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Fetch user role and detailed profile from backend or fallback to user metadata
+  // Resolve roles only from the authenticated backend profile endpoint.
   const fetchProfileAndRole = useCallback(
     async (currentSession: Session): Promise<{ role: UserRole; profile: UserProfile } | null> => {
       try {
@@ -79,29 +79,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           }
         }
       } catch (err) {
-        console.warn('[AuthContext] Backend profile fetch failed, checking metadata:', err);
+        console.warn('[AuthContext] Backend profile fetch failed:', err);
       }
-
-      // Fallback to app_metadata or user_metadata embedded in Supabase JWT
-      const metaRole =
-        (currentSession.user.app_metadata?.role as UserRole) ||
-        (currentSession.user.user_metadata?.role as UserRole);
-
-      if (metaRole) {
-        return {
-          role: metaRole,
-          profile: {
-            id: currentSession.user.id,
-            full_name:
-              currentSession.user.user_metadata?.full_name ||
-              currentSession.user.email?.split('@')[0] ||
-              'User',
-            department_id: currentSession.user.app_metadata?.department_id,
-            campus_id: currentSession.user.app_metadata?.campus_id,
-          },
-        };
-      }
-
       return null;
     },
     []
@@ -127,6 +106,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (result) {
       setRole(result.role);
       setProfile(result.profile);
+    } else {
+      setRole(null);
+      setProfile(null);
     }
   }, [session, fetchProfileAndRole]);
 
@@ -166,6 +148,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           if (roleResult) {
             setRole(roleResult.role);
             setProfile(roleResult.profile);
+          } else {
+            setRole(null);
+            setProfile(null);
           }
           setIsLoading(false);
         }
@@ -197,6 +182,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         if (result && isMounted) {
           setRole(result.role);
           setProfile(result.profile);
+        } else if (isMounted) {
+          setRole(null);
+          setProfile(null);
         }
         setIsLoading(false);
       }

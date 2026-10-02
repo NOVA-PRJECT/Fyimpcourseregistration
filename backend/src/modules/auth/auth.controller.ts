@@ -52,7 +52,6 @@ export class AuthController {
     }
 
     res.cookie('auth_token', result.token, cookieOptions)
-    res.cookie('user_role', result.role, cookieOptions)
 
     return {
       redirectTo: result.redirectTo,
