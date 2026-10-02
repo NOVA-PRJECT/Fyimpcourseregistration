@@ -253,7 +253,7 @@ export class CampusAttendanceService {
 
     const { data: student, error: studentError } = await this.supabase.admin
       .from('students')
-      .select('id, full_name, campus_id, campuses(*)')
+      .select('id, full_name, campus_id, department_id, campuses(*)')
       .eq('id', studentId)
       .maybeSingle();
 
